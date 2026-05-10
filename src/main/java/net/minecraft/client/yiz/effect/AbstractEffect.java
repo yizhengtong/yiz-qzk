@@ -118,8 +118,13 @@ public abstract class AbstractEffect {
 
     /**
      * 检查实体是否已解锁此效果。
+     * ItemPerception（词缀）和 ContainerPerception（随影）不需要解锁，
+     * 只有 EntityPerception（天赋）需要解锁。
      */
     public boolean isUnlocked(LivingEntity entity) {
+        boolean needsUnlock = perceptionModes.stream()
+            .anyMatch(m -> m.getPerceptionType() == PerceptionMode.PerceptionType.ENTITY);
+        if (!needsUnlock) return true;
         return UnlockManager.isUnlocked(entity, id);
     }
 

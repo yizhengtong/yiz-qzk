@@ -6,6 +6,7 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.yiz.ui.ItemInfoUI;
 import net.minecraft.client.yiz.ui.PlayerTalentUI;
 import net.minecraft.client.yiz.ui.UIConfig;
+import net.minecraft.client.yiz.test.TestSetup;
 import net.minecraft.network.chat.Component;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.fml.ModContainer;
@@ -36,6 +37,9 @@ public class tizModClient {
 
     private void onClientSetup(FMLClientSetupEvent event) {
         tizMod.LOGGER.info("YizMod QZK Client initialized");
+
+        // 初始化测试内容（注册测试效果 + 事件钩子）
+        TestSetup.init();
     }
 
     /**

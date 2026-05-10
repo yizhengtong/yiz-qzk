@@ -2,6 +2,7 @@ package net.minecraft.client.yiz;
 
 import net.minecraft.client.yiz.core.data.EffectDataLoader;
 import net.minecraft.client.yiz.effect.unlock.UnlockManager;
+import net.minecraft.client.yiz.test.command.ModCommands;
 import net.minecraft.client.yiz.tizMod;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
@@ -9,7 +10,7 @@ import net.neoforged.fml.config.ModConfig;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.neoforged.neoforge.event.AddReloadListenerEvent;
-import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
+import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import org.slf4j.Logger;
@@ -29,6 +30,7 @@ public class tizMod {
 
         // Register Forge event handlers
         NeoForge.EVENT_BUS.addListener(this::onPlayerClone);
+        NeoForge.EVENT_BUS.addListener(this::onRegisterCommands);
     }
 
     private void commonSetup(FMLCommonSetupEvent event) {
@@ -41,6 +43,13 @@ public class tizMod {
     private void onAddReloadListener(AddReloadListenerEvent event) {
         event.addListener(new EffectDataLoader());
         LOGGER.debug("EffectDataLoader registered");
+    }
+
+    /**
+     * Register test commands.
+     */
+    private void onRegisterCommands(RegisterCommandsEvent event) {
+        ModCommands.register(event.getDispatcher());
     }
 
     /**

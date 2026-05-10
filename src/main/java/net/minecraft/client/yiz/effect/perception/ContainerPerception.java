@@ -22,8 +22,9 @@ public class ContainerPerception implements PerceptionMode {
 
     @Override
     public boolean check(LivingEntity entity, EffectContext context) {
-        // 具体容器检查逻辑由开发者实现
-        // 前置库只提供接口和类型定义
+        if (entity instanceof net.minecraft.world.entity.player.Player player) {
+            return player.containerMenu != player.inventoryMenu;
+        }
         return false;
     }
 
