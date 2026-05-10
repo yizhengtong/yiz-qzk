@@ -1,0 +1,14 @@
+{
+  "required": true,
+  "package": "net.minecraft.client.yiz.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "AttackInterceptorMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "overwrites": {
+    "requireAnnotations": true
+  }
+}
