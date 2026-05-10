@@ -5,8 +5,6 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.yiz.ui.ItemInfoUI;
 import net.minecraft.client.yiz.ui.PlayerTalentUI;
 import net.minecraft.client.yiz.ui.UIConfig;
-import net.minecraft.client.yiz.test.TestSetup;
-import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.fml.ModContainer;
@@ -40,9 +38,6 @@ public class tizModClient {
 
     private void onClientSetup(FMLClientSetupEvent event) {
         tizMod.LOGGER.info("YizMod QZK Client initialized");
-
-        // 初始化测试内容（注册测试效果 + 事件钩子）
-        TestSetup.init();
     }
 
     /**
@@ -68,21 +63,11 @@ public class tizModClient {
         // CTRL + ALT: toggle item UI
         if (ctrlHeld && UIConfig.isItemUIKey(event.getKey(), event.getAction())) {
             UIConfig.toggleItemUI();
-            mc.player.displayClientMessage(Component.literal(
-                UIConfig.isCustomItemUIEnabled()
-                    ? "§a自定义物品UI已开启"
-                    : "§c自定义物品UI已关闭"
-            ), true);
         }
 
         // CTRL + SHIFT: toggle talent UI
         if (ctrlHeld && UIConfig.isTalentUIKey(event.getKey(), event.getAction())) {
             UIConfig.toggleTalentUI();
-            mc.player.displayClientMessage(Component.literal(
-                UIConfig.isPlayerTalentUIEnabled()
-                    ? "§a天赋信息UI已开启"
-                    : "§c天赋信息UI已关闭"
-            ), true);
         }
     }
 
