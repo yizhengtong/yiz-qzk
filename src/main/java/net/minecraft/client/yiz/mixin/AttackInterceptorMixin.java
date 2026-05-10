@@ -20,6 +20,7 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
  * 攻击拦截 Mixin
@@ -82,9 +83,10 @@ public abstract class AttackInterceptorMixin {
     /**
      * 在 hurt() 方法开头注入。
      * 用于对 damageSource 进行修改或记录。
+     * hurt() 返回 boolean，因此使用 CallbackInfoReturnable。
      */
     @Inject(method = "hurt", at = @At("HEAD"), cancellable = true)
-    private void yizmodqzk$onHurt(DamageSource source, float amount, CallbackInfo ci) {
+    private void yizmodqzk$onHurt(DamageSource source, float amount, CallbackInfoReturnable<Boolean> cir) {
         // 可选：在此处理伤害前的逻辑
         // 当前为空实现，预留扩展点
     }
