@@ -1,5 +1,6 @@
 package net.minecraft.client.yiz.tool.damage;
 
+import net.minecraft.client.yiz.core.data.EffectNBTHandler;
 import net.minecraft.client.yiz.effect.AbstractEffect;
 import net.minecraft.client.yiz.effect.EffectContext;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -58,8 +59,13 @@ public class AttackContext {
 
     private boolean checkItemForTag(ItemStack stack, DamageTag tag) {
         if (stack.isEmpty()) return false;
-        // 检查物品 NBT 中是否包含特定标签
-        // 具体实现由物品系统定义
+        // 检查物品 NBT 效果中是否包含指定标签
+        List<AbstractEffect> itemEffects = EffectNBTHandler.getItemEffects(stack);
+        for (AbstractEffect effect : itemEffects) {
+            if (effect instanceof DamageTagProvider provider) {
+                if (provider.getAssociatedTags().contains(tag)) return true;
+            }
+        }
         return false;
     }
 

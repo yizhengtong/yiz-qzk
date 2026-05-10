@@ -100,6 +100,7 @@ public final class AttributeModificationHelper {
 
     /**
      * 设置定时器移除修正器。
+     * 使用服务端 tick 计数器实现精确延迟。
      */
     private static void scheduleModifierRemoval(
         LivingEntity entity,
@@ -107,13 +108,25 @@ public final class AttributeModificationHelper {
         ResourceLocation modifierId,
         int duration
     ) {
-        if (entity.level() != null && entity.level().getServer() != null) {
-            entity.level().getServer().execute(() -> {
-                if (entity.isAlive()) {
+        if (duration <= 0) return;
+        if (entity.level() == null) return;
+        var server = entity.level().getServer();
+        if (server == null) return;
+
+        int targetTick = server.getTickCount() + duration;
+
+        // 自注册 Runnable：每 tick 检查一次直到到达目标 tick
+        server.execute(new Runnable() {
+            @Override
+            public void run() {
+                if (!entity.isAlive()) return;
+                if (server.getTickCount() >= targetTick) {
                     removeModifier(entity, attribute, modifierId);
+                } else {
+                    server.execute(this);
                 }
-            });
-        }
+            }
+        });
     }
 
     /**
