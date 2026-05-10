@@ -6,8 +6,13 @@ import net.minecraft.client.yiz.effect.activation.ActivationCondition;
 import net.minecraft.client.yiz.effect.parent.ParentType;
 import net.minecraft.client.yiz.effect.perception.ItemPerception;
 import net.minecraft.client.yiz.effect.rarity.Rarity;
+import net.minecraft.client.yiz.tool.damage.DamageResult;
+import net.minecraft.client.yiz.tool.damage.DamageTag;
+import net.minecraft.client.yiz.tool.damage.DirectAttackExecutor;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.damagesource.DamageType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 
@@ -43,7 +48,11 @@ public class TestDamageAffix extends AbstractEffect {
 
         player.sendSystemMessage(Component.literal("§a⚡ [词缀·试炼] 伤害增幅触发！额外造成 5.0 点真实伤害"));
 
-        // 应用额外伤害
-        target.hurt(player.damageSources().playerAttack(player), 5.0f);
+        // 使用直接伤害执行器，避免递归触发 LivingDamageEvent
+        DamageResult damage = new DamageResult(5.0, 5.0,
+                player.damageSources().playerAttack(player).typeHolder()
+                        .unwrapKey().map(ResourceKey::location).orElse(null))
+                .withTag(DamageTag.TRUE_DAMAGE);
+        DirectAttackExecutor.executeForcedAttackFromContext(context, damage);
     }
 }

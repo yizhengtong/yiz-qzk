@@ -2,21 +2,23 @@ package net.minecraft.client.yiz;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.yiz.ui.ItemInfoUI;
 import net.minecraft.client.yiz.ui.PlayerTalentUI;
 import net.minecraft.client.yiz.ui.UIConfig;
 import net.minecraft.client.yiz.test.TestSetup;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.ItemStack;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.client.event.InputEvent;
-import net.neoforged.neoforge.client.event.RenderGuiEvent;
+import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
+import net.neoforged.neoforge.client.event.RenderTooltipEvent;
 import net.neoforged.neoforge.client.event.ScreenEvent;
 import net.neoforged.neoforge.client.gui.ConfigurationScreen;
 import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import org.lwjgl.glfw.GLFW;
@@ -30,6 +32,7 @@ public class tizModClient {
         // Register client event handlers
         var modBus = container.getEventBus();
         modBus.addListener(this::onClientSetup);
+        modBus.addListener(this::onRegisterKeyMappings);
 
         // Register Forge event bus handlers
         NeoForge.EVENT_BUS.register(this);
@@ -43,15 +46,27 @@ public class tizModClient {
     }
 
     /**
+     * Register key mappings so they appear in Controls settings and work properly.
+     */
+    private void onRegisterKeyMappings(RegisterKeyMappingsEvent event) {
+        event.register(UIConfig.getToggleItemUIKey());
+        event.register(UIConfig.getToggleTalentUIKey());
+    }
+
+    /**
      * Handle key input for UI toggles.
+     * Uses edge-triggered detection (press only, not hold) to avoid repeated toggling.
      */
     @SubscribeEvent
     public void onKeyInput(InputEvent.Key event) {
+        if (event.getAction() != GLFW.GLFW_PRESS) return;
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) return;
 
+        boolean ctrlHeld = Screen.hasControlDown();
+
         // CTRL + ALT: toggle item UI
-        if (UIConfig.checkItemUIToggle()) {
+        if (ctrlHeld && UIConfig.isItemUIKey(event.getKey(), event.getAction())) {
             UIConfig.toggleItemUI();
             mc.player.displayClientMessage(Component.literal(
                 UIConfig.isCustomItemUIEnabled()
@@ -61,7 +76,7 @@ public class tizModClient {
         }
 
         // CTRL + SHIFT: toggle talent UI
-        if (UIConfig.checkTalentUIToggle()) {
+        if (ctrlHeld && UIConfig.isTalentUIKey(event.getKey(), event.getAction())) {
             UIConfig.toggleTalentUI();
             mc.player.displayClientMessage(Component.literal(
                 UIConfig.isPlayerTalentUIEnabled()
@@ -71,31 +86,50 @@ public class tizModClient {
         }
     }
 
+    // 暂存悬停物品信息，用于在 ScreenEvent.Render.Post 中渲染（保证在最上层）
+    private static ItemStack pendingItemStack = ItemStack.EMPTY;
+    private static int pendingItemX = 0;
+    private static int pendingItemY = 0;
+
     /**
-     * Render custom item info overlay.
+     * Cancel vanilla tooltip and store hovered item info.
+     * Actual rendering happens in onScreenRender (LOWEST) to stay on top of all GUI elements.
      */
-    @SubscribeEvent
-    public void onRenderOverlay(RenderGuiEvent.Post event) {
+    @SubscribeEvent(priority = EventPriority.HIGHEST)
+    public void onTooltipPre(RenderTooltipEvent.Pre event) {
         if (!UIConfig.isCustomItemUIEnabled()) return;
+        if (event.getItemStack().isEmpty()) return;
 
-        Minecraft mc = Minecraft.getInstance();
-        if (mc.screen != null) return; // Don't render in GUIs
+        // 取消原版物品提示
+        event.setCanceled(true);
 
-        // Get hovered item from screen if available
-        // For now, this is a placeholder - full implementation needs screen event integration
+        // 暂存物品信息，由 onScreenRender 渲染
+        pendingItemStack = event.getItemStack();
+        pendingItemX = event.getX();
+        pendingItemY = event.getY();
     }
 
     /**
-     * Render talent UI on inventory screen.
+     * Render UI overlays on top of everything.
      */
-    @SubscribeEvent
+    @SubscribeEvent(priority = EventPriority.LOWEST)
     public void onScreenRender(ScreenEvent.Render.Post event) {
-        Screen screen = event.getScreen();
         Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null) return;
 
+        // 渲染自定义物品信息（在最上层，不被GUI元素遮挡）
+        if (UIConfig.isCustomItemUIEnabled() && !pendingItemStack.isEmpty()) {
+            ItemInfoUI.renderItemInfo(event.getGuiGraphics(), pendingItemStack,
+                pendingItemX, pendingItemY);
+        }
+
+        // 渲染天赋面板
         if (PlayerTalentUI.shouldShow(mc)) {
             PlayerTalentUI.renderTalentUI(event.getGuiGraphics(),
                 event.getMouseX(), event.getMouseY());
         }
+
+        // 清理悬停状态，下一帧如果没有 tooltip 事件就不再显示
+        pendingItemStack = ItemStack.EMPTY;
     }
 }

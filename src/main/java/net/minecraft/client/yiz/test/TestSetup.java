@@ -1,7 +1,9 @@
 package net.minecraft.client.yiz.test;
 
 import net.minecraft.client.yiz.core.event.EffectEventBus;
+import net.minecraft.client.yiz.core.registry.ModRegistries;
 import net.minecraft.client.yiz.effect.EffectContext;
+import net.minecraft.client.yiz.effect.unlock.UnlockManager;
 import net.minecraft.client.yiz.test.effect.TestDamageAffix;
 import net.minecraft.client.yiz.test.effect.TestFlameShadow;
 import net.minecraft.client.yiz.test.talent.TestStrengthTalent;
@@ -10,6 +12,7 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.entity.living.LivingDamageEvent;
+import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.tick.PlayerTickEvent;
 
 /**
@@ -47,8 +50,30 @@ public final class TestSetup {
         // 2. 注册事件处理器
         NeoForge.EVENT_BUS.addListener(TestSetup::onPlayerAttack);
         NeoForge.EVENT_BUS.addListener(TestSetup::onPlayerTick);
+        NeoForge.EVENT_BUS.addListener(TestSetup::onPlayerLogin);
 
         net.minecraft.client.yiz.tizMod.LOGGER.info("[YizTest] 已注册 3 个测试效果");
+    }
+
+    /**
+     * 玩家登录时自动解锁所有测试效果。
+     */
+    private static void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
+        if (!(event.getEntity() instanceof Player player)) return;
+
+        // 自动解锁所有测试效果，无需手动执行命令
+        ModRegistries.getEffect(TestDamageAffix.ID).ifPresent(
+            e -> UnlockManager.unlock(player, e.getId())
+        );
+        ModRegistries.getEffect(TestFlameShadow.ID).ifPresent(
+            e -> UnlockManager.unlock(player, e.getId())
+        );
+        ModRegistries.getEffect(TestStrengthTalent.ID).ifPresent(
+            e -> UnlockManager.unlock(player, e.getId())
+        );
+
+        player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+            "§a[YizTest] 已自动解锁全部测试效果！输入 /yizmodqzk test setup 获取测试物品"));
     }
 
     /**

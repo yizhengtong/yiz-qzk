@@ -3,13 +3,15 @@ package net.minecraft.client.yiz.ui;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.yiz.core.data.EffectNBTHandler;
 import net.minecraft.client.yiz.effect.AbstractEffect;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.world.item.ItemStack;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * 物品信息 UI 主类
@@ -17,10 +19,7 @@ import java.util.List;
  *
  * 快捷键 CTRL + ALT 切换开关。
  */
-public class ItemInfoUI {
-
-    private static final int PADDING = 4;
-    private static final int LINE_HEIGHT = 12;
+public final class ItemInfoUI {
 
     private ItemInfoUI() {}
 
@@ -32,50 +31,25 @@ public class ItemInfoUI {
     }
 
     /**
-     * 渲染自定义物品信息。
+     * 渲染自定义物品信息（使用 GuiGraphics.renderTooltip 确保在最上层）。
      */
-    public static void renderItemInfo(GuiGraphics graphics, ItemStack stack, int mouseX, int mouseY) {
+    public static void renderItemInfo(GuiGraphics graphics, ItemStack stack, int x, int y) {
         if (!shouldShow() || stack.isEmpty()) return;
 
-        Minecraft mc = Minecraft.getInstance();
-        Font font = mc.font;
+        List<Component> lines = buildInfoLines(stack);
 
-        // 位置计算
-        int x = mouseX + 8;
-        int y = mouseY - 12;
-
-        // 获取显示内容
-        List<Component> lines = buildInfoLines(stack, font);
-
-        // 计算背景尺寸
-        int maxWidth = 0;
-        for (Component line : lines) {
-            int width = font.width(line);
-            if (width > maxWidth) maxWidth = width;
-        }
-        int height = lines.size() * LINE_HEIGHT + PADDING * 2;
-        int bgWidth = maxWidth + PADDING * 2;
-
-        // 绘制背景
-        graphics.fill(x, y, x + bgWidth, y + height, 0xCC000000);
-        graphics.fill(x, y, x + bgWidth, y + 1, 0xFF888888);
-        graphics.fill(x, y + height - 1, x + bgWidth, y + height, 0xFF888888);
-        graphics.fill(x, y, x + 1, y + height, 0xFF888888);
-        graphics.fill(x + bgWidth - 1, y, x + bgWidth, y + height, 0xFF888888);
-
-        // 绘制文本
-        int textY = y + PADDING;
-        for (Component line : lines) {
-            graphics.drawString(font, line, x + PADDING, textY, 0xFFFFFFFF);
-            textY += LINE_HEIGHT;
+        if (!lines.isEmpty()) {
+            Font font = Minecraft.getInstance().font;
+            // 使用 renderTooltip 渲染，其 RenderType 在所有 GUI 元素最上层
+            graphics.renderTooltip(font, lines, Optional.empty(), x, y);
         }
     }
 
     /**
      * 构建物品信息行。
      */
-    private static List<Component> buildInfoLines(ItemStack stack, Font font) {
-        java.util.ArrayList<Component> lines = new java.util.ArrayList<>();
+    private static List<Component> buildInfoLines(ItemStack stack) {
+        List<Component> lines = new ArrayList<>();
 
         // 1. 物品名称
         lines.add(stack.getHoverName());
@@ -83,15 +57,19 @@ public class ItemInfoUI {
         // 2. 属性信息
         var attributes = ItemAttributeDisplay.getAvailableAttributes(stack);
         for (var attr : attributes) {
-            lines.add(ItemAttributeDisplay.createAttributeComponent(attr.name(), attr.value(), attr.color()));
+            MutableComponent line = Component.literal("  ");
+            line.append(Component.literal(attr.name() + "："));
+            String color = attr.color() == 0xFF55FF55 ? "§a" :
+                          attr.color() == 0xFFFF5555 ? "§c" : "§f";
+            line.append(Component.literal(color + attr.value()));
+            lines.add(line);
         }
 
         // 3. 效果信息
         List<AbstractEffect> effects = EffectNBTHandler.getItemEffects(stack);
         if (!effects.isEmpty()) {
-            lines.add(Component.literal(""));
             for (AbstractEffect effect : effects) {
-                String effectLine = String.format(" [%s] %s (Lv.%d)",
+                String effectLine = String.format(" §7[§f%s§7] §f%s §7(Lv.%d)",
                     effect.getParentType().getChineseName(),
                     effect.getDisplayName(),
                     effect.getLevel()

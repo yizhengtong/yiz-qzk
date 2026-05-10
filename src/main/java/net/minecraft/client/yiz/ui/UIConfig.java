@@ -41,19 +41,19 @@ public final class UIConfig {
     // ==================== 快捷检测 ====================
 
     /**
-     * 检测是否应该切换物品 UI（CTRL + ALT）。
+     * 检测 ALT 键按下（用于 Ctrl+Alt 组合）。
      */
-    public static boolean checkItemUIToggle() {
-        return TOGGLE_ITEM_UI_KEY.isDown()
-            && Screen.hasControlDown();
+    public static boolean isItemUIKey(int keyCode, int action) {
+        return action == GLFW.GLFW_PRESS
+            && keyCode == TOGGLE_ITEM_UI_KEY.getKey().getValue();
     }
 
     /**
-     * 检测是否应该切换天赋 UI（CTRL + SHIFT）。
+     * 检测 SHIFT 键按下（用于 Ctrl+Shift 组合）。
      */
-    public static boolean checkTalentUIToggle() {
-        return TOGGLE_TALENT_UI_KEY.isDown()
-            && Screen.hasControlDown();
+    public static boolean isTalentUIKey(int keyCode, int action) {
+        return action == GLFW.GLFW_PRESS
+            && keyCode == TOGGLE_TALENT_UI_KEY.getKey().getValue();
     }
 
     // ==================== 物品 UI ====================
@@ -120,12 +120,5 @@ public final class UIConfig {
 
     public static KeyMapping getToggleTalentUIKey() {
         return TOGGLE_TALENT_UI_KEY;
-    }
-
-    // 引用 Screen 以避免编译依赖
-    private static final class Screen {
-        static boolean hasControlDown() {
-            return net.minecraft.client.gui.screens.Screen.hasControlDown();
-        }
     }
 }

@@ -1,10 +1,13 @@
 package net.minecraft.client.yiz.effect.perception;
 
+import net.minecraft.client.yiz.core.data.EffectNBTHandler;
+import net.minecraft.client.yiz.effect.AbstractEffect;
 import net.minecraft.client.yiz.effect.EffectContext;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
 
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -39,6 +42,15 @@ public class ItemPerception implements PerceptionMode {
             };
 
             if (!stack.isEmpty()) {
+                // 验证物品实际绑定了此效果（通过 NBT 检测）
+                if (context != null && context.effect() != null) {
+                    List<AbstractEffect> itemEffects = EffectNBTHandler.getItemEffects(stack);
+                    boolean hasEffect = itemEffects.stream()
+                        .anyMatch(e -> e.getId().equals(context.effect().getId()));
+                    if (!hasEffect) {
+                        continue;
+                    }
+                }
                 return true;
             }
         }

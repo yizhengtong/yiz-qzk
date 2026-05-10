@@ -9,24 +9,18 @@ import net.minecraft.client.yiz.effect.AbstractEffect;
 import net.minecraft.client.yiz.effect.perception.EntityPerception;
 import net.minecraft.client.yiz.effect.unlock.UnlockManager;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * 玩家实体天赋 UI 主类
- * 在生存背包界面右侧显示已解锁天赋信息。
+ * 在生存背包界面左侧显示已解锁天赋信息。
  *
  * 快捷键 CTRL + SHIFT 切换开关。
  */
 public class PlayerTalentUI {
-
-    private static final int PANEL_WIDTH = 180;
-    private static final int HEADER_HEIGHT = 16;
-    private static final int CARD_HEIGHT = 50;
-    private static final int CARD_MARGIN = 4;
 
     private PlayerTalentUI() {}
 
@@ -77,7 +71,7 @@ public class PlayerTalentUI {
     }
 
     /**
-     * 渲染天赋 UI。
+     * 渲染天赋 UI（使用 renderTooltip 统一为原版紫色边框风格）。
      */
     public static void renderTalentUI(GuiGraphics graphics, int mouseX, int mouseY) {
         Minecraft mc = Minecraft.getInstance();
@@ -86,67 +80,45 @@ public class PlayerTalentUI {
         List<AbstractEffect> talents = getPlayerTalents(mc.player);
         if (talents.isEmpty()) return;
 
-        Font font = mc.font;
+        // 构建工具提示行
+        List<Component> lines = new ArrayList<>();
 
-        // 计算位置（背包界面右侧）
+        // 标题
+        lines.add(Component.literal("§6§l已解锁天赋"));
+        lines.add(Component.literal(""));
+
+        // 天赋列表
+        for (AbstractEffect talent : talents) {
+            int color = EffectTooltipRenderer.getRarityColor(talent.getRarity());
+            String hexColor = color == 0xFFFF5555 ? "§c" :
+                             color == 0xFFFFAA00 ? "§6" :
+                             color == 0xFFAA00AA ? "§d" :
+                             color == 0xFF5555FF ? "§9" : "§f";
+
+            String name = String.format("%s%s §fLv.%d",
+                hexColor, talent.getDisplayName(), talent.getLevel());
+            lines.add(Component.literal(name));
+
+            lines.add(Component.literal(String.format("  §7└─ %s · %s",
+                talent.getParentType().getChineseName(),
+                talent.getParentType().getRecommendedUse())));
+
+            lines.add(Component.literal(String.format("  §7└─ 生效：%s",
+                talent.getActivationCondition().getConditionName())));
+
+            lines.add(Component.literal(String.format("  §7└─ %s",
+                talent.getPerceptionTypeName())));
+
+            lines.add(Component.literal(""));
+        }
+
+        // 计算位置（背包界面左侧），renderTooltip 默认在 mouseX+12, mouseY-12 渲染
         int guiLeft = (mc.getWindow().getGuiScaledWidth() - 176) / 2;
         int guiTop = (mc.getWindow().getGuiScaledHeight() - 166) / 2;
-        int panelX = guiLeft + 176 + 8;
-        int panelY = guiTop + 8;
+        int panelX = guiLeft - 12 - 8;
+        int panelY = guiTop + 8 + 12;
 
-        int panelHeight = Math.min(
-            HEADER_HEIGHT + talents.size() * (CARD_HEIGHT + CARD_MARGIN),
-            240
-        );
-
-        // 绘制背景
-        renderPanelBackground(graphics, panelX, panelY, PANEL_WIDTH, panelHeight);
-
-        // 绘制标题
-        graphics.drawString(font, Component.literal("已解锁天赋"),
-            panelX + 6, panelY + 4, 0xFFFFFF);
-
-        // 绘制天赋列表
-        int currentY = panelY + HEADER_HEIGHT;
-        for (AbstractEffect talent : talents) {
-            renderTalentCard(graphics, font, talent, panelX + 4, currentY);
-            currentY += CARD_HEIGHT + CARD_MARGIN;
-        }
-    }
-
-    /**
-     * 绘制面板背景。
-     */
-    private static void renderPanelBackground(GuiGraphics graphics, int x, int y, int width, int height) {
-        // 使用原版背包纹理
-        var texture = ResourceLocation.parse("textures/gui/container/inventory.png");
-        graphics.blit(texture, x, y, 0, 0, 0, width, height, 256, 256);
-    }
-
-    /**
-     * 绘制单个天赋卡片。
-     */
-    private static void renderTalentCard(GuiGraphics graphics, Font font, AbstractEffect talent, int x, int y) {
-        int color = EffectTooltipRenderer.getRarityColor(talent.getRarity());
-        String name = String.format("%s·%s Lv.%d",
-            talent.getRarity().getChineseName(),
-            talent.getDisplayName(),
-            talent.getLevel()
-        );
-
-        // 名称
-        graphics.drawString(font, name, x, y, color);
-        // 父类
-        graphics.drawString(font,
-            "  └─ " + talent.getParentType().getChineseName() + " · " + talent.getParentType().getRecommendedUse(),
-            x, y + 12, 0x888888);
-        // 生效条件
-        graphics.drawString(font,
-            "  └─ 生效：" + talent.getActivationCondition().getConditionName(),
-            x, y + 24, 0x888888);
-        // 感知类型
-        graphics.drawString(font,
-            "  └─ " + talent.getPerceptionTypeName(),
-            x, y + 36, 0x888888);
+        Font font = mc.font;
+        graphics.renderTooltip(font, lines, Optional.empty(), panelX, panelY);
     }
 }

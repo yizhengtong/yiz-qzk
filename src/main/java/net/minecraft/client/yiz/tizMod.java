@@ -25,8 +25,8 @@ public class tizMod {
         modContainer.registerConfig(ModConfig.Type.COMMON, Config.SPEC);
         modEventBus.addListener(this::commonSetup);
 
-        // Register data reload listener
-        modEventBus.addListener(this::onAddReloadListener);
+        // Register data reload listener (NeoForge event bus, not mod bus)
+        NeoForge.EVENT_BUS.addListener(this::onAddReloadListener);
 
         // Register Forge event handlers
         NeoForge.EVENT_BUS.addListener(this::onPlayerClone);
