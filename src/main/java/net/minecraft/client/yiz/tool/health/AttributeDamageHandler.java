@@ -1,17 +1,19 @@
 package net.minecraft.client.yiz.tool.health;
 
-import net.minecraft.client.yiz.attribute.ModAttributes;
-import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.LivingEntity;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.entity.living.LivingIncomingDamageEvent;
 
 /**
- * 属性伤害事件处理器
- * 在受伤事件中读取攻击者的自定义属性（灵梦固定伤害/百分比伤害），
- * 将其叠加到本次伤害中。
+ * 方法B：属性伤害事件处理器
+ * 在受伤事件中获取攻击者与目标实体，
+ * 通过 {@link HealthAttributeHandler#applyReimuAttributes}（方法A）
+ * 将灵梦属性传递到 ASM Agent 健康值修改流水线。
  *
- * <p>使用 NeoForge 事件总线而非 Mixin，保证在各种环境下均可靠触发。</p>
+ * <p>使用 NeoForge 事件总线，保证在各种环境下均可靠触发。</p>
+ * <p>与旧版不同：不再直接修改事件伤害值（会经过护甲计算），
+ * 而是通过 HealthApplier + ASM Agent 流水线直接修改实体生命值。</p>
  */
 public final class AttributeDamageHandler {
 
@@ -33,19 +35,15 @@ public final class AttributeDamageHandler {
         var source = event.getSource();
         if (source == null) return;
 
-        // 只处理玩家作为攻击者的情况
+        // 获取攻击者（任意 LivingEntity，不限于 Player）
         var attacker = source.getEntity();
-        if (!(attacker instanceof Player player)) return;
+        if (!(attacker instanceof LivingEntity livingAttacker)) return;
 
-        double flatDmg = player.getAttributeValue(ModAttributes.REIMU_FLAT_DAMAGE);
-        double pctDmg = player.getAttributeValue(ModAttributes.REIMU_PERCENT_DAMAGE);
+        // 获取目标实体
+        var target = event.getEntity();
+        if (target == null) return;
 
-        if (flatDmg <= 0 && pctDmg <= 0) return;
-
-        // 额外伤害 = 固定伤害 + 目标最大生命值 × 百分比 / 100
-        float extra = (float) flatDmg + event.getEntity().getMaxHealth() * (float) pctDmg / 100.0f;
-        if (extra <= 0) return;
-
-        event.setAmount(event.getAmount() + extra);
+        // 委托方法A：将灵梦属性通过 ASM Agent 流水线应用到目标
+        HealthAttributeHandler.applyReimuAttributes(livingAttacker, target);
     }
 }

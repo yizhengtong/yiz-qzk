@@ -191,13 +191,23 @@ def agentSrcDir = 'agent/src'
 def agentBuildDir = "${buildDir}/agent-classes"
 def agentJarFile = "${buildDir}/libs/yizmodqzk-agent-${mod_version}.jar"
 
+// Agent 的额外依赖（需要打包进 agent jar 的依赖）
+configurations {
+    agentLibs
+}
+
+dependencies {
+    agentLibs "org.ow2.asm:asm:9.8"
+}
+
 task compileAgent(type: JavaCompile) {
     source = fileTree(agentSrcDir).include('**/*.java')
     destinationDirectory = file(agentBuildDir)
-    classpath = configurations.compileClasspath
+    classpath = configurations.compileClasspath + configurations.agentLibs
     sourceCompatibility = '21'
     targetCompatibility = '21'
     options.encoding = 'UTF-8'
+    options.compilerArgs.add('--add-modules=jdk.attach')
 }
 
 task agentJar(type: Jar) {
@@ -207,10 +217,13 @@ task agentJar(type: Jar) {
     archiveClassifier = ''
     destinationDirectory = file("${buildDir}/libs")
     from file(agentBuildDir)
+    // 将 ASM 解压进 agent jar（agent 被系统 ClassLoader 加载时需要 ASM）
+    from { configurations.agentLibs.collect { zipTree(it) } }
 
     manifest {
         attributes(
             'Agent-Class': 'net.minecraft.client.yiz.agent.HealthAgent',
+            'Premain-Class': 'net.minecraft.client.yiz.agent.HealthAgent',
             'Can-Retransform-Classes': 'true',
             'Can-Redefine-Classes': 'true',
             'Implementation-Title': 'YizModQZK Health Agent',

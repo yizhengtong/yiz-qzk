@@ -38,6 +38,32 @@ public final class HealthAttributeHandler {
         NeoForge.EVENT_BUS.register(HealthAttributeHandler.class);
     }
 
+    /**
+     * 方法A：将攻击者的灵梦属性（固定伤害 + 百分比伤害）应用到目标实体。
+     * <p>
+     * 读取攻击者的 {@link ModAttributes#REIMU_FLAT_DAMAGE} 和
+     * {@link ModAttributes#REIMU_PERCENT_DAMAGE} 属性值，
+     * 通过 ASM Agent 的健康值修改流水线传递到目标实体上。
+     * </p>
+     * <p>
+     * 该方法不直接修改生命值，而是创建 {@link EffectContext} 并委托
+     * {@link HealthModificationManager#executeModification} 触发完整流程：
+     * 发布 {@link HealthModificationEvent} → {@link #onHealthModification} 订阅者
+     * 读取属性 → 添加修正器 → 数值聚合 → 实体应用。
+     * </p>
+     *
+     * @param attacker 攻击者（属性持有者）
+     * @param target   目标实体（伤害承受方）
+     */
+    public static void applyReimuAttributes(LivingEntity attacker, LivingEntity target) {
+        double flatDmg = attacker.getAttributeValue(ModAttributes.REIMU_FLAT_DAMAGE);
+        double pctDmg = attacker.getAttributeValue(ModAttributes.REIMU_PERCENT_DAMAGE);
+        if (flatDmg <= 0 && pctDmg <= 0) return;
+
+        EffectContext context = EffectContext.createAttackContext(attacker, target);
+        HealthModificationManager.executeModification(target, context);
+    }
+
     @SubscribeEvent
     public static void onHealthModification(HealthModificationEvent event) {
         EffectContext context = event.getContext();

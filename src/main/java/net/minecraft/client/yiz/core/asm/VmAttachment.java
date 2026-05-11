@@ -2,7 +2,10 @@ package net.minecraft.client.yiz.core.asm;
 
 import com.sun.tools.attach.VirtualMachine;
 
+import java.io.File;
 import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -111,6 +114,81 @@ public final class VmAttachment {
      */
     public static void detach(VirtualMachine vm) throws Exception {
         vm.detach();
+    }
+
+    /**
+     * 通过子进程绕过 JDK 21 自 attach 限制。
+     *
+     * <p>JDK 9+ 默认禁止进程 attach 自身，JDK 21 进一步移除了
+     * ALLOW_ATTACH_SELF 标志位。此方法启动一个独立的子 JVM，
+     * 由子进程执行 {@link VirtualMachine#attach attach} +
+     * {@link VirtualMachine#loadAgent loadAgent}。
+     * 跨进程 attach 是允许的，由此绕过自 attach 限制。</p>
+     *
+     * <p>classpath 策略：</p>
+     * <ol>
+     *   <li>优先使用 {@code java.class.path}（NeoForge 开发环境可用）</li>
+     *   <li>回退到 agent jar 自身作为 classpath（生产环境 AgentLoaderProcess 也在 agent jar 中）</li>
+     * </ol>
+     *
+     * @param agentJarPath 要加载的 agent jar 的绝对路径
+     * @return 子进程退出码为 0 时返回 true
+     */
+    public static boolean loadAgentViaSubprocess(String agentJarPath) {
+        try {
+            String pid = getCurrentPid();
+            String javaHome = System.getProperty("java.home");
+            String javaBin = javaHome + File.separator + "bin" + File.separator + "java";
+            String classPath = System.getProperty("java.class.path");
+            // 合并 java.class.path（开发环境）和 agent jar（生产环境），
+            // 确保子进程总能找到 AgentLoaderProcess
+            String subCp = agentJarPath;
+            if (classPath != null && !classPath.isEmpty()) {
+                subCp = classPath + File.pathSeparator + agentJarPath;
+            }
+
+            // 子进程命令：
+            //   java --add-modules=jdk.attach --add-opens=jdk.attach/sun.tools.attach=ALL-UNNAMED
+            //        -cp <classpath> AgentLoaderProcess <pid> <agentJar>
+            List<String> command = new ArrayList<>();
+            command.add(javaBin);
+            command.add("--add-modules=jdk.attach");
+            command.add("--add-opens=jdk.attach/sun.tools.attach=ALL-UNNAMED");
+            command.add("-cp");
+            command.add(subCp);
+            command.add("net.minecraft.client.yiz.core.asm.AgentLoaderProcess");
+            command.add(pid);
+            command.add(agentJarPath);
+
+            LOGGER.info("[VmAttachment] Starting subprocess agent loader: pid={}, subCp={}", pid, subCp);
+            LOGGER.debug("[VmAttachment] Command: {}", String.join(" ", command));
+
+            ProcessBuilder pb = new ProcessBuilder(command);
+            pb.redirectErrorStream(true); // 合并 stdout/stderr
+            Process child = pb.start();
+
+            // 读取子进程全部输出（在 waitFor 之前消费缓冲区，防止管道阻塞）
+            try (var reader = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(child.getInputStream()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    LOGGER.warn("[SubProcess] {}", line);
+                }
+            }
+
+            int exitCode = child.waitFor();
+
+            if (exitCode == 0) {
+                LOGGER.info("[VmAttachment] Subprocess completed successfully");
+                return true;
+            } else {
+                LOGGER.warn("[VmAttachment] Subprocess exited with code {}", exitCode);
+                return false;
+            }
+        } catch (Exception e) {
+            LOGGER.error("[VmAttachment] Subprocess approach failed", e);
+            return false;
+        }
     }
 
     // ==================== Unsafe 工具 ====================

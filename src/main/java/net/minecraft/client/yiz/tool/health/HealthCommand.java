@@ -78,6 +78,18 @@ public final class HealthCommand {
                         "眷恋"))
                 )
             )
+            // /yiz e <value> — 最简单的 ASM Agent 伤害测试
+            .then(Commands.literal("e")
+                .then(Commands.argument("value", IntegerArgumentType.integer(0))
+                    .executes(ctx -> {
+                        int value = IntegerArgumentType.getInteger(ctx, "value");
+                        SimpleEntityDamageHandler.setDamageValue(value);
+                        ctx.getSource().sendSuccess(() ->
+                            Component.literal("§a✔ 已设置 ASM 实体伤害值: §e" + value + " §a（攻击非玩家实体生效）"), false);
+                        return 1;
+                    })
+                )
+            )
         );
     }
 

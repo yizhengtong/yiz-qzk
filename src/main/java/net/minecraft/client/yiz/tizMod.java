@@ -6,6 +6,7 @@ import net.minecraft.client.yiz.tool.health.AttributeDamageHandler;
 import net.minecraft.client.yiz.tool.health.HealBanHandler;
 import net.minecraft.client.yiz.tool.health.HealthAttributeHandler;
 import net.minecraft.client.yiz.tool.health.HealthCommand;
+import net.minecraft.client.yiz.tool.health.SimpleEntityDamageHandler;
 import net.minecraft.world.entity.EntityType;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
@@ -39,6 +40,9 @@ public class tizMod {
 
         // 注册属性伤害事件处理器（常规攻击时应用属性额外伤害）
         AttributeDamageHandler.register();
+
+        // 注册最简单的 ASM Agent 伤害测试接口
+        SimpleEntityDamageHandler.register();
 
         // 注册禁疗事件处理器（攻击后禁疗 + 治疗拦截）
         HealBanHandler.register();

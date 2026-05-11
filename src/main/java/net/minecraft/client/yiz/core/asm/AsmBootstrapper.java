@@ -1,6 +1,5 @@
 package net.minecraft.client.yiz.core.asm;
 
-import com.sun.tools.attach.VirtualMachine;
 import net.minecraft.client.yiz.tizMod;
 import org.slf4j.Logger;
 
@@ -15,8 +14,8 @@ import java.nio.file.StandardCopyOption;
  * 完整时序：
  * 1. FantasyEndingPlugin.&lt;clinit&gt; 触发 start()
  * 2. 从主 JAR 的 /META-INF/jarjar/ 解压 agent jar 到临时文件
- * 3. VmAttachment.allowAttachSelf() 绕过 JDK 自 attach 限制
- * 4. VirtualMachine.attach(pid) → loadAgent(tempJar)
+ * 3. 尝试直接 VirtualMachine.attach(pid) → loadAgent(tempJar)
+ * 4. 若直接 attach 失败（JDK 21 自 attach 限制），回退到子进程 attach
  * 5. Agent 的 agent() 被调用 → Instrumentation 注册 LivingHealthTransformer
  * 6. 此后所有 LivingEntity 子类加载时都被 ASM 改写
  */
@@ -39,6 +38,12 @@ public final class AsmBootstrapper {
     /**
      * 启动 ASM Agent 加载流程。
      * 可被重复调用，只会执行一次。
+     *
+     * <p>加载策略优先级：</p>
+     * <ol>
+     *   <li>直接 attach — 在允许自 attach 的 JVM 上工作（JDK 8 及部分早期 JDK 版本）</li>
+     *   <li>子进程 attach — 绕过 JDK 21 的自 attach 限制（标准方案，ByteBuddy 同款思路）</li>
+     * </ol>
      */
     public static synchronized void start() {
         if (initialized) return;
@@ -46,31 +51,47 @@ public final class AsmBootstrapper {
 
         LOGGER.info("[AsmBootstrapper] Initializing ASM agent...");
 
-        try {
-            // 1. 解压 agent jar
-            File agentJar = extractAgentJar();
-            if (agentJar == null) {
-                LOGGER.error("[AsmBootstrapper] Failed to extract agent jar");
-                return;
-            }
+        // 1. 解压 agent jar
+        File agentJar = extractAgentJar();
+        if (agentJar == null) {
+            LOGGER.error("[AsmBootstrapper] Failed to extract agent jar");
+            return;
+        }
 
-            // 2. 绕过自 attach 限制
-            VmAttachment.allowAttachSelf();
-            LOGGER.debug("[AsmBootstrapper] Attach self allowed");
-
-            // 3. 获取 VirtualMachine 并加载 agent
-            VirtualMachine vm = VmAttachment.attachToSelf();
-            LOGGER.debug("[AsmBootstrapper] Attached to self: pid={}", VmAttachment.getCurrentPid());
-
-            VmAttachment.loadAgent(vm, agentJar.getAbsolutePath(), "");
+        // 2. 尝试直接 attach（策略 1）
+        if (tryDirectAttach(agentJar)) {
             agentLoaded = true;
-            LOGGER.info("[AsmBootstrapper] Agent loaded successfully");
+            LOGGER.info("[AsmBootstrapper] Agent loaded successfully via direct attach");
+            return;
+        }
 
-            // 4. detach
+        // 3. 回退到子进程 attach（策略 2）
+        LOGGER.warn("[AsmBootstrapper] Direct attach failed, trying subprocess approach...");
+        if (VmAttachment.loadAgentViaSubprocess(agentJar.getAbsolutePath())) {
+            agentLoaded = true;
+            LOGGER.info("[AsmBootstrapper] Agent loaded successfully via subprocess");
+            return;
+        }
+
+        // 4. 所有方式均失败
+        LOGGER.error("[AsmBootstrapper] All agent loading strategies failed");
+    }
+
+    /**
+     * 尝试直接 attach 方式加载 agent。
+     * 包括绕过自 attach 限制后再尝试。
+     */
+    private static boolean tryDirectAttach(File agentJar) {
+        try {
+            VmAttachment.allowAttachSelf();
+            var vm = VmAttachment.attachToSelf();
+            LOGGER.debug("[AsmBootstrapper] Attached to self: pid={}", VmAttachment.getCurrentPid());
+            VmAttachment.loadAgent(vm, agentJar.getAbsolutePath(), "");
             VmAttachment.detach(vm);
-
+            return true;
         } catch (Exception e) {
-            LOGGER.error("[AsmBootstrapper] Failed to load ASM agent", e);
+            LOGGER.warn("[AsmBootstrapper] Direct attach failed: {}", e.getMessage());
+            return false;
         }
     }
 
