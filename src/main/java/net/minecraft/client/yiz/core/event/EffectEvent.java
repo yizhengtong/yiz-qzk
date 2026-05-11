@@ -59,6 +59,8 @@ public abstract class EffectEvent {
         KILL,
         ACTIVATED,
         DEACTIVATED,
-        UNLOCKED
+        UNLOCKED,
+        /** 健康值修改事件 — 由 HealthModificationManager 触发 */
+        HEALTH_MODIFY
     }
 }

@@ -50,6 +50,16 @@ public abstract class AttackInterceptorMixin {
         // 2. 检测是否包含强制执行标签
         boolean hasTrueDamage = context.hasEnforcementTag(DamageTag.TRUE_DAMAGE);
         boolean hasArmorPiercing = context.hasEnforcementTag(DamageTag.ARMOR_PIERCING);
+        boolean hasDirectHealthMod = context.hasEnforcementTag(DamageTag.DIRECT_HEALTH_MOD);
+
+        // 2a. DIRECT_HEALTH_MOD 优先：走健康值修改管理器管道
+        if (hasDirectHealthMod) {
+            EffectContext effectContext = EffectContext.create(attacker, target);
+            DirectHealthModExecutor.executeDirectHealthMod(attacker, target, effectContext);
+            ci.cancel();
+            yizmodqzk$LOGGER.debug("Direct health modification intercepted");
+            return;
+        }
 
         if (hasTrueDamage || hasArmorPiercing) {
             // 创建效果上下文

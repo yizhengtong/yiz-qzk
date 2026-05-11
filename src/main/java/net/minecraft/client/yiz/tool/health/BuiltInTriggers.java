@@ -15,6 +15,9 @@ public final class BuiltInTriggers {
 
     /**
      * 定时触发器（每隔 N 刻触发一次）。
+     *
+     * 注意：使用内部计数器，不依赖实体 tick 循环。
+     * 如需与实体 tick 同步，使用 {@link TickDrivenTrigger}。
      */
     public static class IntervalTrigger implements HealthModificationTrigger {
         private final int intervalTicks;
@@ -41,6 +44,56 @@ public final class BuiltInTriggers {
 
         public void reset() {
             tickCounter = 0;
+        }
+    }
+
+    /**
+     * Tick 驱动触发器（与实体的 tick 循环同步）。
+     *
+     * 与 IntervalTrigger 不同，此触发器由外部提供 tick 计数，
+     * 而非内部维护计数器。使用方式：
+     * <pre>{@code
+     * if (trigger.shouldTrigger(entity, context, entity.tickCount)) {
+     *     // 执行修改
+     * }
+     * }</pre>
+     */
+    public static class TickDrivenTrigger implements HealthModificationTrigger {
+        private final int intervalTicks;
+        private int lastTriggerTick = 0;
+
+        public TickDrivenTrigger(int intervalTicks) {
+            this.intervalTicks = intervalTicks;
+        }
+
+        /**
+         * 检查是否应在当前 tick 触发。
+         *
+         * @param entity   目标实体
+         * @param context  效果上下文
+         * @param tickCount 当前 tick 计数（通常来自 entity.tickCount）
+         * @return true = 触发
+         */
+        public boolean shouldTrigger(LivingEntity entity, EffectContext context, int tickCount) {
+            if (tickCount - lastTriggerTick >= intervalTicks) {
+                lastTriggerTick = tickCount;
+                return true;
+            }
+            return false;
+        }
+
+        @Override
+        public boolean shouldTrigger(LivingEntity entity, EffectContext context) {
+            return shouldTrigger(entity, context, entity.tickCount);
+        }
+
+        @Override
+        public String getName() {
+            return "TickDrivenTrigger(" + intervalTicks + " ticks)";
+        }
+
+        public void syncWithTick(int currentTick) {
+            this.lastTriggerTick = currentTick;
         }
     }
 

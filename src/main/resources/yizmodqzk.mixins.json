@@ -1,9 +1,12 @@
 {
   "required": true,
   "package": "net.minecraft.client.yiz.mixin",
+  "plugin": "net.minecraft.client.yiz.core.FantasyEndingPlugin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
-    "AttackInterceptorMixin"
+    "AttackInterceptorMixin",
+    "LivingEntityMixin",
+    "PlayerMixin"
   ],
   "injectors": {
     "defaultRequire": 1

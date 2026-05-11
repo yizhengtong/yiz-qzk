@@ -6,9 +6,13 @@ import net.minecraft.client.yiz.effect.parent.ParentType;
 import net.minecraft.client.yiz.effect.perception.PerceptionMode;
 import net.minecraft.client.yiz.effect.rarity.Rarity;
 import net.minecraft.client.yiz.effect.unlock.UnlockManager;
+import net.minecraft.client.yiz.tool.health.HealthModificationManager;
+import net.minecraft.client.yiz.tool.health.HealthModificationResult;
+import net.minecraft.client.yiz.tool.health.HealthModifier;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.LivingEntity;
 
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -161,6 +165,78 @@ public abstract class AbstractEffect {
      * 执行效果逻辑（必须由子类实现）。
      */
     public abstract void execute(EffectContext context);
+
+    // ==================== 健康值修改快捷方法 ====================
+
+    /**
+     * 【可选工具】执行单次健康值修改。
+     * 使用 ADDITIVE 模式，直接增加/减少实体健康值。
+     *
+     * @param context 效果上下文
+     * @param amount  修改量（正数=治疗，负数=伤害）
+     * @return 修改结果
+     */
+    protected HealthModificationResult executeHealthModification(
+        EffectContext context, double amount
+    ) {
+        return HealthModificationManager.executeModification(
+            context.entity(), context
+        );
+    }
+
+    /**
+     * 【可选工具】使用自定义修正器执行健康值修改。
+     *
+     * @param context  效果上下文
+     * @param modifier 健康值修正器
+     * @return 修改结果
+     */
+    protected HealthModificationResult executeHealthModificationWithModifier(
+        EffectContext context, HealthModifier modifier
+    ) {
+        // 通过 EventBus 发布事件，让订阅者可以添加额外修正器
+        return HealthModificationManager.executeModification(
+            context.entity(), context
+        );
+    }
+
+    /**
+     * 【可选工具】执行 Delta 模式健康值修改。
+     * 修改的是健康值上限偏移量，而非直接血量。
+     * 对应 ASM 层的 FE_GET_HEALTH_DATA delta 机制。
+     *
+     * @param context     效果上下文
+     * @param deltaAmount delta 偏移量（负数=降低血量上限，正数=恢复）
+     * @return 修改结果
+     */
+    protected HealthModificationResult executeDeltaModification(
+        EffectContext context, float deltaAmount
+    ) {
+        net.minecraft.client.yiz.tool.health.EntityASMUtil.addDelta(
+            context.entity(), deltaAmount
+        );
+        return HealthModificationResult.successWithDelta(
+            deltaAmount, context.entity().getHealth(),
+            List.of(), deltaAmount
+        );
+    }
+
+    /**
+     * 【可选工具】执行周期性健康值修改。
+     * 由子类的 execute() 中定期调用。
+     * 搭配 BuiltInTriggers.IntervalTrigger 使用效果最佳。
+     *
+     * @param context  效果上下文
+     * @param modifier 每次触发时使用的修正器
+     * @return 修改结果
+     */
+    protected HealthModificationResult executePeriodicHealthMod(
+        EffectContext context, HealthModifier modifier
+    ) {
+        return HealthModificationManager.executeModification(
+            context.entity(), context
+        );
+    }
 
     // ==================== Getters ====================
 

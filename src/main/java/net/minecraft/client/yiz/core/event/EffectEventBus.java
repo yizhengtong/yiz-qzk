@@ -3,6 +3,8 @@ package net.minecraft.client.yiz.core.event;
 import net.minecraft.client.yiz.core.registry.ModRegistries;
 import net.minecraft.client.yiz.effect.AbstractEffect;
 import net.minecraft.client.yiz.effect.EffectContext;
+import net.minecraft.client.yiz.tool.health.HealthModificationManager;
+import net.minecraft.client.yiz.tool.health.HealthModificationTrigger;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.client.yiz.tizMod;
@@ -67,6 +69,7 @@ public final class EffectEventBus {
     /**
      * 分发上下文到效果系统。
      * 遍历所有已注册效果，检查感知、解锁、生效条件，执行效果。
+     * 执行完毕后，检查并触发被动健康值修改。
      */
     public static void dispatchContext(EffectContext context) {
         if (context == null || context.entity() == null) {
@@ -96,12 +99,37 @@ public final class EffectEventBus {
                     continue;
                 }
 
-                // 4. 执行效果
+                // 4. 执行效果（效果内部可自行调用健康值修改）
                 effect.execute(effectContext);
 
             } catch (Exception e) {
                 LOGGER.error("Error dispatching effect {}: {}", effect.getId(), e.getMessage());
             }
+        }
+    }
+
+    /**
+     * 分发上下文并检查被动健康值修改。
+     * 在 dispatchContext 的基础上，额外检查是否有 HealthModificationTrigger
+     * 需要触发。用于 EffectEventBus 驱动周期性健康值修改的场景。
+     *
+     * @param context  效果上下文
+     * @param trigger  可选触发器（null 则等同于 dispatchContext）
+     */
+    public static void dispatchContextWithHealthMod(
+        EffectContext context,
+        HealthModificationTrigger trigger
+    ) {
+        if (context == null || context.entity() == null) {
+            return;
+        }
+
+        // 先执行标准分发
+        dispatchContext(context);
+
+        // 如果有触发器，检查是否应该触发健康值修改
+        if (trigger != null && trigger.shouldTrigger(context.entity(), context)) {
+            HealthModificationManager.triggerModification(context.entity(), context);
         }
     }
 

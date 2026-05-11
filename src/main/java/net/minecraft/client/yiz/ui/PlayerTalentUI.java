@@ -65,7 +65,7 @@ public class PlayerTalentUI {
         if (!UIConfig.isPlayerTalentUIEnabled()) return false;
         if (!(mc.screen instanceof net.minecraft.client.gui.screens.inventory.InventoryScreen)) return false;
         if (mc.player == null) return false;
-        return hasUnlockedTalents(mc.player);
+        return true;
     }
 
     // ==================== 渲染 + 输入入口 ====================
@@ -79,7 +79,6 @@ public class PlayerTalentUI {
         if (mc.player == null) return;
 
         List<AbstractEffect> talents = getPlayerTalents(mc.player);
-        if (talents.isEmpty()) return;
 
         // 首次渲染时初始化默认位置（背包界面左侧）
         if (winX == -1 || winY == -1) {
@@ -140,8 +139,9 @@ public class PlayerTalentUI {
 
         // ── 标题栏 ──
         int titleBottom = cy + TITLE_BAR_HEIGHT;
+        String title = talents.isEmpty() ? "§7已解锁天赋" : "§6§l已解锁天赋";
         // 标题文字
-        graphics.drawString(font, "§6§l已解锁天赋",
+        graphics.drawString(font, title,
             cx, cy + (TITLE_BAR_HEIGHT - font.lineHeight) / 2, 0xFFFFFFFF);
         // 标题分隔线
         graphics.fill(cx, titleBottom, cx + cw, titleBottom + 1, 0x44FFFFFF);
@@ -149,7 +149,14 @@ public class PlayerTalentUI {
         // ── 天赋列表 ──
         int lineY = titleBottom + CONTENT_PAD;
         int contentMaxY = y + h - 6 - CONTENT_PAD - HANDLE_SIZE;
-        for (AbstractEffect talent : talents) {
+
+        if (talents.isEmpty()) {
+            // 无天赋时显示提示
+            String hint = "§8当前没有已解锁的天赋";
+            int hintX = cx + (cw - font.width(hint)) / 2;
+            int hintY = titleBottom + CONTENT_PAD + 10;
+            graphics.drawString(font, hint, hintX, hintY, 0xA0A0A0);
+        } else for (AbstractEffect talent : talents) {
             if (lineY + font.lineHeight > contentMaxY) break; // 裁剪超出内容
 
             int color = EffectTooltipRenderer.getRarityColor(talent.getRarity());
@@ -311,10 +318,6 @@ public class PlayerTalentUI {
     }
 
     // ==================== 数据 ====================
-
-    private static boolean hasUnlockedTalents(LocalPlayer player) {
-        return !getPlayerTalents(player).isEmpty();
-    }
 
     public static List<AbstractEffect> getPlayerTalents(LocalPlayer player) {
         List<AbstractEffect> list = new ArrayList<>();

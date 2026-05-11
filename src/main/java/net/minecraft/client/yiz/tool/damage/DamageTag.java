@@ -24,7 +24,19 @@ public enum DamageTag {
      * 破除无敌帧标签
      * 特性：无视目标的无敌帧（hurtTime / invulnerableTime）。
      */
-    PIERCE_INVULNERABILITY("pierce_invulnerability", "破除无敌帧");
+    PIERCE_INVULNERABILITY("pierce_invulnerability", "破除无敌帧"),
+
+    /**
+     * 直接健康值修改标签
+     * 特性：不走 hurt() 流程，直接调用 HealthModificationManager
+     * 修改实体的健康值，绕过伤害免疫、闪避、护盾等机制。
+     *
+     * 工作流程（与 TRUE_DAMAGE 不同）：
+     * - TRUE_DAMAGE：直接 setHealth(health - damage)
+     * - DIRECT_HEALTH_MOD：走 HealthModificationManager 的完整管道，
+     *   支持多修正器汇总、Delta 模式、BAN_HEALING 检查等
+     */
+    DIRECT_HEALTH_MOD("direct_health_mod", "直接健康值修改");
 
     private final String id;
     private final String displayName;

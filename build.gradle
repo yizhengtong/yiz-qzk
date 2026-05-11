@@ -59,6 +59,15 @@ runs {
         workingDirectory project.layout.projectDirectory.dir('run').dir(name)
 
         modSource project.sourceSets.main
+
+        // ASM Agent: expose jdk.attach module for VirtualMachine.attach()
+        jvmArgument '--add-modules=jdk.attach'
+        jvmArgument '--add-opens=jdk.attach/sun.tools.attach=ALL-UNNAMED'
+        // Module-based mods (NeoForge dev) — ALL-UNNAMED doesn't cover named modules
+        jvmArgument '--add-opens=jdk.attach/sun.tools.attach=yizmodqzk'
+
+        // Pass agent jar path for AsmBootstrapper to find in dev environment
+        systemProperty 'yizmodqzk.agent.jar', project.file("build/libs/yizmodqzk-agent-${mod_version}.jar").absolutePath
     }
 
     client {
@@ -173,4 +182,48 @@ idea {
         downloadSources = true
         downloadJavadoc = true
     }
+}
+
+// ==================== Agent Jar 构建 ====================
+// JavaAgent 用于 ASM 字节码改写，嵌入在主模组 JAR 的 /META-INF/jarjar/ 中。
+
+def agentSrcDir = 'agent/src'
+def agentBuildDir = "${buildDir}/agent-classes"
+def agentJarFile = "${buildDir}/libs/yizmodqzk-agent-${mod_version}.jar"
+
+task compileAgent(type: JavaCompile) {
+    source = fileTree(agentSrcDir).include('**/*.java')
+    destinationDirectory = file(agentBuildDir)
+    classpath = configurations.compileClasspath
+    sourceCompatibility = '21'
+    targetCompatibility = '21'
+    options.encoding = 'UTF-8'
+}
+
+task agentJar(type: Jar) {
+    dependsOn compileAgent
+    archiveBaseName = 'yizmodqzk-agent'
+    archiveVersion = mod_version
+    archiveClassifier = ''
+    destinationDirectory = file("${buildDir}/libs")
+    from file(agentBuildDir)
+
+    manifest {
+        attributes(
+            'Agent-Class': 'net.minecraft.client.yiz.agent.HealthAgent',
+            'Can-Retransform-Classes': 'true',
+            'Can-Redefine-Classes': 'true',
+            'Implementation-Title': 'YizModQZK Health Agent',
+            'Implementation-Version': mod_version
+        )
+    }
+}
+
+// Embed agent jar into the main mod jar under /META-INF/jarjar/
+tasks.named('jar', Jar) {
+    from(agentJar.outputs.files) {
+        into 'META-INF/jarjar'
+        rename { 'yizmodqzk-agent.jar' }
+    }
+    dependsOn agentJar
 }

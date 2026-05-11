@@ -1,13 +1,19 @@
 package net.minecraft.client.yiz;
 
+import net.minecraft.client.yiz.attribute.ModAttributes;
 import net.minecraft.client.yiz.core.data.EffectDataLoader;
-import net.minecraft.client.yiz.tizMod;
+import net.minecraft.client.yiz.tool.health.AttributeDamageHandler;
+import net.minecraft.client.yiz.tool.health.HealBanHandler;
+import net.minecraft.client.yiz.tool.health.HealthAttributeHandler;
+import net.minecraft.client.yiz.tool.health.HealthCommand;
+import net.minecraft.world.entity.EntityType;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.neoforged.neoforge.event.AddReloadListenerEvent;
+import net.neoforged.neoforge.event.entity.EntityAttributeModificationEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import org.slf4j.Logger;
@@ -22,6 +28,24 @@ public class tizMod {
         modContainer.registerConfig(ModConfig.Type.COMMON, Config.SPEC);
         modEventBus.addListener(this::commonSetup);
 
+        // 注册自定义属性
+        ModAttributes.getRegistry().register(modEventBus);
+
+        // 将自定义属性添加到玩家实体
+        modEventBus.addListener(this::onEntityAttributeModification);
+
+        // 注册属性健康值处理器（自动添加灵梦/眷恋修正器）
+        HealthAttributeHandler.register();
+
+        // 注册属性伤害事件处理器（常规攻击时应用属性额外伤害）
+        AttributeDamageHandler.register();
+
+        // 注册禁疗事件处理器（攻击后禁疗 + 治疗拦截）
+        HealBanHandler.register();
+
+        // 注册指令
+        NeoForge.EVENT_BUS.register(HealthCommand.class);
+
         // Register data reload listener (NeoForge event bus, not mod bus)
         NeoForge.EVENT_BUS.addListener(this::onAddReloadListener);
 
@@ -31,6 +55,15 @@ public class tizMod {
 
     private void commonSetup(FMLCommonSetupEvent event) {
         LOGGER.info("YizMod QZK Framework initialized");
+    }
+
+    /**
+     * 将自定义属性添加到实体类型上。
+     */
+    private void onEntityAttributeModification(EntityAttributeModificationEvent event) {
+        event.add(EntityType.PLAYER, ModAttributes.REIMU_FLAT_DAMAGE);
+        event.add(EntityType.PLAYER, ModAttributes.REIMU_PERCENT_DAMAGE);
+        event.add(EntityType.PLAYER, ModAttributes.ATTACHMENT);
     }
 
     /**
@@ -46,13 +79,9 @@ public class tizMod {
      */
     private void onPlayerClone(PlayerEvent.Clone event) {
         if (event.isWasDeath()) {
-            // Copy unlock data from old player to new player
             var oldPlayer = event.getOriginal();
             var newPlayer = event.getEntity();
 
-            // UnlockManager data is preserved in memory,
-            // so no explicit copy needed here for in-session respawns.
-            // For cross-session, data is loaded via EntityEffectNBTHandler.
             LOGGER.debug("Player cloned, unlock data preserved");
         }
     }
