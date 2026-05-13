@@ -1,5 +1,7 @@
 package net.minecraft.client.yiz.mixin;
 
+import net.minecraft.client.yiz.api.DamageAttributeRegistry;
+import net.minecraft.client.yiz.api.YizModQZKAPI;
 import net.minecraft.client.yiz.effect.EffectContext;
 import net.minecraft.client.yiz.tool.damage.AttackContext;
 import net.minecraft.client.yiz.tool.damage.DamageResult;
@@ -99,5 +101,25 @@ public abstract class AttackInterceptorMixin {
     private void yizmodqzk$onHurt(DamageSource source, float amount, CallbackInfoReturnable<Boolean> cir) {
         // 可选：在此处理伤害前的逻辑
         // 当前为空实现，预留扩展点
+    }
+
+    /**
+     * 在 attack() 返回时注入（vanilla 攻击完成后）。
+     * <p>
+     * 扫描攻击者身上所有已注册的伤害属性（通过 {@link DamageAttributeRegistry}），
+     * 将属性值总和作为额外真实伤害，经由 {@link YizModQZKAPI#damage} 的三層系统施加。
+     * 绕过目标实体的自定义 {@code hurt()} 方法。
+     * </p>
+     */
+    @Inject(method = "attack", at = @At("RETURN"))
+    private void yizmodqzk$onAttackReturn(Entity target, CallbackInfo ci) {
+        if (!(target instanceof LivingEntity livingTarget)) return;
+
+        Player attacker = (Player) (Object) this;
+
+        float attrDamage = DamageAttributeRegistry.getTotalValue(attacker);
+        if (attrDamage > 0) {
+            YizModQZKAPI.damage(livingTarget, attrDamage, attacker);
+        }
     }
 }

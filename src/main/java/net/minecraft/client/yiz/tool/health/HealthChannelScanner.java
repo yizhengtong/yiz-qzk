@@ -88,9 +88,34 @@ public final class HealthChannelScanner {
     private static void scanUpToLivingEntity(Class<?> clazz, List<EntityDataAccessor<Float>> result) {
         if (clazz == null || clazz == Object.class || clazz == LivingEntity.class) return;
 
-        // 先扫描父类（上层优先），确保 DATA_HEALTH_ID 的父类先被处理
+        // 先扫描父类（上层优先）
         scanUpToLivingEntity(clazz.getSuperclass(), result);
 
+        // 同时扫描该类实现的所有接口（模组可能在接口中定义 DataParameter）
+        scanInterfaces(clazz, result);
+
+        // 再扫描该类自身的静态字段
+        scanDeclaredFloatAccessors(clazz, result);
+    }
+
+    /**
+     * 递归扫描接口层级，查找定义在接口中的 EntityDataAccessor 静态字段。
+     * 例如 IEntityAnimatedHealth.TITAN_HEALTH
+     */
+    private static void scanInterfaces(Class<?> clazz, List<EntityDataAccessor<Float>> result) {
+        for (Class<?> iface : clazz.getInterfaces()) {
+            // 避免重复扫描（多个父类可能实现同一个接口）
+            if (iface == LivingEntity.class || iface == Object.class) continue;
+            scanDeclaredFloatAccessors(iface, result);
+            // 接口也可以继承其他接口
+            scanInterfaces(iface, result);
+        }
+    }
+
+    /**
+     * 扫描单个类/接口上的静态 EntityDataAccessor&lt;Float&gt; 字段
+     */
+    private static void scanDeclaredFloatAccessors(Class<?> clazz, List<EntityDataAccessor<Float>> result) {
         for (Field field : clazz.getDeclaredFields()) {
             if (!Modifier.isStatic(field.getModifiers())) continue;
             if (!EntityDataAccessor.class.isAssignableFrom(field.getType())) continue;

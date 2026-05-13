@@ -3,9 +3,11 @@ package net.minecraft.client.yiz.tool.health;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.context.CommandContext;
+import net.minecraft.client.yiz.api.YizModQZKAPI;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -73,6 +75,7 @@ public final class HealthCommand {
     private static int killAllNonPlayer(CommandContext<CommandSourceStack> ctx) {
         var source = ctx.getSource();
         var level = source.getLevel();
+        var sourceEntity = source.getEntity();
 
         java.util.List<LivingEntity> targets = new java.util.ArrayList<>();
         for (var entity : level.getEntities().getAll()) {
@@ -81,8 +84,12 @@ public final class HealthCommand {
             }
         }
 
+        // 通过公开 API 施加巨额伤害，走三層系统（delta → channel scanner → DirectHealthFallback），
+        // 绕过实体自定义 hurt() 方法（如 EntityTitan 的伤害类型黑名单/阈值/上限）
         for (var e : targets) {
-            e.kill();
+            float current = e.getHealth();
+            if (current <= 0) continue;
+            YizModQZKAPI.damage(e, current * 10, sourceEntity);
         }
 
         source.sendSuccess(() ->

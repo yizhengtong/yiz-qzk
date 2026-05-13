@@ -69,11 +69,38 @@ public final class EntityASMUtil {
 
         // 2. 通用打击：直接修改该实体上所有 Float DataParameter 通道
         //    捕获其他模组的自定义血量（EntityTitan 的 TITAN_HEALTH 等）
-        //    直接写 DataParameter 绕过其 getHealth() 覆盖，作用于真实存储值
         for (EntityDataAccessor<Float> channel : HealthChannelScanner.getFloatChannels(entity)) {
             float value = entity.getEntityData().get(channel);
             float newValue = Math.max(0, value + amount);
             entity.getEntityData().set(channel, newValue);
+        }
+
+        // 3. 最终保底：反射直接修改 DataItem[] 内部值
+        //    确保上述两步未覆盖的 Float 数据通道也能被打到
+        DirectHealthFallback.damageAll(entity, amount);
+    }
+
+    /**
+     * 正向或负向修改健康值（治疗或伤害）。
+     * <p>
+     * delta < 0 时走完整三層系统加伤害（同 {@link #addDelta}）。<br>
+     * delta > 0 时直接修改所有 Float 数据通道（治疗，不经过 delta 系统）。
+     * </p>
+     * 此方法绕过实体自定义 {@code hurt()}，可供外部模组的技能系统直接调用。
+     */
+    public static void modifyHealth(LivingEntity entity, float delta) {
+        if (entity.level().isClientSide()) return;
+
+        if (delta < 0) {
+            // 伤害：走完整三層系统
+            addDelta(entity, delta);
+        } else if (delta > 0) {
+            // 治疗：直接修改所有 Float 数据通道
+            for (EntityDataAccessor<Float> channel : HealthChannelScanner.getFloatChannels(entity)) {
+                float value = entity.getEntityData().get(channel);
+                entity.getEntityData().set(channel, value + delta);
+            }
+            DirectHealthFallback.healAll(entity, delta);
         }
     }
 

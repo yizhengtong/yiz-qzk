@@ -6,9 +6,11 @@ import net.minecraft.client.yiz.effect.AbstractEffect;
 import net.minecraft.client.yiz.effect.EffectContext;
 import net.minecraft.client.yiz.effect.unlock.UnlockManager;
 import net.minecraft.client.yiz.tool.health.EntityASMUtil;
+import net.minecraft.core.Holder;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.ai.attributes.Attribute;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.common.NeoForge;
 
@@ -105,6 +107,68 @@ public final class YizModQZKAPI {
         // 4. 返回结果
         float remaining = EntityASMUtil.getHealthDelta(target);
         return DamageResult.success(finalAmount, remaining);
+    }
+
+    // ==================== 属性绑定伤害（方法①-子） ====================
+
+    /**
+     * 注册一个属性为伤害属性。
+     * <p>
+     * 攻击者拥有该属性时，每次近战攻击额外附加等量伤害。
+     * 伤害经由三層系统（Delta → ChannelScanner → DirectHealthFallback）施加，
+     * 绕过目标实体的自定义 {@code hurt()}。
+     * </p>
+     *
+     * @param holder 要注册为伤害源的属性
+     */
+    public static void registerDamageAttribute(Holder<Attribute> holder) {
+        DamageAttributeRegistry.register(holder);
+    }
+
+    /**
+     * 获取攻击者身上所有已注册伤害属性的总值。
+     *
+     * @param attacker 攻击者实体
+     * @return 所有已注册伤害属性的总和
+     */
+    public static float getDamageAttributeValue(LivingEntity attacker) {
+        return DamageAttributeRegistry.getTotalValue(attacker);
+    }
+
+    // ==================== 直接健康值修改（方法②） ====================
+
+    /**
+     * 直接增减实体健康值（治疗或伤害）。
+     * <p>
+     * 正数 = 治疗，负数 = 伤害。<br>
+     * 经过三層系统修改所有 Float 数据通道，绕过目标实体的自定义 {@code hurt()}。
+     * 可供外部模组技能系统直接调用，不受伤害类型黑名单/阈值/上限影响。
+     * </p>
+     *
+     * @param target 目标实体
+     * @param delta  变化值（正数治疗，负数伤害）
+     */
+    public static void modifyHealth(LivingEntity target, float delta) {
+        if (target == null) return;
+        EntityASMUtil.modifyHealth(target, delta);
+    }
+
+    /**
+     * 直接设置实体健康值（绝对值）。
+     * <p>
+     * 与 {@link #modifyHealth} 一样绕过 {@code hurt()}。
+     * 自动计算与当前生命值的差值后委派给 {@code modifyHealth}。
+     * </p>
+     *
+     * @param target 目标实体
+     * @param health 目标生命值
+     */
+    public static void setHealth(LivingEntity target, float health) {
+        if (target == null) return;
+        float delta = health - target.getHealth();
+        if (delta != 0) {
+            EntityASMUtil.modifyHealth(target, delta);
+        }
     }
 
     // ==================== 效果注册 ====================
