@@ -2,6 +2,7 @@ package net.minecraft.client.yiz.mixin;
 
 import net.minecraft.client.yiz.api.DamageAttributeRegistry;
 import net.minecraft.client.yiz.api.HealBanAttributeRegistry;
+import net.minecraft.client.yiz.api.SpecialDamageAttributeRegistry;
 import net.minecraft.client.yiz.api.YizModQZKAPI;
 import net.minecraft.client.yiz.effect.EffectContext;
 import net.minecraft.client.yiz.tool.health.HealBanConfig;
@@ -133,6 +134,20 @@ public abstract class AttackInterceptorMixin {
         float banFixed = HealBanAttributeRegistry.getFixedTotal(attacker);
         if (banPercent > 0 || banFixed > 0) {
             HealBanConfig.set(livingTarget, banPercent, banFixed);
+        }
+
+        // 3. 特殊伤害属性 → 真实伤害 / 破甲 / 破无敌帧
+        float trueDmg = SpecialDamageAttributeRegistry.getTrueDamageTotal(attacker);
+        if (trueDmg > 0) {
+            YizModQZKAPI.trueDamage(livingTarget, trueDmg, attacker);
+        }
+        float apDmg = SpecialDamageAttributeRegistry.getArmorPiercingTotal(attacker);
+        if (apDmg > 0) {
+            if (SpecialDamageAttributeRegistry.hasPierceInvulnerability(attacker)) {
+                YizModQZKAPI.armorPiercingAndPierceInvulnerabilityDamage(livingTarget, apDmg, attacker);
+            } else {
+                YizModQZKAPI.armorPiercingDamage(livingTarget, apDmg, attacker);
+            }
         }
     }
 }

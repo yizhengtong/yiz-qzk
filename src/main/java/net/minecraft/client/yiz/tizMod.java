@@ -1,12 +1,9 @@
 package net.minecraft.client.yiz;
 
-import net.minecraft.client.yiz.api.DamageAttributeRegistry;
-import net.minecraft.client.yiz.api.HealBanAttributeRegistry;
 import net.minecraft.client.yiz.core.data.EffectDataLoader;
 import net.minecraft.client.yiz.tool.health.HealBanHandler;
 import net.minecraft.client.yiz.tool.health.HealthCommand;
 import net.minecraft.client.yiz.tool.health.SimpleEntityDamageHandler;
-import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
@@ -44,12 +41,6 @@ public class tizMod {
     }
 
     private void commonSetup(FMLCommonSetupEvent event) {
-        // 绑定原版护甲值为伤害属性（1 护甲 = 1 额外伤害，测试用，后续删除）
-        DamageAttributeRegistry.register(Attributes.ARMOR);
-
-        // 绑定护甲韧性为百分比禁疗属性（1 护甲韧性 = 10% 治疗削减）
-        HealBanAttributeRegistry.registerPercent(Attributes.ARMOR_TOUGHNESS, 10);
-
         LOGGER.info("YizMod QZK Framework initialized");
     }
 

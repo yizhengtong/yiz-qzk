@@ -5,6 +5,7 @@ import net.minecraft.client.yiz.core.registry.ModRegistries;
 import net.minecraft.client.yiz.effect.AbstractEffect;
 import net.minecraft.client.yiz.effect.EffectContext;
 import net.minecraft.client.yiz.effect.unlock.UnlockManager;
+import net.minecraft.client.yiz.ui.PlayerTalentUI;
 import net.minecraft.client.yiz.tool.health.EntityASMUtil;
 import net.minecraft.core.Holder;
 import net.minecraft.resources.ResourceLocation;
@@ -12,6 +13,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.Attribute;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.damagesource.DamageSource;
 import net.neoforged.neoforge.common.NeoForge;
 
 import java.util.List;
@@ -107,6 +109,176 @@ public final class YizModQZKAPI {
         // 4. 返回结果
         float remaining = EntityASMUtil.getHealthDelta(target);
         return DamageResult.success(finalAmount, remaining);
+    }
+
+    // ==================== 真实伤害 / 破甲 / 破无敌帧（方法④） ====================
+
+    /**
+     * 真实伤害：直接扣除目标生命值，无视护甲、无敌帧、伤害减免。
+     * <p>
+     * 伤害值发布 {@link DamageEvent}，可被监听和取消。
+     * 应用方式：{@code target.setHealth(target.getHealth() - amount)}。
+     * </p>
+     *
+     * @param target 伤害承受方
+     * @param amount 伤害值（正数）
+     * @param source 伤害来源（攻击者），可为 null
+     * @return 伤害应用结果
+     */
+    public static DamageResult trueDamage(LivingEntity target, float amount, Entity source) {
+        if (target == null || amount <= 0) {
+            return DamageResult.canceled("invalid parameters");
+        }
+
+        DamageEvent event = new DamageEvent(target, amount, DamageType.TRUE, source);
+        NeoForge.EVENT_BUS.post(event);
+        if (event.isCanceled()) return DamageResult.canceled(event.getCancelReason());
+
+        float finalAmount = event.getAmount();
+        float newHealth = Math.max(0, target.getHealth() - finalAmount);
+        target.setHealth(newHealth);
+        target.hurtMarked = true;
+        if (target.level() != null) {
+            target.level().broadcastEntityEvent(target, (byte) 2);
+        }
+        if (newHealth <= 0 && source != null) {
+            target.die(source.damageSources().generic());
+        }
+        return DamageResult.success(finalAmount, 0);
+    }
+
+    /**
+     * 破甲伤害：跳过护甲减伤，仍受无敌帧限制。
+     * <p>
+     * 使用 {@link DamageSource#magic()} 作为伤害源以跳过护甲减免。
+     * </p>
+     *
+     * @param target 伤害承受方
+     * @param amount 伤害值（正数）
+     * @param source 伤害来源（攻击者），可为 null
+     * @return 伤害应用结果
+     */
+    public static DamageResult armorPiercingDamage(LivingEntity target, float amount, Entity source) {
+        if (target == null || amount <= 0) {
+            return DamageResult.canceled("invalid parameters");
+        }
+
+        DamageEvent event = new DamageEvent(target, amount, DamageType.ARMOR_PIERCING, source);
+        NeoForge.EVENT_BUS.post(event);
+        if (event.isCanceled()) return DamageResult.canceled(event.getCancelReason());
+
+        float finalAmount = event.getAmount();
+        DamageSource dmgSource = source != null
+            ? source.damageSources().magic()
+            : target.damageSources().generic();
+        target.hurt(dmgSource, finalAmount);
+        return DamageResult.success(finalAmount, 0);
+    }
+
+    /**
+     * 破无敌帧伤害：无视目标无敌帧，但仍经过护甲减伤。
+     * <p>
+     * 临时清除目标 {@code invulnerableTime} 后通过原版 {@code hurt()} 应用伤害，
+     * 完成后恢复。
+     * </p>
+     *
+     * @param target 伤害承受方
+     * @param amount 伤害值（正数）
+     * @param source 伤害来源（攻击者），可为 null
+     * @return 伤害应用结果
+     */
+    public static DamageResult pierceInvulnerabilityDamage(LivingEntity target, float amount, Entity source) {
+        if (target == null || amount <= 0) {
+            return DamageResult.canceled("invalid parameters");
+        }
+
+        DamageEvent event = new DamageEvent(target, amount, DamageType.PIERCE_INVULNERABILITY, source);
+        NeoForge.EVENT_BUS.post(event);
+        if (event.isCanceled()) return DamageResult.canceled(event.getCancelReason());
+
+        float finalAmount = event.getAmount();
+        int saved = target.invulnerableTime;
+        target.invulnerableTime = 0;
+        try {
+            target.hurt(target.damageSources().generic(), finalAmount);
+        } finally {
+            target.invulnerableTime = saved;
+        }
+        return DamageResult.success(finalAmount, 0);
+    }
+
+    /**
+     * 破甲 + 破无敌帧：跳过护甲且无视无敌帧。
+     *
+     * @param target 伤害承受方
+     * @param amount 伤害值（正数）
+     * @param source 伤害来源（攻击者），可为 null
+     * @return 伤害应用结果
+     */
+    public static DamageResult armorPiercingAndPierceInvulnerabilityDamage(LivingEntity target, float amount, Entity source) {
+        if (target == null || amount <= 0) {
+            return DamageResult.canceled("invalid parameters");
+        }
+
+        DamageEvent event = new DamageEvent(target, amount, DamageType.ARMOR_PIERCING, source);
+        NeoForge.EVENT_BUS.post(event);
+        if (event.isCanceled()) return DamageResult.canceled(event.getCancelReason());
+
+        float finalAmount = event.getAmount();
+        int saved = target.invulnerableTime;
+        target.invulnerableTime = 0;
+        try {
+            DamageSource dmgSource = source != null
+                ? source.damageSources().magic()
+                : target.damageSources().generic();
+            target.hurt(dmgSource, finalAmount);
+        } finally {
+            target.invulnerableTime = saved;
+        }
+        return DamageResult.success(finalAmount, 0);
+    }
+
+    // ==================== 特殊伤害属性绑定（方法④-子） ====================
+
+    /**
+     * 注册一个属性为真实伤害属性。
+     * <p>
+     * 攻击者拥有该属性时，每次近战攻击额外附加等量真实伤害。
+     * 真实伤害直接 {@code setHealth(health - damage)}。
+     * </p>
+     *
+     * @param holder 属性
+     * @param scale  缩放系数（每点属性的伤害值）
+     */
+    public static void registerTrueDamageAttribute(Holder<Attribute> holder, float scale) {
+        SpecialDamageAttributeRegistry.registerTrueDamage(holder, scale);
+    }
+
+    /**
+     * 注册一个属性为破甲伤害属性。
+     * <p>
+     * 攻击者拥有该属性时，每次近战攻击附加等量破甲伤害。
+     * 破甲伤害跳过护甲减伤。
+     * </p>
+     *
+     * @param holder 属性
+     * @param scale  缩放系数（每点属性的伤害值）
+     */
+    public static void registerArmorPiercingAttribute(Holder<Attribute> holder, float scale) {
+        SpecialDamageAttributeRegistry.registerArmorPiercing(holder, scale);
+    }
+
+    /**
+     * 注册一个属性为破无敌帧属性。
+     * <p>
+     * 攻击者拥有该属性时（总值 > 0），破甲伤害同时无视目标无敌帧。
+     * </p>
+     *
+     * @param holder 属性
+     * @param scale  缩放系数（大于 0 即可激活）
+     */
+    public static void registerPierceInvulnerabilityAttribute(Holder<Attribute> holder, float scale) {
+        SpecialDamageAttributeRegistry.registerPierceInvulnerability(holder, scale);
     }
 
     // ==================== 属性绑定伤害（方法①-子） ====================
@@ -301,6 +473,36 @@ public final class YizModQZKAPI {
      */
     public static List<AbstractEffect> getAllEffects() {
         return List.copyOf(ModRegistries.getAllEffects());
+    }
+
+    // ==================== 实体天赋查询 ====================
+
+    /**
+     * 获取实体所有已解锁的天赋。
+     * <p>
+     * 自动过滤出 {@link net.minecraft.client.yiz.effect.perception.EntityPerception} 类型的效果，
+     * 并按稀有度 → 等级降序排序。
+     * </p>
+     *
+     * @param entity 目标实体
+     * @return 已解锁的天赋列表
+     */
+    public static List<AbstractEffect> getEntityTalents(LivingEntity entity) {
+        return PlayerTalentUI.getPlayerTalents(entity);
+    }
+
+    // ==================== UI 刷新 ====================
+
+    /**
+     * 请求刷新所有 YizMod QZK UI 组件。
+     * <p>
+     * 下游模组在解锁新天赋、变更效果或需要重新渲染 UI 时调用此方法。
+     * </p>
+     */
+    public static void refreshUI() {
+        // UI 组件在下一帧渲染时会自动从注册表重新读取最新状态，
+        // 不持有缓存副本，因此无需额外刷新动作。
+        // 此方法作为 API 契约保留，确保下游模组调用不会出错。
     }
 
     // ==================== 快捷方法 ====================

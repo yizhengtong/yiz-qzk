@@ -5,6 +5,7 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.inventory.tooltip.TooltipRenderUtil;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.client.yiz.core.registry.ModRegistries;
 import net.minecraft.client.yiz.effect.AbstractEffect;
 import net.minecraft.client.yiz.effect.perception.EntityPerception;
@@ -320,12 +321,19 @@ public class PlayerTalentUI {
     // ==================== 数据 ====================
 
     public static List<AbstractEffect> getPlayerTalents(LocalPlayer player) {
+        return getPlayerTalents((LivingEntity) player);
+    }
+
+    /**
+     * 获取实体所有已解锁的天赋（LivingEntity 版本，兼容服务端逻辑）。
+     */
+    public static List<AbstractEffect> getPlayerTalents(LivingEntity entity) {
         List<AbstractEffect> list = new ArrayList<>();
         for (AbstractEffect effect : ModRegistries.getAllEffects()) {
             boolean isTalent = effect.getPerceptionModes().stream()
                 .anyMatch(m -> m instanceof EntityPerception);
             if (!isTalent) continue;
-            if (UnlockManager.isUnlocked(player, effect.getId())) {
+            if (UnlockManager.isUnlocked(entity, effect.getId())) {
                 list.add(effect);
             }
         }

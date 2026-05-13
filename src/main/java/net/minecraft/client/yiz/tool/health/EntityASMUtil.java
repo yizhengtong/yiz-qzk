@@ -237,6 +237,44 @@ public final class EntityASMUtil {
         return original;
     }
 
+    // ==================== CoreMod 级别健康值修正 ====================
+
+    /**
+     * CoreMod 级别 {@code getHealth()} 返回值修正。
+     * <p>
+     * 由 {@code META-INF/yizmodqzk_healban.js} 通过 ASM 在 {@code LivingEntity.getHealth()}
+     * 的每个 {@code FRETURN} 之前注入。
+     * </p>
+     * <p>
+     * 作为保底方案，在 Mixin 和 ASM Agent 均未生效时提供最终防线：
+     * <ol>
+     *   <li>Delta 截断：修正后的血量不超过 {@code maxHealth + delta}</li>
+     *   <li>HealBan 上限：禁疗激活时，有效血量不得超过 {@code maxHealth}</li>
+     * </ol>
+     * 这确保即使泰坦类实体在 DataParameter 中存储了巨量 HP，
+     * {@code getHealth()} 返回的是封顶后的有效值，死亡检测可以正常触发。
+     * </p>
+     *
+     * @param originalHealth 原始 getHealth() 返回值
+     * @param entity         目标实体
+     * @return 经过封顶修正后的健康值
+     */
+    public static float specialCoreModGetHealth(float originalHealth, LivingEntity entity) {
+        // 1. Delta 截断（与 Mixin 的 getHealth 修改保持一致）
+        float delta = getHealthDelta(entity);
+        float afterDelta = (delta != 0)
+            ? Math.min(originalHealth, entity.getMaxHealth() + delta)
+            : originalHealth;
+
+        // 2. HealBan 上限：禁疗激活时，有效血量不得超过 maxHealth
+        //    防止泰坦类实体在 DataParameter 中存储巨量 HP 导致打不死
+        if (HealBanConfig.get(entity) != null) {
+            return Math.min(afterDelta, entity.getMaxHealth());
+        }
+
+        return afterDelta;
+    }
+
     // ==================== 统计 ====================
 
     /**
