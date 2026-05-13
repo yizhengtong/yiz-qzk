@@ -2,9 +2,7 @@ package net.minecraft.client.yiz;
 
 import net.minecraft.client.yiz.attribute.ModAttributes;
 import net.minecraft.client.yiz.core.data.EffectDataLoader;
-import net.minecraft.client.yiz.tool.health.AttributeDamageHandler;
 import net.minecraft.client.yiz.tool.health.HealBanHandler;
-import net.minecraft.client.yiz.tool.health.HealthAttributeHandler;
 import net.minecraft.client.yiz.tool.health.HealthCommand;
 import net.minecraft.client.yiz.tool.health.SimpleEntityDamageHandler;
 import net.minecraft.world.entity.EntityType;
@@ -35,12 +33,6 @@ public class tizMod {
         // 将自定义属性添加到玩家实体
         modEventBus.addListener(this::onEntityAttributeModification);
 
-        // 注册属性健康值处理器（自动添加灵梦/眷恋修正器）
-        HealthAttributeHandler.register();
-
-        // 注册属性伤害事件处理器（常规攻击时应用属性额外伤害）
-        AttributeDamageHandler.register();
-
         // 注册最简单的 ASM Agent 伤害测试接口
         SimpleEntityDamageHandler.register();
 
@@ -65,8 +57,6 @@ public class tizMod {
      * 将自定义属性添加到实体类型上。
      */
     private void onEntityAttributeModification(EntityAttributeModificationEvent event) {
-        event.add(EntityType.PLAYER, ModAttributes.REIMU_FLAT_DAMAGE);
-        event.add(EntityType.PLAYER, ModAttributes.REIMU_PERCENT_DAMAGE);
         event.add(EntityType.PLAYER, ModAttributes.ATTACHMENT);
     }
 

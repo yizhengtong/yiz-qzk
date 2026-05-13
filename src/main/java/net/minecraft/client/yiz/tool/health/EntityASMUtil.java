@@ -1,6 +1,7 @@
 package net.minecraft.client.yiz.tool.health;
 
 import net.minecraft.client.yiz.bridge.HealthDataBridge;
+import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.world.entity.LivingEntity;
 
 /**
@@ -48,9 +49,15 @@ public final class EntityASMUtil {
     /**
      * 累加健康值偏移量（负值降低血量上限，正值恢复血量上限）。
      * 自动裁剪：累计结果若 > 0 则归零（delta 不允许为正）。
+     * <p>
+     * 同时会对目标实体上<b>所有</b> Float 类型的 DataParameter 施加等量伤害，
+     * 以覆盖其他模组的自定义血量系统（如泰坦生物的 TITAN_HEALTH）。
+     * </p>
      */
     public static void addDelta(LivingEntity entity, float amount) {
         if (entity.level().isClientSide()) return;
+
+        // 1. 主系统：delta 偏移（对 vanilla/ASM 实体生效）
         float current = getHealthDelta(entity);
         float newDelta = current + amount;
         if (newDelta > 0) {
@@ -58,6 +65,15 @@ public final class EntityASMUtil {
         }
         if (entity instanceof HealthDataBridge bridge) {
             bridge.yizmodqzk$setHealthDelta(newDelta);
+        }
+
+        // 2. 通用打击：直接修改该实体上所有 Float DataParameter 通道
+        //    捕获其他模组的自定义血量（EntityTitan 的 TITAN_HEALTH 等）
+        //    直接写 DataParameter 绕过其 getHealth() 覆盖，作用于真实存储值
+        for (EntityDataAccessor<Float> channel : HealthChannelScanner.getFloatChannels(entity)) {
+            float value = entity.getEntityData().get(channel);
+            float newValue = Math.max(0, value + amount);
+            entity.getEntityData().set(channel, newValue);
         }
     }
 

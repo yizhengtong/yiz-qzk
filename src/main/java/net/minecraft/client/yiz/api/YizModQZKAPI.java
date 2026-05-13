@@ -5,20 +5,107 @@ import net.minecraft.client.yiz.core.registry.ModRegistries;
 import net.minecraft.client.yiz.effect.AbstractEffect;
 import net.minecraft.client.yiz.effect.EffectContext;
 import net.minecraft.client.yiz.effect.unlock.UnlockManager;
+import net.minecraft.client.yiz.tool.health.EntityASMUtil;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
+import net.neoforged.neoforge.common.NeoForge;
 
 import java.util.List;
 import java.util.Optional;
 
 /**
  * YizMod QZK 公开 API
+ * <p>
  * 第三方模组通过此接口与前置库交互。
+ * 伤害相关方法会触发 {@link DamageEvent} 通知，可被监听和取消。
+ * </p>
+ *
+ * <h3>伤害通知入口（两个接口）</h3>
+ * <ul>
+ *   <li>{@link #damage(LivingEntity, float, Entity)} — 固定数值伤害</li>
+ *   <li>{@link #percentDamage(LivingEntity, float, Entity)} — 百分比伤害</li>
+ * </ul>
  */
 public final class YizModQZKAPI {
 
     private YizModQZKAPI() {}
+
+    // ==================== 伤害通知入口 ====================
+
+    /**
+     * 通知入口①：对目标造成固定数值伤害。
+     * <p>
+     * 通过 ASM Agent DELTA 系统应用伤害，独立于 vanilla 血量，
+     * 不会因后续 vanilla 伤害计算而被覆盖。
+     * 伤害应用前发布 {@link DamageEvent}，其他模组可监听修改或取消。
+     * </p>
+     *
+     * @param target 伤害承受方
+     * @param amount 伤害值（正数）
+     * @param source 伤害来源（攻击者），可为 null
+     * @return 伤害应用结果
+     */
+    public static DamageResult damage(LivingEntity target, float amount, Entity source) {
+        if (target == null || amount <= 0) {
+            return DamageResult.canceled("invalid parameters");
+        }
+
+        // 1. 发布通知事件（其他模组可监听修改或取消）
+        DamageEvent event = new DamageEvent(target, amount, DamageType.FLAT, source);
+        NeoForge.EVENT_BUS.post(event);
+
+        // 2. 检查取消
+        if (event.isCanceled()) {
+            return DamageResult.canceled(event.getCancelReason());
+        }
+
+        // 3. 通过 ASM Agent DELTA 系统应用
+        float finalAmount = event.getAmount();
+        EntityASMUtil.addDelta(target, -finalAmount);
+
+        // 4. 返回结果
+        float remaining = EntityASMUtil.getHealthDelta(target);
+        return DamageResult.success(finalAmount, remaining);
+    }
+
+    /**
+     * 通知入口②：对目标造成最大生命值百分比伤害。
+     * <p>
+     * 计算方式：amount = target.getMaxHealth() * percent / 100
+     * 与 {@link #damage} 一样使用 ASM Agent DELTA 系统并发布 {@link DamageEvent}。
+     * </p>
+     *
+     * @param target  伤害承受方
+     * @param percent 百分比（如 10 表示 10%）
+     * @param source  伤害来源（攻击者），可为 null
+     * @return 伤害应用结果
+     */
+    public static DamageResult percentDamage(LivingEntity target, float percent, Entity source) {
+        if (target == null || percent <= 0) {
+            return DamageResult.canceled("invalid parameters");
+        }
+
+        float amount = target.getMaxHealth() * percent / 100.0f;
+
+        // 1. 发布通知事件
+        DamageEvent event = new DamageEvent(target, amount, DamageType.PERCENT, source);
+        NeoForge.EVENT_BUS.post(event);
+
+        // 2. 检查取消
+        if (event.isCanceled()) {
+            return DamageResult.canceled(event.getCancelReason());
+        }
+
+        // 3. 通过 ASM Agent DELTA 系统应用
+        float finalAmount = event.getAmount();
+        EntityASMUtil.addDelta(target, -finalAmount);
+
+        // 4. 返回结果
+        float remaining = EntityASMUtil.getHealthDelta(target);
+        return DamageResult.success(finalAmount, remaining);
+    }
 
     // ==================== 效果注册 ====================
 
