@@ -18,12 +18,64 @@
 9. [事件监听](#9-事件监听)
 10. [JSON 数据驱动](#10-json-数据驱动)
 11. [完整示例](#11-完整示例)
+12. [FAQ](#faq)
 
 ---
 
 ## 1. 快速接入
 
-### 1.1 依赖声明
+### 1.1 发布到 Maven
+
+在本项目目录执行以下命令，将前置库发布到本地 Maven 仓库：
+
+```bash
+# 发布到 ~/.m2/repository（推荐，IDE 自动识别）
+gradle publishToMavenLocal
+
+# 或发布到项目内 file://repo/ 目录
+gradle publish
+```
+
+发布产物坐标（由 `mod_group_id` 和 `mod_id` 决定）：
+```
+net.minecraft.client.yiz:yizmodqzk:1.0.0
+```
+
+### 1.2 获取分发包（推荐）
+
+在本项目目录执行：
+
+```bash
+gradle packageLib
+```
+
+在 `build/distributions/` 下生成 `yizmodqzk-{version}.zip`，解压后直接放入服务端/客户端的 `mods` 文件夹即可。
+
+---
+
+### 1.3 下游项目引入依赖
+
+**`build.gradle`**：
+
+```gradle
+repositories {
+    // 方式 A：本地 Maven 仓库（使用 publishToMavenLocal 后）
+    mavenLocal()
+
+    // 方式 B：Git 子模块的 file repo（使用 gradle publish 后）
+    maven { url "file:///path/to/yiz-qzk/repo" }
+}
+
+dependencies {
+    // 本前置库
+    implementation "net.minecraft.client.yiz:yizmodqzk:1.0.0"
+}
+```
+
+> **注意**：`build.gradle` 中的 `implementation` 配置确保编译期和运行期均可访问 API 类。
+> 本前置库也是一个 NeoForge Mod，运行时需放在 `mods` 目录。
+
+### 1.4 声明模组依赖
 
 在 `neoforge.mods.toml` 中声明前置库依赖：
 
@@ -36,7 +88,30 @@
     side = "BOTH"
 ```
 
-### 1.2 导入 API
+### 1.4 自动复制前置库到 build/libs
+
+下游模组 `gradle build` 时，想让 `yizmodqzk` 的 JAR 自动出现在 `build/libs/` 目录中，在 `build.gradle` 添加：
+
+```gradle
+dependencies {
+    implementation "net.minecraft.client.yiz:yizmodqzk:1.0.0"
+}
+
+// build 时将前置库复制到 build/libs/（与模组 JAR 放一起）
+tasks.register('collectLibs', Copy) {
+    from configurations.runtimeClasspath
+    into layout.buildDirectory.dir('libs')
+}
+tasks.named('build') { dependsOn 'collectLibs' }
+```
+
+执行 `gradle build` 后，`build/libs/` 中同时包含：
+```
+your-mod-1.0.0.jar        ← 你的模组
+yizmodqzk-1.0.0.jar       ← 前置库（自动复制）
+```
+
+### 1.5 导入 API
 
 ```java
 import net.minecraft.client.yiz.api.YizModQZKAPI;
@@ -605,3 +680,61 @@ public class MyMod {
 | **物品** | `attachEffectToItem(stack, effect)` | 为物品附加效果 |
 | | `getItemEffects(stack)` | 获取物品上的所有效果 |
 | **UI** | `refreshUI()` | 刷新 UI |
+
+---
+
+## FAQ
+
+### 这个前置库可以被 AI（如 Claude）正确理解和使用吗？
+
+**可以**。理由如下：
+
+1. **单入口 API 类**：所有公开功能集中在 `YizModQZKAPI` 一个类中，全部为静态方法，AI 无需实例化即可调用。
+2. **清晰的命名**：方法名自文档化 — `trueDamage()`、`armorPiercingDamage()`、`setHealBan()`、`unlockEffect()`。
+3. **详细的 Javadoc**：每个方法都有中英文参数说明和示例。
+4. **标准的 AbstractEffect 模式**：效果的六大维度集中在构造函数参数中，AI 能直接看出如何创建一个完整的效果。
+5. **确定性 API 模式**：所有方法不依赖隐藏状态或复杂的 builder 模式，直接传参即可。
+
+AI 在接入时：
+- 看到 `YizModQZKAPI.damage(target, amount, source)` 就知道"对目标造成伤害"
+- 看到 `AbstractEffect` 构造函数的 8 个参数就知道"这是创建效果的标准入口"
+- 看到 `Set.of(new EntityPerception())` 就知道"这是天赋类型"
+- 看到 `EntityAttackCondition` 就知道"攻击时触发"
+
+### 如果我想将本前置库嵌入到一个更大的项目中使用？
+
+方式一：**Git 子模块**
+
+```bash
+git submodule add https://github.com/你的仓库/yiz-qzk.git libraries/yiz-qzk
+```
+
+在父项目的 `settings.gradle` 中包含：
+```gradle
+include 'libraries:yiz-qzk'
+```
+
+方式二：**独立发布 + Maven 依赖**（推荐，解耦更彻底）
+
+```bash
+cd yiz-qzk
+gradle publishToMavenLocal
+```
+
+然后在下游项目中声明依赖（见 [1.2 下游项目引入依赖](#12-下游项目引入依赖)）。
+
+### 为什么所有方法都是静态的？不使用实例注入？
+
+本前置库的设计定位是**工具类式前置库**，下游模组在任何地方都可以直接调用 `YizModQZKAPI.xxx()`，无需：
+- 获取实例或持有引用
+- 通过依赖注入获取 API 对象
+- 在构造器中传入 API 实例
+
+这种模式的最简接入成本，对下游模组开发者最友好。
+
+### 本前置库与其他模组的兼容性如何？
+
+- **伤害系统**：绕过目标实体的自定义 `hurt()`，不影响其他模组的伤害监听
+- **禁疗系统**：通过 ASM Agent + Mixin + CoreMod 三层保底，对第三方模组的治疗行为生效
+- **Attribute 绑定**：使用原版 `Holder<Attribute>`，与所有模组的属性系统兼容
+- **效果框架**：通过 `ModRegistries` 独立注册，不冲突

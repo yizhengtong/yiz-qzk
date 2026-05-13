@@ -240,3 +240,18 @@ tasks.named('jar', Jar) {
     }
     dependsOn agentJar
 }
+
+// ==================== 分发包 ====================
+// 运行 gradle packageLib 生成 build/distributions/yizmodqzk-{version}.zip
+// 内含 mod JAR，供下游直接放入 mods 文件夹使用
+
+tasks.register('packageLib', Zip) {
+    archiveBaseName = mod_id
+    archiveVersion = mod_version
+    destinationDirectory = layout.buildDirectory.dir('distributions')
+
+    from(tasks.named('jar')) {
+        into('/')
+    }
+    dependsOn tasks.named('jar')
+}
