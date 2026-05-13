@@ -127,6 +127,43 @@ public final class DirectHealthFallback {
         applyToAllFloatItems(entity, amount, false);
     }
 
+    // ==================== 公用遍历（供 HealBanHandler.enforceTick 使用） ====================
+
+    /**
+     * 遍历实体的所有 Float DataItem。
+     * <p>
+     * 使用与 {@link #applyToAllFloatItems} 相同的方式访问 {@code itemsById} 数组，
+     * 确保不会遗漏任何 Float 数据通道（包括泰坦类模组通过反射等方式注册的）。
+     * </p>
+     *
+     * @param entity   目标实体
+     * @param callback 对每个 Float DataItem 的回调
+     */
+    public static void forEachFloatItem(LivingEntity entity, FloatItemCallback callback) {
+        if (!AVAILABLE) return;
+        try {
+            SynchedEntityData data = entity.getEntityData();
+            SynchedEntityData.DataItem<?>[] items = (SynchedEntityData.DataItem<?>[]) ITEMS_BY_ID.get(data);
+            if (items == null) return;
+            for (SynchedEntityData.DataItem<?> item : items) {
+                if (item == null) continue;
+                EntityDataAccessor<?> accessor = item.getAccessor();
+                if (accessor == null || accessor.serializer() != EntityDataSerializers.FLOAT) continue;
+                @SuppressWarnings("unchecked")
+                SynchedEntityData.DataItem<Float> floatItem = (SynchedEntityData.DataItem<Float>) item;
+                float value = (Float) item.getValue();
+                @SuppressWarnings("unchecked")
+                EntityDataAccessor<Float> floatAccessor = (EntityDataAccessor<Float>) accessor;
+                callback.accept(floatAccessor, value, floatItem);
+            }
+        } catch (Exception ignored) {}
+    }
+
+    @FunctionalInterface
+    public interface FloatItemCallback {
+        void accept(EntityDataAccessor<Float> accessor, float value, SynchedEntityData.DataItem<Float> item);
+    }
+
     // ==================== 内部实现 ====================
 
     /**

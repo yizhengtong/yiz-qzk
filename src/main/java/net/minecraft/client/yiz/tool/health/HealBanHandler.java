@@ -123,8 +123,12 @@ public final class HealBanHandler {
      * 周期性禁疗强制：检测实体各 Float 通道是否出现了未经授权的增长，
      * 如果是，按禁疗配置削减。
      * <p>
+     * 通过 {@link DirectHealthFallback#forEachFloatItem} 直接访问
+     * {@code SynchedEntityData.DataItem[]}，确保泰坦类模组的所有自定义
+     * Float 通道（含非静态定义的）都能被覆盖。
+     * </p>
+     * <p>
      * 由 {@code LivingEntityMixin.yizmodqzk$onTick()} 每 ~10 tick 调用一次。
-     * 主要应对泰坦类实体在 tick()/aiStep() 中直接修改自定义 DataParameter 的恢复方式。
      * </p>
      */
     public static void enforceTick(LivingEntity entity) {
@@ -134,27 +138,33 @@ public final class HealBanHandler {
             return;
         }
 
-        List<EntityDataAccessor<Float>> channels = HealthChannelScanner.getAllFloatChannels(entity);
         Map<Integer, Float> prev = CHANNEL_SNAPSHOTS.get(entity.getUUID());
         Map<Integer, Float> current = new HashMap<>();
 
-        // 1. 读取当前各通道值
-        for (EntityDataAccessor<Float> ch : channels) {
-            current.put(ch.id(), entity.getEntityData().get(ch));
-        }
+        // 1. 通过 itemsById 反射读取所有 Float 通道当前值
+        DirectHealthFallback.forEachFloatItem(entity, (accessor, value, item) -> {
+            current.put(accessor.id(), value);
+        });
 
         // 2. 逐通道检查增长并强制禁疗
         if (prev != null) {
-            for (EntityDataAccessor<Float> ch : channels) {
-                float now = current.get(ch.id());
-                Float was = prev.get(ch.id());
+            for (Map.Entry<Integer, Float> entry : current.entrySet()) {
+                Integer id = entry.getKey();
+                float now = entry.getValue();
+                Float was = prev.get(id);
                 if (was != null && now > was + 0.01f) {
                     float increase = now - was;
                     float allowed = config.apply(increase);
                     float banned = increase - Math.max(0, allowed);
                     if (banned > 0.01f) {
-                        entity.getEntityData().set(ch, now - banned);
-                        current.put(ch.id(), now - banned);
+                        // 找到对应的 DataItem 写入减少后的值
+                        DirectHealthFallback.forEachFloatItem(entity, (acc, v, item) -> {
+                            if (acc.id() == id) {
+                                item.setValue(v - banned);
+                                item.setDirty(true);
+                            }
+                        });
+                        current.put(id, now - banned);
                     }
                 }
             }
@@ -165,16 +175,19 @@ public final class HealBanHandler {
     }
 
     /**
-     * 更新通道快照基线（在 {@code EntityASMUtil.modifyHealth()} 主动治疗后调用）。
-     * 防止 tick 级强制将我们自己的治疗也拦截掉。
+     * 更新通道快照基线（在 <ul>
+     *   <li>{@code EntityASMUtil.modifyHealth()} 主动治疗后</li>
+     *   <li>{@code EntityASMUtil.addDelta()} 伤害后</li>
+     *   <li>{@code setHealth()} RETURN</li>
+     * </ul>
+     * 调用，防止 tick 级强制将我们的修改也拦截掉）。
      */
     public static void updateBaseline(LivingEntity entity) {
         if (HealBanConfig.get(entity) == null) return;
-        List<EntityDataAccessor<Float>> channels = HealthChannelScanner.getAllFloatChannels(entity);
         Map<Integer, Float> snap = new HashMap<>();
-        for (EntityDataAccessor<Float> ch : channels) {
-            snap.put(ch.id(), entity.getEntityData().get(ch));
-        }
+        DirectHealthFallback.forEachFloatItem(entity, (accessor, value, item) -> {
+            snap.put(accessor.id(), value);
+        });
         CHANNEL_SNAPSHOTS.put(entity.getUUID(), snap);
     }
 
