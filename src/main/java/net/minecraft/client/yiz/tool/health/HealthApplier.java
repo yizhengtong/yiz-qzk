@@ -63,11 +63,13 @@ public final class HealthApplier {
 
         // ========== 4. 禁疗检查 ==========
         if (computed > currentHealth) {
-            double banFactor = HealBanValueCalculator.calculate(entity);
-            if (banFactor > 0) {
+            var apiBan = HealBanConfig.get(entity);
+            if (apiBan != null) {
                 double healingAmount = computed - currentHealth;
-                double reducedHealing = HealBanApplier.apply(healingAmount, banFactor);
-                computed = currentHealth + reducedHealing;
+                if (healingAmount > 0) {
+                    double banned = apiBan.apply((float) healingAmount);
+                    computed = currentHealth + banned;
+                }
             }
         }
 

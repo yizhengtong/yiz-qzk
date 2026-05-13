@@ -1,8 +1,10 @@
 package net.minecraft.client.yiz.mixin;
 
 import net.minecraft.client.yiz.api.DamageAttributeRegistry;
+import net.minecraft.client.yiz.api.HealBanAttributeRegistry;
 import net.minecraft.client.yiz.api.YizModQZKAPI;
 import net.minecraft.client.yiz.effect.EffectContext;
+import net.minecraft.client.yiz.tool.health.HealBanConfig;
 import net.minecraft.client.yiz.tool.damage.AttackContext;
 import net.minecraft.client.yiz.tool.damage.DamageResult;
 import net.minecraft.client.yiz.tool.damage.DamageTag;
@@ -106,10 +108,13 @@ public abstract class AttackInterceptorMixin {
     /**
      * 在 attack() 返回时注入（vanilla 攻击完成后）。
      * <p>
-     * 扫描攻击者身上所有已注册的伤害属性（通过 {@link DamageAttributeRegistry}），
-     * 将属性值总和作为额外真实伤害，经由 {@link YizModQZKAPI#damage} 的三層系统施加。
-     * 绕过目标实体的自定义 {@code hurt()} 方法。
+     * 扫描攻击者身上所有已注册的伤害/禁疗属性，自动附加效果。
      * </p>
+     * <ul>
+     *   <li>伤害属性 → 额外真实伤害（三層系统）</li>
+     *   <li>百分比禁疗属性 → 目标获得百分比治疗削减</li>
+     *   <li>固定值禁疗属性 → 目标获得固定值治疗削减</li>
+     * </ul>
      */
     @Inject(method = "attack", at = @At("RETURN"))
     private void yizmodqzk$onAttackReturn(Entity target, CallbackInfo ci) {
@@ -117,9 +122,17 @@ public abstract class AttackInterceptorMixin {
 
         Player attacker = (Player) (Object) this;
 
+        // 1. 伤害属性 → 额外真实伤害
         float attrDamage = DamageAttributeRegistry.getTotalValue(attacker);
         if (attrDamage > 0) {
             YizModQZKAPI.damage(livingTarget, attrDamage, attacker);
+        }
+
+        // 2. 禁疗属性 → 为目标施加禁疗
+        float banPercent = HealBanAttributeRegistry.getPercentTotal(attacker);
+        float banFixed = HealBanAttributeRegistry.getFixedTotal(attacker);
+        if (banPercent > 0 || banFixed > 0) {
+            HealBanConfig.set(livingTarget, banPercent, banFixed);
         }
     }
 }

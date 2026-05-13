@@ -171,6 +171,88 @@ public final class YizModQZKAPI {
         }
     }
 
+    // ==================== 健康值根本禁疗（方法③） ====================
+
+    /**
+     * 从健康值根本禁止治疗（百分比 + 固定值）。
+     * <p>
+     * 在 {@code modifyHealth} 和 {@code HealthApplier} 层面拦截治疗，
+     * 对任何途径的治疗生效。
+     * </p>
+     *
+     * @param entity      目标实体
+     * @param percent     百分比禁疗（0~100），如 50 = 削减一半治疗
+     * @param fixedAmount 固定值禁疗（≥0），如 10 = 每次治疗减 10 点
+     */
+    public static void setHealBan(LivingEntity entity, float percent, float fixedAmount) {
+        if (entity == null) return;
+        net.minecraft.client.yiz.tool.health.HealBanConfig.set(entity, percent, fixedAmount);
+    }
+
+    /**
+     * 百分比禁疗（子方法①）。
+     * <p>
+     * 按百分比削减所有治疗量。
+     * 例：percent=50 → 所有治疗仅生效一半。
+     * </p>
+     *
+     * @param entity  目标实体
+     * @param percent 禁疗百分比（0~100）
+     */
+    public static void setHealBanPercent(LivingEntity entity, float percent) {
+        if (entity == null) return;
+        var existing = net.minecraft.client.yiz.tool.health.HealBanConfig.get(entity);
+        float fixed = existing != null ? existing.fixedAmount() : 0;
+        net.minecraft.client.yiz.tool.health.HealBanConfig.set(entity, percent, fixed);
+    }
+
+    /**
+     * 固定值禁疗（子方法②）。
+     * <p>
+     * 每次治疗减掉固定数值。治疗量不足时完全取消。
+     * 例：fixedAmount=10 → 10点以下的治疗全取消，20点的治疗只生效 10 点。
+     * </p>
+     *
+     * @param entity      目标实体
+     * @param fixedAmount 固定禁疗值（≥0）
+     */
+    public static void setHealBanFixed(LivingEntity entity, float fixedAmount) {
+        if (entity == null) return;
+        var existing = net.minecraft.client.yiz.tool.health.HealBanConfig.get(entity);
+        float percent = existing != null ? existing.percent() : 0;
+        net.minecraft.client.yiz.tool.health.HealBanConfig.set(entity, percent, fixedAmount);
+    }
+
+    // ==================== 禁疗属性绑定（方法③-子） ====================
+
+    /**
+     * 注册一个属性为百分比禁疗属性。
+     * <p>
+     * 攻击者拥有该属性时，每次攻击为目标施加百分比禁疗。
+     * 例：registerHealBanPercentAttribute(holder, 10)，攻击者有 3 点 → 目标 30% 禁疗。
+     * </p>
+     *
+     * @param holder 属性
+     * @param scale  缩放系数（每点属性的禁疗百分比）
+     */
+    public static void registerHealBanPercentAttribute(Holder<Attribute> holder, float scale) {
+        HealBanAttributeRegistry.registerPercent(holder, scale);
+    }
+
+    /**
+     * 注册一个属性为固定值禁疗属性。
+     * <p>
+     * 攻击者拥有该属性时，每次攻击为目标施加固定值禁疗。
+     * 例：registerHealBanFixedAttribute(holder, 5)，攻击者有 3 点 → 目标每次治疗减 15 点。
+     * </p>
+     *
+     * @param holder 属性
+     * @param scale  缩放系数（每点属性的禁疗值）
+     */
+    public static void registerHealBanFixedAttribute(Holder<Attribute> holder, float scale) {
+        HealBanAttributeRegistry.registerFixed(holder, scale);
+    }
+
     // ==================== 效果注册 ====================
 
     /**

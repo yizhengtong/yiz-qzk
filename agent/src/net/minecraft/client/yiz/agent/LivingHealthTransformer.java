@@ -13,10 +13,11 @@ import java.security.ProtectionDomain;
 
 /**
  * ASM ClassFileTransformer
- * 在类加载时改写所有 LivingEntity 子类的三个关键方法：
+ * 在类加载时改写所有 LivingEntity 子类的关键方法：
  * - getHealth()          → 注入 specialGetHealth() 调用
  * - isAlive()             → 注入 specialIsAlive() 调用
  * - isDeadOrDying()       → 注入 specialIsDeadOrDying() 调用
+ * - heal(float)           → 注入 applyHealBan() 调用（ASM 级禁疗）
  * - 非 LivingEntity 类中对上述方法的静态调用 → 重定向
  */
 public class LivingHealthTransformer implements ClassFileTransformer {
@@ -117,6 +118,9 @@ public class LivingHealthTransformer implements ClassFileTransformer {
                 return new IsAliveMethodVisitor(mv, access, name, desc);
             } else if (isIsDeadOrDyingMethod(name, desc)) {
                 return new IsDeadOrDyingMethodVisitor(mv, access, name, desc);
+            } else if (isHealMethod(name, desc)) {
+                // 对 heal(float) 注入 ASM 级禁疗
+                return new HealMethodVisitor(mv, access, name, desc);
             } else if (isModClass) {
                 // 对模组类（非 Minecraft 原生类）的方法，检查是否有对 getHealth/isAlive/isDeadOrDying 的静态调用
                 return new StaticHealthCallVisitor(mv, access, name, desc);
@@ -142,6 +146,10 @@ public class LivingHealthTransformer implements ClassFileTransformer {
 
     private static boolean isIsDeadOrDyingMethod(String name, String desc) {
         return (name.equals("isDead") || name.equals("isDeadOrDying")) && desc.equals("()Z");
+    }
+
+    private static boolean isHealMethod(String name, String desc) {
+        return name.equals("heal") && desc.equals("(F)V");
     }
 
     // ==================== ASM MethodVisitor: getHealth ====================
@@ -253,6 +261,47 @@ public class LivingHealthTransformer implements ClassFileTransformer {
                 );
             }
             super.visitInsn(opcode);
+        }
+    }
+
+    // ==================== ASM MethodVisitor: heal(float) 禁疗注入 ====================
+
+    /**
+     * 在 heal(float) 方法的头部注入：
+     *   float healAmount = EntityASMUtil.applyHealBan(this, healAmount);
+     *
+     * 这将替换传入的治疗量为应用禁疗配置后的值，
+     * 对所有 LivingEntity 子类生效（包括重写 heal() 的模组实体）。
+     *
+     * 字节码注入序列：
+     *   ALOAD 0        → this
+     *   FLOAD 1        → healAmount 参数
+     *   INVOKESTATIC   → EntityASMUtil.applyHealBan(LivingEntity, float) float
+     *   FSTORE 1       → 将结果存回 healAmount 参数
+     */
+    private static class HealMethodVisitor extends MethodVisitor {
+
+        HealMethodVisitor(MethodVisitor mv, int access, String name, String desc) {
+            super(Opcodes.ASM9, mv);
+        }
+
+        @Override
+        public void visitCode() {
+            super.visitCode();
+            // ALOAD 0 (this)
+            mv.visitVarInsn(Opcodes.ALOAD, 0);
+            // FLOAD 1 (healAmount)
+            mv.visitVarInsn(Opcodes.FLOAD, 1);
+            // INVOKESTATIC EntityASMUtil.applyHealBan(LivingEntity, float) float
+            mv.visitMethodInsn(
+                    Opcodes.INVOKESTATIC,
+                    ASM_UTIL,
+                    "applyHealBan",
+                    "(Lnet/minecraft/world/entity/LivingEntity;F)F",
+                    false
+            );
+            // FSTORE 1 (store result back to healAmount)
+            mv.visitVarInsn(Opcodes.FSTORE, 1);
         }
     }
 

@@ -1,18 +1,18 @@
 package net.minecraft.client.yiz;
 
-import net.minecraft.client.yiz.attribute.ModAttributes;
+import net.minecraft.client.yiz.api.DamageAttributeRegistry;
+import net.minecraft.client.yiz.api.HealBanAttributeRegistry;
 import net.minecraft.client.yiz.core.data.EffectDataLoader;
 import net.minecraft.client.yiz.tool.health.HealBanHandler;
 import net.minecraft.client.yiz.tool.health.HealthCommand;
 import net.minecraft.client.yiz.tool.health.SimpleEntityDamageHandler;
-import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.neoforged.neoforge.event.AddReloadListenerEvent;
-import net.neoforged.neoforge.event.entity.EntityAttributeModificationEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import org.slf4j.Logger;
@@ -26,12 +26,6 @@ public class tizMod {
     public tizMod(IEventBus modEventBus, ModContainer modContainer) {
         modContainer.registerConfig(ModConfig.Type.COMMON, Config.SPEC);
         modEventBus.addListener(this::commonSetup);
-
-        // 注册自定义属性
-        ModAttributes.getRegistry().register(modEventBus);
-
-        // 将自定义属性添加到玩家实体
-        modEventBus.addListener(this::onEntityAttributeModification);
 
         // 注册最简单的 ASM Agent 伤害测试接口
         SimpleEntityDamageHandler.register();
@@ -50,14 +44,13 @@ public class tizMod {
     }
 
     private void commonSetup(FMLCommonSetupEvent event) {
-        LOGGER.info("YizMod QZK Framework initialized");
-    }
+        // 绑定原版护甲值为伤害属性（1 护甲 = 1 额外伤害，测试用，后续删除）
+        DamageAttributeRegistry.register(Attributes.ARMOR);
 
-    /**
-     * 将自定义属性添加到实体类型上。
-     */
-    private void onEntityAttributeModification(EntityAttributeModificationEvent event) {
-        event.add(EntityType.PLAYER, ModAttributes.ATTACHMENT);
+        // 绑定护甲韧性为百分比禁疗属性（1 护甲韧性 = 10% 治疗削减）
+        HealBanAttributeRegistry.registerPercent(Attributes.ARMOR_TOUGHNESS, 10);
+
+        LOGGER.info("YizMod QZK Framework initialized");
     }
 
     /**

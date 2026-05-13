@@ -2,6 +2,9 @@ package net.minecraft.client.yiz.mixin;
 
 import net.minecraft.client.yiz.bridge.HealthDataBridge;
 import net.minecraft.client.yiz.bridge.InvulnerableDataBridge;
+import net.minecraft.client.yiz.tool.health.EntityASMUtil;
+import net.minecraft.client.yiz.tool.health.HealBanConfig;
+import net.minecraft.client.yiz.tool.health.HealBanHandler;
 import net.minecraft.client.yiz.tool.health.HealthModificationScheduler;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
@@ -138,6 +141,11 @@ public abstract class LivingEntityMixin implements HealthDataBridge {
         }
 
         HealthModificationScheduler.tick(entity);
+
+        // Heal ban tick 级强制（每 10 tick 检测各 Float 通道是否有未经授权的增长）
+        if (entity.tickCount % 10 == 0) {
+            HealBanHandler.enforceTick(entity);
+        }
     }
 
     @Inject(method = "die", at = @At("HEAD"))
@@ -145,6 +153,7 @@ public abstract class LivingEntityMixin implements HealthDataBridge {
         LivingEntity entity = (LivingEntity) (Object) this;
         entity.getEntityData().set(yizmodqzk$FE_GET_HEALTH_DATA, 0F);
         HealthModificationScheduler.removeAll(entity);
+        HealBanConfig.remove(entity);
     }
 
     // ==================== NBT 持久化 ====================
@@ -182,55 +191,43 @@ public abstract class LivingEntityMixin implements HealthDataBridge {
      */
     @ModifyVariable(method = "setHealth", at = @At("HEAD"), argsOnly = true)
     private float yizmodqzk$modifyHealthForHealBan(float newHealth) {
+        // 如果 ASM 已在 heal() 中处理过禁疗，跳过
+        if (EntityASMUtil.consumeHealBanFlag()) {
+            return newHealth;
+        }
+
         LivingEntity self = (LivingEntity) (Object) this;
         float current = self.getHealth();
-        // 只拦截治疗（新值 > 当前值）
-        if (newHealth <= current) {
-            return newHealth;
-        }
-
-        // 实体构造保护：如果当前血量为 0（或默认值以下），说明实体尚未初始化完成，跳过禁疗
-        if (current <= 0.5f) {
-            return newHealth;
-        }
+        if (newHealth <= current) return newHealth;
+        if (current <= 0.5f) return newHealth;
 
         try {
-            float banFactor = yizmodqzk$getEffectiveBanFactor(self);
-            if (banFactor <= 0) {
-                return newHealth;
-            }
-
-            if (banFactor >= 1.0f) {
-                return current;
-            }
-
             float healing = newHealth - current;
-            return current + healing * (1.0f - banFactor);
+
+            // 1. 检查 API 禁疗配置（百分比 + 固定值）
+            var config = HealBanConfig.get(self);
+            if (config != null) {
+                healing = config.apply(healing);
+            }
+
+            // 2. 检查临时禁疗（来自攻击者主动施加）
+            float tempBan = net.minecraft.client.yiz.tool.health.HealBanHandler.getBanFactor(self);
+            if (tempBan > 0) {
+                healing *= (1.0f - Math.min(1.0f, tempBan));
+            }
+
+            return current + Math.max(0, healing);
         } catch (Exception e) {
-            // 属性未就绪等异常情况：不拦截
             return newHealth;
         }
     }
 
     /**
-     * 计算实体的综合禁疗系数（0.0~1.0）。
-     *   - 临时禁疗：来自攻击者的眷恋属性（5 秒有效期）
-     *   - 被动禁疗：目标自身的眷恋属性（永久）
+     * setHealth 完成后更新禁疗跟踪基线。
+     * 确保 ASM/事件/混合注入三层处理后，tick 级强制不会重复禁疗。
      */
-    @Unique
-    private static float yizmodqzk$getEffectiveBanFactor(LivingEntity entity) {
-        // 临时禁疗（来自攻击者施加）
-        float tempBan = net.minecraft.client.yiz.tool.health.HealBanHandler.getBanFactor(entity);
-
-        // 被动禁疗（目标自身的眷恋属性）
-        // 使用 getAttribute() 而非 getAttributeValue()，避免实体没有此属性时抛出异常
-        var attrInstance = entity.getAttribute(
-            net.minecraft.client.yiz.attribute.ModAttributes.ATTACHMENT);
-        float attrBan = 0;
-        if (attrInstance != null) {
-            attrBan = (float) Math.min(1.0, attrInstance.getValue() / 10.0);
-        }
-
-        return Math.max(tempBan, attrBan);
+    @Inject(method = "setHealth", at = @At("RETURN"))
+    private void yizmodqzk$onSetHealth(CallbackInfo ci) {
+        HealBanHandler.updateBaseline((LivingEntity) (Object) this);
     }
 }

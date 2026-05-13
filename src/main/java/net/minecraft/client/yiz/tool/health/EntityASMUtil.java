@@ -78,6 +78,9 @@ public final class EntityASMUtil {
         // 3. 最终保底：反射直接修改 DataItem[] 内部值
         //    确保上述两步未覆盖的 Float 数据通道也能被打到
         DirectHealthFallback.damageAll(entity, amount);
+
+        // 更新禁疗跟踪基线，使 tick 级强制基于最新血量判断
+        HealBanHandler.updateBaseline(entity);
     }
 
     /**
@@ -95,13 +98,64 @@ public final class EntityASMUtil {
             // 伤害：走完整三層系统
             addDelta(entity, delta);
         } else if (delta > 0) {
-            // 治疗：直接修改所有 Float 数据通道
+            // 治疗：先应用禁疗配置（百分比 + 固定值）
+            var ban = HealBanConfig.get(entity);
+            if (ban != null) {
+                delta = ban.apply(delta);
+                if (delta <= 0) return; // 完全被禁疗
+            }
+
+            // 再直接修改所有 Float 数据通道
             for (EntityDataAccessor<Float> channel : HealthChannelScanner.getFloatChannels(entity)) {
                 float value = entity.getEntityData().get(channel);
                 entity.getEntityData().set(channel, value + delta);
             }
             DirectHealthFallback.healAll(entity, delta);
+
+            // 更新禁疗跟踪基线，防止 tick 级强制将本次治疗也拦截
+            HealBanHandler.updateBaseline(entity);
         }
+    }
+
+    // ==================== ASM 级别禁疗注入 ====================
+
+    private static final ThreadLocal<Boolean> HEAL_BAN_APPLIED_BY_ASM =
+        ThreadLocal.withInitial(() -> false);
+
+    /**
+     * 由 ASM 在 {@code heal()} 方法 HEAD 处注入。
+     * 在 NeoForge 事件钩子和原版逻辑执行之前，对治疗量应用禁疗配置。
+     * 对所有 LivingEntity 子类生效，即使其 {@code heal()} 被子类重写。
+     */
+    public static float applyHealBan(LivingEntity entity, float healAmount) {
+        if (healAmount <= 0) return healAmount;
+
+        float result = healAmount;
+
+        var config = HealBanConfig.get(entity);
+        if (config != null) {
+            result = config.apply(result);
+        }
+
+        float tempBan = HealBanHandler.getBanFactor(entity);
+        if (tempBan > 0) {
+            result *= (1.0f - tempBan);
+        }
+
+        if (result < healAmount) {
+            HEAL_BAN_APPLIED_BY_ASM.set(true);
+        }
+        return Math.max(0, result);
+    }
+
+    /**
+     * 消费 ASM 禁疗标记。
+     * 供 Mixin 和事件处理器调用，避免在 heal() → setHealth() 链中重复禁疗。
+     */
+    public static boolean consumeHealBanFlag() {
+        boolean v = HEAL_BAN_APPLIED_BY_ASM.get();
+        HEAL_BAN_APPLIED_BY_ASM.set(false);
+        return v;
     }
 
     /**
