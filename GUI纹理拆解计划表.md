@@ -296,3 +296,126 @@ if (server != null) {
 | 3 | 修复Slot点击偏移：纹理绘制偏移 -1px，对齐 isHovering 命中盒 | ✅ |
 | 4 | 将坐标计算规则和容器点击修复写入计划书 | ✅ |
 | 5 | 你指定下一类 GUI 来拆 | ⬜ |
+
+---
+
+## 大容量容器布局规则（变列系统）
+
+### 问题
+
+当容器格数超过 27（3×9）时，若仍按 9 列布局，窗口会变得过长。例如 128 格需要 15 行，窗口高 370px、宽仅 172px，高宽比 ≈ 2.15，感官极不协调。
+
+### 核心原则
+
+**容器槽区视觉比例应接近正方形。** 列数不再固定为 9，而是根据总格数动态计算，使容器区域的宽高比接近 1:1。
+
+### 算法
+
+```
+输入：总格数 N
+
+N ≤ 27 → 固定 9 列（标准箱子风格，不变）
+
+N > 27 → 在 [9, 16] 列范围内寻找最优列数：
+  for cols in 9..16:
+      rows = ceil(N / cols)
+      ratio = max(cols, rows) / min(cols, rows)
+  选 ratio 最接近 1 的 (cols, rows) 组合
+
+原因：
+  cols < 9 会导致格子超过槽位默认尺寸 18px，和现有纹理不兼容
+  cols > 16 会使窗口过宽，超出常见屏幕范围
+```
+
+### 关键值对照表
+
+| 格数 | 9列方案 | 最优方案 | 高宽比 | 窗口尺寸 |
+|------|---------|---------|--------|---------|
+| 27 | 9×3 | 9×3（标准） | 0.89 | 172×154 |
+| 54 | 9×6 | 9×6 | 1.05 | 172×208 |
+| 72 | 9×8 | 9×8 | 1.12 | 172×262 |
+| 100 | 9×12 | **10×10** | 1.00 | 190×274 |
+| 128 | 9×15 | **12×11** | 1.09 | 226×298 |
+| 200 | 9×23 | **14×15** | 1.07 | 262×352 |
+| 300 | 9×34 | **16×19** | 1.19 | 298×436 |
+
+### 窗口尺寸计算公式
+
+```
+SLOT = 18
+BORDER = 5                          // 边框厚度
+COLS = 动态计算（见算法）
+ROWS = ceil(N / COLS)
+
+内容区宽度 = COLS × SLOT
+总窗口宽度 = BORDER × 2 + 内容区宽度
+
+容器区高度 = ROWS × SLOT
+分隔条     = 14
+玩家背包   = 76
+
+总窗口高度 = BORDER + 容器区高度 + 分隔条 + 玩家背包 + BORDER
+```
+
+### 布局示意图（以 128 格为例：12 列 × 11 行）
+
+```
+总窗口 226×298：
+┌── TL ── top_edge(平铺) ── TR ──┐  ← 5px
+│  ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░  │  ← 11行 × 18px = 198px
+│  ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░  │     容器槽区
+│  ...                                │
+├───────── split_bar ────────────────┤  ← 14px
+│       player_slots_9x4（居中）       │  ← 76px  玩家背包
+└── BL ── bottom_edge ── BR ───────┘  ← 5px
+```
+
+### 玩家背包居中规则
+
+当容器列数 > 9 时，底部玩家背包（固定 162px 宽）在内容区中水平居中：
+
+```
+内容区宽度 = COLS × SLOT
+背包偏移   = (内容区宽度 - 162) / 2
+```
+
+在代码中表现为：
+```java
+// 容器槽位：从 BORDER 开始，占满内容区宽度
+addSlot(new Slot(chestInv, index,
+    BORDER + col * SLOT, BORDER + row * SLOT));
+
+// 玩家背包：在内容区中居中
+int invOffset = (COLS - 9) * SLOT / 2;     // 居中偏移
+addSlot(new Slot(playerInv, slotIndex,
+    BORDER + invOffset + col * SLOT, PLAYER_INV_Y + row * SLOT));
+```
+
+### 纹理渲染注意事项
+
+- 背景填充（fill_white）和边框（border_edge_*）按新窗口宽度绘制
+- 分隔条（split_bar）按新内容区宽度平铺
+- 容器槽位（slot_default）按动态列数×行数排列，-1px偏移规则不变
+- 玩家背包纹理（player_slots_9x4）在内容区中居中绘制：`x + BORDER + invOffset - 1`
+
+### `ResourceLocation` 路径规则（必读）
+
+**`ResourceLocation` 的路径必须包含 `.png` 扩展名**，否则游戏找不到纹理文件，显示紫黑色丢失纹理。
+
+这是因为 Minecraft 1.21 的 `GuiGraphics.blit()` 按路径原样传给 `TextureManager`，不会自动补 `.png`：
+
+```java
+// ❌ 错误：缺少 .png → 紫黑色
+"textures/gui/container/slot_default"
+
+// ✅ 正确：包含 .png → 正常显示
+"textures/gui/container/slot_default.png"
+```
+
+完整用法：
+```java
+private static final ResourceLocation TEX_SLOT = ResourceLocation.fromNamespaceAndPath(
+    "yizmodqzk", "textures/gui/container/slot_default.png");
+```
+
+**注意**：文件位于 `src/main/resources/assets/yizmodqzk/textures/gui/container/slot_default.png`（不是项目根目录的 `assets/`）。

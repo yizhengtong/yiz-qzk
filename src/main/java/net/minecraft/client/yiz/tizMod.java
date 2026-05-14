@@ -22,11 +22,11 @@ public class tizMod {
     public static final Logger LOGGER = LogUtils.getLogger();
 
     public tizMod(IEventBus modEventBus, ModContainer modContainer) {
-        // 注册 MenuType
-        ModMenus.register(modEventBus);
-
         modContainer.registerConfig(ModConfig.Type.COMMON, Config.SPEC);
         modEventBus.addListener(this::commonSetup);
+
+        // 注册 4 个变列容器菜单的 MenuType
+        ModMenus.MENUS.register(modEventBus);
 
         // 注册最简单的 ASM Agent 伤害测试接口
         SimpleEntityDamageHandler.register();

@@ -1,8 +1,6 @@
 package net.minecraft.client.yiz.ui;
 
-import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.KeyMapping;
-import net.minecraft.client.Minecraft;
 import org.lwjgl.glfw.GLFW;
 
 /**
@@ -24,11 +22,15 @@ public final class UIConfig {
         "key.categories.yizmodqzk"
     );
 
-    private static final KeyMapping OPEN_TEST_CHEST_KEY = new KeyMapping(
-        "key.yizmodqzk.open_test_chest",
-        GLFW.GLFW_KEY_H,
-        "key.categories.yizmodqzk"
-    );
+    // ── Demo 容器快捷键（单键无修饰符） ──
+    private static final KeyMapping CHEST_75_KEY = new KeyMapping(
+        "key.yizmodqzk.chest_75", GLFW.GLFW_KEY_C, "key.categories.yizmodqzk");
+    private static final KeyMapping CHEST_115_KEY = new KeyMapping(
+        "key.yizmodqzk.chest_115", GLFW.GLFW_KEY_V, "key.categories.yizmodqzk");
+    private static final KeyMapping CHEST_130_KEY = new KeyMapping(
+        "key.yizmodqzk.chest_130", GLFW.GLFW_KEY_B, "key.categories.yizmodqzk");
+    private static final KeyMapping CHEST_200_KEY = new KeyMapping(
+        "key.yizmodqzk.chest_200", GLFW.GLFW_KEY_N, "key.categories.yizmodqzk");
 
     // UI 开关状态
     private static boolean customItemUIEnabled = false;
@@ -118,19 +120,7 @@ public final class UIConfig {
         return lineHeight;
     }
 
-    // ==================== 测试快捷键 ====================
-
-    /**
-     * 检测测试容器 GUI 快捷键（H 键）。
-     */
-    public static boolean isOpenTestChestKey(int keyCode, int action) {
-        return action == GLFW.GLFW_PRESS
-            && keyCode == OPEN_TEST_CHEST_KEY.getKey().getValue();
-    }
-
-    public static KeyMapping getOpenTestChestKey() {
-        return OPEN_TEST_CHEST_KEY;
-    }
+    // ==================== 快捷键获取 ====================
 
     public static KeyMapping getToggleItemUIKey() {
         return TOGGLE_ITEM_UI_KEY;
@@ -139,4 +129,12 @@ public final class UIConfig {
     public static KeyMapping getToggleTalentUIKey() {
         return TOGGLE_TALENT_UI_KEY;
     }
+
+    // ==================== 容器快捷键获取 ====================
+
+    public static KeyMapping getChest75Key() { return CHEST_75_KEY; }
+    public static KeyMapping getChest115Key() { return CHEST_115_KEY; }
+    public static KeyMapping getChest130Key() { return CHEST_130_KEY; }
+    public static KeyMapping getChest200Key() { return CHEST_200_KEY; }
+
 }
