@@ -2,9 +2,17 @@ package net.minecraft.client.yiz;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.yiz.menu.ModMenus;
+import net.minecraft.client.yiz.menu.TestChestMenu;
 import net.minecraft.client.yiz.ui.ItemInfoUI;
 import net.minecraft.client.yiz.ui.PlayerTalentUI;
+import net.minecraft.client.yiz.ui.TestChestScreen;
 import net.minecraft.client.yiz.ui.UIConfig;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.SimpleMenuProvider;
+import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.fml.ModContainer;
@@ -31,6 +39,7 @@ public class tizModClient {
         var modBus = container.getEventBus();
         modBus.addListener(this::onClientSetup);
         modBus.addListener(this::onRegisterKeyMappings);
+        modBus.addListener(this::onRegisterMenuScreens);
 
         // Register Forge event bus handlers
         NeoForge.EVENT_BUS.register(this);
@@ -41,11 +50,19 @@ public class tizModClient {
     }
 
     /**
+     * 注册容器屏幕绑定（NeoForge mod 总线事件）。
+     */
+    private void onRegisterMenuScreens(net.neoforged.neoforge.client.event.RegisterMenuScreensEvent event) {
+        event.register(ModMenus.TEST_CHEST.get(), TestChestScreen::new);
+    }
+
+    /**
      * Register key mappings so they appear in Controls settings and work properly.
      */
     private void onRegisterKeyMappings(RegisterKeyMappingsEvent event) {
         event.register(UIConfig.getToggleItemUIKey());
         event.register(UIConfig.getToggleTalentUIKey());
+        event.register(UIConfig.getOpenTestChestKey());
     }
 
     /**
@@ -68,6 +85,30 @@ public class tizModClient {
         // CTRL + SHIFT: toggle talent UI
         if (ctrlHeld && UIConfig.isTalentUIKey(event.getKey(), event.getAction())) {
             UIConfig.toggleTalentUI();
+        }
+
+        // H: open test chest container
+        // 通过集成服务端打开，确保 containerId 有效，槽位点击才能正常运作
+        if (UIConfig.isOpenTestChestKey(event.getKey(), event.getAction())) {
+            Inventory inv = mc.player.getInventory();
+            MinecraftServer server = mc.getSingleplayerServer();
+            if (server != null) {
+                // 单机模式：通过集成服务端分配有效 containerId
+                ServerPlayer serverPlayer = server.getPlayerList().getPlayer(mc.player.getUUID());
+                if (serverPlayer != null) {
+                    serverPlayer.openMenu(new SimpleMenuProvider(
+                        (id, playerInv, p) -> new TestChestMenu(id, playerInv),
+                        Component.literal("Test Chest")
+                    ));
+                }
+            } else {
+                // 没有服务端（理论上不会发生），回退到客户端直接打开
+                mc.setScreen(new TestChestScreen(
+                    new TestChestMenu(-1, inv),
+                    inv,
+                    Component.literal("Test Chest")
+                ));
+            }
         }
     }
 

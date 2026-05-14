@@ -24,6 +24,12 @@ public final class UIConfig {
         "key.categories.yizmodqzk"
     );
 
+    private static final KeyMapping OPEN_TEST_CHEST_KEY = new KeyMapping(
+        "key.yizmodqzk.open_test_chest",
+        GLFW.GLFW_KEY_H,
+        "key.categories.yizmodqzk"
+    );
+
     // UI 开关状态
     private static boolean customItemUIEnabled = false;
     private static boolean playerTalentUIEnabled = false;
@@ -112,7 +118,19 @@ public final class UIConfig {
         return lineHeight;
     }
 
-    // ==================== 快捷键注册 ====================
+    // ==================== 测试快捷键 ====================
+
+    /**
+     * 检测测试容器 GUI 快捷键（H 键）。
+     */
+    public static boolean isOpenTestChestKey(int keyCode, int action) {
+        return action == GLFW.GLFW_PRESS
+            && keyCode == OPEN_TEST_CHEST_KEY.getKey().getValue();
+    }
+
+    public static KeyMapping getOpenTestChestKey() {
+        return OPEN_TEST_CHEST_KEY;
+    }
 
     public static KeyMapping getToggleItemUIKey() {
         return TOGGLE_ITEM_UI_KEY;

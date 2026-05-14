@@ -1,6 +1,7 @@
 package net.minecraft.client.yiz;
 
 import net.minecraft.client.yiz.core.data.EffectDataLoader;
+import net.minecraft.client.yiz.menu.ModMenus;
 import net.minecraft.client.yiz.tool.health.HealBanHandler;
 import net.minecraft.client.yiz.tool.health.HealthCommand;
 import net.minecraft.client.yiz.tool.health.SimpleEntityDamageHandler;
@@ -21,6 +22,9 @@ public class tizMod {
     public static final Logger LOGGER = LogUtils.getLogger();
 
     public tizMod(IEventBus modEventBus, ModContainer modContainer) {
+        // 注册 MenuType
+        ModMenus.register(modEventBus);
+
         modContainer.registerConfig(ModConfig.Type.COMMON, Config.SPEC);
         modEventBus.addListener(this::commonSetup);
 
