@@ -22,13 +22,6 @@ public final class UIConfig {
         "key.categories.yizmodqzk"
     );
 
-    // 高阶锻造 GUI 快捷键
-    public static final KeyMapping OPEN_HIGH_SMITH_KEY = new KeyMapping(
-        "key.yizmodqzk.open_high_smith",
-        GLFW.GLFW_KEY_C,
-        "key.categories.yizmodqzk"
-    );
-
     // UI 开关状态
     private static boolean customItemUIEnabled = false;
     private static boolean playerTalentUIEnabled = false;

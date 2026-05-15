@@ -1,0 +1,72 @@
+package net.minecraft.client.yiz.tool;
+
+import com.mojang.brigadier.Command;
+import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.builder.LiteralArgumentBuilder;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.commands.Commands;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.neoforge.event.RegisterCommandsEvent;
+
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * 简易指令注册器。
+ *
+ * <p>下游模组调用 {@link #register} 提交指令，无需自行订阅 {@link RegisterCommandsEvent}。
+ * 指令在服务端启动时自动注册到 {@link CommandDispatcher}。</p>
+ *
+ * <pre>{@code
+ * // 最简用法：一个字面指令
+ * SimpleCommandRegistry.register(
+ *     Commands.literal("mytest")
+ *         .executes(ctx -> {
+ *             ctx.getSource().sendSuccess(() -> Component.literal("OK"), false);
+ *             return 1;
+ *         })
+ * );
+ * }</pre>
+ */
+public final class SimpleCommandRegistry {
+
+    private static final List<LiteralArgumentBuilder<CommandSourceStack>> pending = new ArrayList<>();
+    private static boolean registered = false;
+
+    private SimpleCommandRegistry() {}
+
+    /**
+     * 注册 NeoForge 事件监听（由 tizMod 调用一次）。
+     */
+    public static void init() {
+        if (registered) return;
+        registered = true;
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.register(SimpleCommandRegistry.class);
+    }
+
+    /**
+     * 提交一个指令。
+     * <p>调用时机不限——模组构造器、commonSetup、或运行时均可。
+     * 所有指令在下次 {@link RegisterCommandsEvent} 时集中注册。</p>
+     *
+     * @param builder 指令构建器
+     */
+    public static void register(LiteralArgumentBuilder<CommandSourceStack> builder) {
+        pending.add(builder);
+    }
+
+    /**
+     * 快捷注册：无参数的字面指令。
+     */
+    public static void register(String name, Command<CommandSourceStack> action) {
+        register(Commands.literal(name).executes(action));
+    }
+
+    @SubscribeEvent
+    public static void onRegisterCommands(RegisterCommandsEvent event) {
+        CommandDispatcher<CommandSourceStack> dispatcher = event.getDispatcher();
+        for (var builder : pending) {
+            dispatcher.register(builder);
+        }
+    }
+}

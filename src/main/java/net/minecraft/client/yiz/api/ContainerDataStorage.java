@@ -48,6 +48,11 @@ public interface ContainerDataStorage {
     boolean has(String namespace, String key);
 
     /**
+     * 获取已注册的容器实例。
+     */
+    Container get(String namespace, String key);
+
+    /**
      * 立即强制保存所有已注册容器的当前状态到世界存档。
      */
     void saveAll();

@@ -1,12 +1,15 @@
 package net.minecraft.client.yiz.tool.damage;
 
+import net.minecraft.client.yiz.attribute.AttributeModifier;
 import net.minecraft.client.yiz.attribute.ModifierStack;
 import net.minecraft.client.yiz.effect.EffectContext;
+import net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler;
 import net.minecraft.client.yiz.tool.helper.EffectContextHelper;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.Vec3;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -25,10 +28,26 @@ public final class DefaultDamageCalculator {
      * @return 伤害结果
      */
     public static DamageResult calculateDamage(EffectContext context, double baseDamage) {
-        // 1. 获取修正器
-        List<net.minecraft.client.yiz.attribute.AttributeModifier> additive = List.of();
-        List<net.minecraft.client.yiz.attribute.AttributeModifier> multiplicative = List.of();
-        List<net.minecraft.client.yiz.attribute.AttributeModifier> independent = List.of();
+        // 1. 收集修正器
+        List<AttributeModifier> additive = new ArrayList<>();
+        List<AttributeModifier> multiplicative = new ArrayList<>();
+        List<AttributeModifier> independent = new ArrayList<>();
+
+        // 1a. 攻击者物品的 %伤害增幅
+        if (context.entity() instanceof LivingEntity attacker) {
+            double amp = ItemAttributeHandler.getTotalDamageAmplification(attacker);
+            if (amp != 0) {
+                multiplicative.add(new AttributeModifier("item_damage_amp", amp, AttributeModifier.ModifierType.MULTIPLICATIVE));
+            }
+        }
+
+        // 1b. 目标物品的 %伤害减免
+        if (context.target() instanceof LivingEntity target) {
+            double red = ItemAttributeHandler.getTotalDamageReduction(target);
+            if (red != 0) {
+                multiplicative.add(new AttributeModifier("item_damage_red", -red, AttributeModifier.ModifierType.MULTIPLICATIVE));
+            }
+        }
 
         // 2. 使用多乘区计算
         double finalDamage = ModifierStack.calculate(baseDamage, additive, multiplicative, independent);

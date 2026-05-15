@@ -91,11 +91,4 @@ public final class ModRegistries {
         return EFFECT_REGISTRY.values();
     }
 
-    // ==================== Clear (for testing) ====================
-
-    public static void clearAll() {
-        WEAPON_REGISTRY.clear();
-        TALENT_REGISTRY.clear();
-        EFFECT_REGISTRY.clear();
-    }
 }

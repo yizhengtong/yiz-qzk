@@ -79,6 +79,12 @@ public class WorldContainerDataStorage extends SavedData implements ContainerDat
     }
 
     @Override
+    public Container get(String namespace, String key) {
+        Map<String, Container> ns = registry.get(namespace);
+        return ns != null ? ns.get(key) : null;
+    }
+
+    @Override
     public void saveAll() {
         setDirty();
     }
@@ -90,11 +96,11 @@ public class WorldContainerDataStorage extends SavedData implements ContainerDat
 
     // ── 包内可见：供 tizModClient 挂钩使用 ──
 
-    static SavedData.Factory<WorldContainerDataStorage> factory() {
+    public static SavedData.Factory<WorldContainerDataStorage> factory() {
         return new SavedData.Factory<>(WorldContainerDataStorage::new, WorldContainerDataStorage::load);
     }
 
-    static String storageName() {
+    public static String storageName() {
         return NAME;
     }
 

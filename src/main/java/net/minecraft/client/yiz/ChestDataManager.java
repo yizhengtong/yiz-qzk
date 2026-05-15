@@ -27,7 +27,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * handle.close();
  * }</pre>
  */
-public class ChestDataManager implements ContainerDataStorage {
+public class ChestDataManager {
 
     private static final Logger LOGGER = LoggerFactory.getLogger("yizmodqzk:ChestDataManager");
     private static final ChestDataManager INSTANCE = new ChestDataManager();
@@ -39,7 +39,14 @@ public class ChestDataManager implements ContainerDataStorage {
     private final Map<ResourceLocation, Container> pendingRegistrations = new ConcurrentHashMap<>();
 
     static {
-        ContainerDataStorage.Holder.setInstance(INSTANCE);
+        ContainerDataStorage.Holder.setInstance(new ContainerDataStorage() {
+            @Override public AutoCloseable register(String ns, String k, Container c) { return INSTANCE.doRegister(ns, k, c); }
+            @Override public void unregister(ResourceLocation id) { INSTANCE.doUnregister(id); }
+            @Override public boolean has(String ns, String k) { return INSTANCE.doHas(ns, k); }
+            @Override public Container get(String ns, String k) { return INSTANCE.doGet(ns, k); }
+            @Override public void saveAll() { if (INSTANCE.activeStorage != null) INSTANCE.activeStorage.setDirty(); }
+            @Override public int getDataVersion() { return WorldContainerDataStorage.currentVersion(); }
+        });
     }
 
     private ChestDataManager() {}
@@ -48,82 +55,24 @@ public class ChestDataManager implements ContainerDataStorage {
     //  静态便捷方法（外部模组入口）
     // ══════════════════════════════════════════════════════════════════
 
-    /**
-     * 注册容器（自动检测调用方的 modId 作为 namespace）。
-     *
-     * @param key       容器标识键（如 "tombstone_data"）
-     * @param container 需要持久化的容器实例
-     * @return 可关闭句柄，调用 close() 注销
-     */
     public static AutoCloseable register(String key, Container container) {
         return INSTANCE.doRegister(detectCallerNamespace(), key, container);
     }
 
-    /**
-     * 注册容器（显式指定 namespace）。
-     *
-     * @param namespace 命名空间（建议使用 modId）
-     * @param key       容器标识键
-     * @param container 需要持久化的容器实例
-     * @return 可关闭句柄，调用 close() 注销
-     */
     public static AutoCloseable register(String namespace, String key, Container container) {
         return INSTANCE.doRegister(namespace, key, container);
     }
 
-    /**
-     * 注销一个容器。
-     *
-     * @param id 容器的完整 ResourceLocation（namespace:key）
-     */
-    public static void unregister(ResourceLocation id) {
-        INSTANCE.doUnregister(id);
+    public static Container getContainer(String namespace, String key) {
+        return INSTANCE.doGet(namespace, key);
     }
 
-    /**
-     * 获取当前已注册的所有容器视图（只读）。
-     * 用于外部系统遍历检查，不建议直接修改。
-     */
-    public static Map<String, Map<String, Container>> getRegistry() {
-        return INSTANCE.getActiveRegistry();
+    public static void setActiveWorldStorage(WorldContainerDataStorage storage) {
+        INSTANCE.setActiveStorage(storage);
     }
 
-    // ══════════════════════════════════════════════════════════════════
-    //  ContainerDataStorage 接口实现
-  // ══════════════════════════════════════════════════════════════════
-
-    @Override
-    public AutoCloseable register(String namespace, String key, Container container) {
-        return doRegister(namespace, key, container);
-    }
-
-    @Override
-    public void unregister(ResourceLocation id) {
-        doUnregister(id);
-    }
-
-    @Override
-    public boolean has(String namespace, String key) {
-        WorldContainerDataStorage storage = activeStorage;
-        if (storage != null && storage.has(namespace, key)) return true;
-
-        ResourceLocation id = ResourceLocation.fromNamespaceAndPath(namespace, key);
-        return pendingRegistrations.containsKey(id);
-    }
-
-    @Override
-    public void saveAll() {
-        WorldContainerDataStorage storage = activeStorage;
-        if (storage != null) storage.saveAll();
-    }
-
-    @Override
-    public int getDataVersion() {
-        return WorldContainerDataStorage.currentVersion();
-    }
-
-    public static ContainerDataStorage getInstance() {
-        return INSTANCE;
+    public static void clearActiveWorldStorage() {
+        INSTANCE.clearActiveStorage();
     }
 
     // ══════════════════════════════════════════════════════════════════
@@ -184,6 +133,19 @@ public class ChestDataManager implements ContainerDataStorage {
         pendingRegistrations.remove(id);
         WorldContainerDataStorage storage = activeStorage;
         if (storage != null) storage.unregister(id);
+    }
+
+    private boolean doHas(String namespace, String key) {
+        if (activeStorage != null && activeStorage.has(namespace, key)) return true;
+        return pendingRegistrations.containsKey(ResourceLocation.fromNamespaceAndPath(namespace, key));
+    }
+
+    private Container doGet(String namespace, String key) {
+        if (activeStorage != null) {
+            Container c = activeStorage.get(namespace, key);
+            if (c != null) return c;
+        }
+        return pendingRegistrations.get(ResourceLocation.fromNamespaceAndPath(namespace, key));
     }
 
     private Map<String, Map<String, Container>> getActiveRegistry() {

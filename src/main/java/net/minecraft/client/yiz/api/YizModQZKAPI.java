@@ -505,6 +505,146 @@ public final class YizModQZKAPI {
         // 此方法作为 API 契约保留，确保下游模组调用不会出错。
     }
 
+    // ==================== 物品属性修改 ====================
+
+    // -- 攻击力 --
+
+    public static double getAttackDamage(ItemStack stack) {
+        return net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler.getAttackDamage(stack);
+    }
+
+    public static void setAttackDamage(ItemStack stack, double value) {
+        net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler.setAttackDamage(stack, value);
+    }
+
+    public static void addAttackDamage(ItemStack stack, double delta) {
+        net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler.addAttackDamage(stack, delta);
+    }
+
+    // -- 攻击速度 --
+
+    public static double getAttackSpeed(ItemStack stack) {
+        return net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler.getAttackSpeed(stack);
+    }
+
+    public static void setAttackSpeed(ItemStack stack, double value) {
+        net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler.setAttackSpeed(stack, value);
+    }
+
+    public static void addAttackSpeed(ItemStack stack, double delta) {
+        net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler.addAttackSpeed(stack, delta);
+    }
+
+    // -- 交互距离 --
+
+    public static double getInteractionRange(ItemStack stack) {
+        return net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler.getInteractionRange(stack);
+    }
+
+    public static void setInteractionRange(ItemStack stack, double value) {
+        net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler.setInteractionRange(stack, value);
+    }
+
+    public static void addInteractionRange(ItemStack stack, double delta) {
+        net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler.addInteractionRange(stack, delta);
+    }
+
+    // -- 横扫伤害比例 --
+
+    public static double getSweepRatio(ItemStack stack) {
+        return net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler.getSweepRatio(stack);
+    }
+
+    public static void setSweepRatio(ItemStack stack, double value) {
+        net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler.setSweepRatio(stack, value);
+    }
+
+    public static void addSweepRatio(ItemStack stack, double delta) {
+        net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler.addSweepRatio(stack, delta);
+    }
+
+    // -- 横扫衰减开关 --
+
+    public static boolean isSweepDecayEnabled(ItemStack stack) {
+        return net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler.isSweepDecayEnabled(stack);
+    }
+
+    public static void setSweepDecay(ItemStack stack, boolean enabled) {
+        net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler.setSweepDecay(stack, enabled);
+    }
+
+    // -- 耐久值 --
+
+    public static int getMaxDurability(ItemStack stack) {
+        return net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler.getMaxDurability(stack);
+    }
+
+    public static void setMaxDurability(ItemStack stack, int value) {
+        net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler.setMaxDurability(stack, value);
+    }
+
+    public static void addMaxDurability(ItemStack stack, int delta) {
+        net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler.addMaxDurability(stack, delta);
+    }
+
+    // -- %伤害增幅 --
+
+    public static double getDamageAmplification(ItemStack stack) {
+        return net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler.getDamageAmplification(stack);
+    }
+
+    public static void setDamageAmplification(ItemStack stack, double percent) {
+        net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler.setDamageAmplification(stack, percent);
+    }
+
+    public static void addDamageAmplification(ItemStack stack, double delta) {
+        net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler.addDamageAmplification(stack, delta);
+    }
+
+    // -- %伤害减免 --
+
+    public static double getDamageReduction(ItemStack stack) {
+        return net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler.getDamageReduction(stack);
+    }
+
+    public static void setDamageReduction(ItemStack stack, double percent) {
+        net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler.setDamageReduction(stack, percent);
+    }
+
+    public static void addDamageReduction(ItemStack stack, double delta) {
+        net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler.addDamageReduction(stack, delta);
+    }
+
+    // ==================== 简易指令注册 ====================
+
+    /**
+     * 注册一个指令（完整 builder）。
+     *
+     * <pre>{@code
+     * YizModQZKAPI.registerCommand(
+     *     Commands.literal("mytest")
+     *         .executes(ctx -> { ... })
+     * );
+     * }</pre>
+     */
+    public static void registerCommand(com.mojang.brigadier.builder.LiteralArgumentBuilder<net.minecraft.commands.CommandSourceStack> builder) {
+        net.minecraft.client.yiz.tool.SimpleCommandRegistry.register(builder);
+    }
+
+    /**
+     * 快捷注册：无参数的字面指令。
+     *
+     * <pre>{@code
+     * YizModQZKAPI.registerSimpleCommand("heal", ctx -> {
+     *     ctx.getSource().getPlayerOrException().heal(20);
+     *     return 1;
+     * });
+     * }</pre>
+     */
+    public static void registerSimpleCommand(String name, com.mojang.brigadier.Command<net.minecraft.commands.CommandSourceStack> action) {
+        net.minecraft.client.yiz.tool.SimpleCommandRegistry.register(name, action);
+    }
+
     // ==================== 快捷方法 ====================
 
     /**

@@ -1,48 +1,42 @@
 package net.minecraft.client.yiz.ui;
 
+import net.minecraft.client.yiz.effect.perception.PerceptionMode;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 
+import java.util.LinkedHashSet;
+import java.util.Set;
+
 /**
- * 物品名称前缀处理器
- * 当物品带有词缀或随影效果时，在物品名称最前方添加类型标识。
+ * 物品名称前缀处理器。
+ *
+ * <p>从物品所有效果的感知方式中收集 {@link PerceptionMode#getTypeName()}，
+ * 拼为 {@code [类型A/类型B]} 前缀。内置感知返回的默认名称为"词缀 (Affix)"、
+ * "随影 (Shadow)"等，下游模组通过 {@code CustomPerception} 可提供自定义名称。</p>
  */
 public final class ItemNamePrefixHandler {
 
     private ItemNamePrefixHandler() {}
 
     /**
-     * 获取物品名称前缀。
-     *
-     * @param stack 物品
-     * @return 前缀字符串，无效果时返回空字符串
+     * 获取物品名称前缀，由效果感知方式动态决定。
      */
     public static String getNamePrefix(ItemStack stack) {
         var effects = net.minecraft.client.yiz.core.data.EffectNBTHandler.getItemEffects(stack);
         if (effects.isEmpty()) return "";
 
-        boolean hasAffix = false;
-        boolean hasShadow = false;
-
+        Set<String> names = new LinkedHashSet<>();
         for (var effect : effects) {
             for (var mode : effect.getPerceptionModes()) {
-                if (mode instanceof net.minecraft.client.yiz.effect.perception.ItemPerception) {
-                    hasAffix = true;
-                } else if (mode instanceof net.minecraft.client.yiz.effect.perception.ContainerPerception) {
-                    hasShadow = true;
+                String name = mode.getTypeName();
+                if (name != null && !name.isEmpty()) {
+                    names.add(name);
                 }
             }
         }
 
-        if (hasAffix && hasShadow) {
-            return "[词缀/随影] ";
-        } else if (hasAffix) {
-            return "[词缀] ";
-        } else if (hasShadow) {
-            return "[随影] ";
-        }
-
-        return "";
+        if (names.isEmpty()) return "";
+        return "[" + String.join("/", names) + "] ";
     }
 
     /**

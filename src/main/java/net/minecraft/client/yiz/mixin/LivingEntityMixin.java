@@ -2,7 +2,9 @@ package net.minecraft.client.yiz.mixin;
 
 import net.minecraft.client.yiz.bridge.HealthDataBridge;
 import net.minecraft.client.yiz.bridge.InvulnerableDataBridge;
+import net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler;
 import net.minecraft.client.yiz.tool.health.EntityASMUtil;
+import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.client.yiz.tool.health.HealBanConfig;
 import net.minecraft.client.yiz.tool.health.HealBanHandler;
 import net.minecraft.client.yiz.tool.health.HealthModificationScheduler;
@@ -175,6 +177,37 @@ public abstract class LivingEntityMixin implements HealthDataBridge {
             // delta 只能为 ≤0
             self.getEntityData().set(yizmodqzk$FE_GET_HEALTH_DATA, Math.min(0, delta));
         }
+    }
+
+    // ==================== hurt() 物品属性伤害修正 ====================
+
+    /**
+     * 在 hurt() 入口修改原始伤害值，应用物品的 %伤害增幅 和 %伤害减免。
+     *
+     * <p>%伤害增幅：来自攻击者（damage source entity）主手+副手物品汇总，乘法放大原始伤害。</p>
+     * <p>%伤害减免：来自目标（this）主手+副手物品汇总，乘法削减原始伤害。</p>
+     * <p>两者在护甲/附魔减伤之前应用，确保与原版减伤体系自然叠加。</p>
+     */
+    @ModifyVariable(method = "hurt", at = @At("HEAD"), argsOnly = true)
+    private float yizmodqzk$modifyHurtAmount(float amount, DamageSource source) {
+        if (amount <= 0) return amount;
+        LivingEntity self = (LivingEntity) (Object) this;
+
+        // %伤害增幅 — 攻击者物品
+        if (source.getEntity() instanceof LivingEntity attacker) {
+            double amp = ItemAttributeHandler.getTotalDamageAmplification(attacker);
+            if (amp != 0) {
+                amount *= (1.0F + (float) amp);
+            }
+        }
+
+        // %伤害减免 — 目标物品
+        double red = ItemAttributeHandler.getTotalDamageReduction(self);
+        if (red != 0) {
+            amount *= (1.0F - (float) red);
+        }
+
+        return Math.max(0, amount);
     }
 
     // ==================== setHealth 禁疗拦截 ====================
