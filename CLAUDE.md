@@ -30,6 +30,7 @@ src/main/java/net/minecraft/client/yiz/
 │   ├── registry/ModRegistries.java    # 全局效果注册表
 │   ├── event/EffectEventBus.java     # 效果事件分发
 │   ├── data/EffectDataLoader.java    # JSON 数据驱动加载
+│   ├── AttackTargetLock.java         # 攻击目标锁定（Agent 级，不被 Mixin 覆盖）
 │   ├── FantasyEndingPlugin.java      # Mixin 插件
 │   └── asm/                          # ASM Agent 引导（AgentLoaderProcess/AsmBootstrapper）
 ├── tool/damage/              # ③ 伤害系统（14种伤害类型，3种强制标签）
@@ -102,6 +103,10 @@ Delta 系统 → ChannelScanner → DirectHealthFallback
 ### 禁疗系统
 
 叠加模型：先百分比削减，再减固定值。通过 ASM Agent + Mixin 三层保底拦截治疗。
+
+### 攻击目标锁定
+
+`AttackTargetLock` 在 `AttackInterceptorMixin` 的 `attack()` HEAD 处（最早时机）捕获原始 target，存入 `ConcurrentHashMap<UUID, Entity>`。下游通过 `YizModQZKAPI.getOriginalAttackTarget(player)` 取回"玩家真正想攻击的实体"——不受其他模组 Mixin 取消/偷换的影响。
 
 ### 物品属性修改（7 属性 × 3 操作）
 
