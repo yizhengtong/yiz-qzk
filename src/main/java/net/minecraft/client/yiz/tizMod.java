@@ -1,7 +1,6 @@
 package net.minecraft.client.yiz;
 
 import net.minecraft.client.yiz.core.data.EffectDataLoader;
-import net.minecraft.client.yiz.menu.ModMenus;
 import net.minecraft.client.yiz.tool.health.HealBanHandler;
 import net.minecraft.client.yiz.tool.health.HealthCommand;
 import net.minecraft.client.yiz.tool.health.SimpleEntityDamageHandler;
@@ -24,9 +23,6 @@ public class tizMod {
     public tizMod(IEventBus modEventBus, ModContainer modContainer) {
         modContainer.registerConfig(ModConfig.Type.COMMON, Config.SPEC);
         modEventBus.addListener(this::commonSetup);
-
-        // 注册 4 个变列容器菜单的 MenuType
-        ModMenus.MENUS.register(modEventBus);
 
         // 注册最简单的 ASM Agent 伤害测试接口
         SimpleEntityDamageHandler.register();

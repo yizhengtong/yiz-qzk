@@ -22,16 +22,6 @@ public final class UIConfig {
         "key.categories.yizmodqzk"
     );
 
-    // ── Demo 容器快捷键（单键无修饰符） ──
-    private static final KeyMapping CHEST_75_KEY = new KeyMapping(
-        "key.yizmodqzk.chest_75", GLFW.GLFW_KEY_C, "key.categories.yizmodqzk");
-    private static final KeyMapping CHEST_115_KEY = new KeyMapping(
-        "key.yizmodqzk.chest_115", GLFW.GLFW_KEY_V, "key.categories.yizmodqzk");
-    private static final KeyMapping CHEST_130_KEY = new KeyMapping(
-        "key.yizmodqzk.chest_130", GLFW.GLFW_KEY_B, "key.categories.yizmodqzk");
-    private static final KeyMapping CHEST_200_KEY = new KeyMapping(
-        "key.yizmodqzk.chest_200", GLFW.GLFW_KEY_N, "key.categories.yizmodqzk");
-
     // UI 开关状态
     private static boolean customItemUIEnabled = false;
     private static boolean playerTalentUIEnabled = false;
@@ -129,12 +119,5 @@ public final class UIConfig {
     public static KeyMapping getToggleTalentUIKey() {
         return TOGGLE_TALENT_UI_KEY;
     }
-
-    // ==================== 容器快捷键获取 ====================
-
-    public static KeyMapping getChest75Key() { return CHEST_75_KEY; }
-    public static KeyMapping getChest115Key() { return CHEST_115_KEY; }
-    public static KeyMapping getChest130Key() { return CHEST_130_KEY; }
-    public static KeyMapping getChest200Key() { return CHEST_200_KEY; }
 
 }
