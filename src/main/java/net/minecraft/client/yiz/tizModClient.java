@@ -5,9 +5,15 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.yiz.ui.ItemInfoUI;
 import net.minecraft.client.yiz.ui.PlayerTalentUI;
 import net.minecraft.client.yiz.ui.UIConfig;
-import net.minecraft.client.yiz.api.ContainerDataStorage;
 import net.minecraft.client.yiz.impl.WorldContainerDataStorage;
+import net.minecraft.client.yiz.menu.HighSmithMenu;
+import net.minecraft.client.yiz.menu.HighSmithScreen;
+import net.minecraft.client.yiz.menu.ModMenus;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.SimpleMenuProvider;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.neoforged.api.distmarker.Dist;
@@ -17,6 +23,7 @@ import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.neoforge.client.event.InputEvent;
+import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
 import net.neoforged.neoforge.client.event.RenderTooltipEvent;
 import net.neoforged.neoforge.client.event.ScreenEvent;
@@ -36,6 +43,7 @@ public class tizModClient {
         var modBus = container.getEventBus();
         modBus.addListener(this::onClientSetup);
         modBus.addListener(this::onRegisterKeyMappings);
+        modBus.addListener(this::onRegisterMenuScreens);
 
         // Register Forge event bus handlers
         NeoForge.EVENT_BUS.register(this);
@@ -51,6 +59,14 @@ public class tizModClient {
     private void onRegisterKeyMappings(RegisterKeyMappingsEvent event) {
         event.register(UIConfig.getToggleItemUIKey());
         event.register(UIConfig.getToggleTalentUIKey());
+        event.register(UIConfig.OPEN_HIGH_SMITH_KEY);
+    }
+
+    /**
+     * Register screen for each custom menu type.
+     */
+    private void onRegisterMenuScreens(RegisterMenuScreensEvent event) {
+        event.register(ModMenus.HIGH_SMITH.get(), HighSmithScreen::new);
     }
 
     /**
@@ -74,6 +90,33 @@ public class tizModClient {
         if (ctrlHeld && UIConfig.isTalentUIKey(event.getKey(), event.getAction())) {
             UIConfig.toggleTalentUI();
         }
+
+        // C (no modifier): open high-level smithing GUI
+        if (event.getKey() == GLFW.GLFW_KEY_C && !ctrlHeld && !Screen.hasShiftDown() && !Screen.hasAltDown()) {
+            openHighSmithScreen(mc);
+        }
+    }
+
+    /**
+     * 通过集成服务端打开高阶锻造 GUI，确保 containerId 有效。
+     */
+    private void openHighSmithScreen(Minecraft mc) {
+        MinecraftServer server = mc.getSingleplayerServer();
+        if (server == null) {
+            tizMod.LOGGER.warn("无法打开高阶锻造 GUI：未检测到集成服务端");
+            return;
+        }
+        ServerPlayer serverPlayer = server.getPlayerList().getPlayer(mc.player.getUUID());
+        if (serverPlayer == null) {
+            tizMod.LOGGER.warn("无法打开高阶锻造 GUI：找不到服务端玩家");
+            return;
+        }
+
+        serverPlayer.openMenu(new SimpleMenuProvider(
+                (id, inv, p) -> new HighSmithMenu(id, inv),
+                Component.translatable("container.yizmodqzk.high_smith")
+        ));
+        tizMod.LOGGER.info("已打开高阶锻造 GUI");
     }
 
     // 暂存悬停物品信息，用于在 ScreenEvent.Render.Post 中渲染（保证在最上层）
@@ -140,7 +183,7 @@ public class tizModClient {
             .computeIfAbsent(WorldContainerDataStorage.factory(), WorldContainerDataStorage.storageName());
 
         // 通知 ChestDataManager 切换活跃存储实例
-        ((ChestDataManager) ContainerDataStorage.getInstance()).setActiveStorage(storage);
+        ChestDataManager.setActiveWorldStorage(storage);
     }
 
     /**
