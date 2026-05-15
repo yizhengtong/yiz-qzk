@@ -284,4 +284,32 @@ public final class EntityASMUtil {
     public static int getTrackedEntityCount() {
         return -1;
     }
+
+    // ==================== Agent 状态（供指令查询） ====================
+
+    /** Agent premain/agentmain 是否成功执行 */
+    public static volatile boolean agentActive = false;
+
+    /** Agent Transformer 是否至少转换过一个类 */
+    public static volatile boolean agentTransformed = false;
+
+    /** 由 Agent 回调 */
+    @SuppressWarnings("unused")
+    public static void markAgentActive() { agentActive = true; }
+
+    /** 由 Transformer 回调 */
+    @SuppressWarnings("unused")
+    public static void markAgentTransformed() { agentTransformed = true; }
+
+    // ==================== 保护态生命值纠正 ====================
+
+    /**
+     * 由 ASM Agent 注入的 {@code setHealth(float)} 钩子调用。
+     * 确保生命值 never &lt;1, never NaN。
+     */
+    @SuppressWarnings("unused")
+    public static float clampProtectedHealth(float health) {
+        if (Float.isNaN(health) || health < 1.0F) return 1.0F;
+        return health;
+    }
 }

@@ -106,7 +106,34 @@ Delta 系统 → ChannelScanner → DirectHealthFallback
 
 ### 攻击目标锁定
 
-`AttackTargetLock` 在 `AttackInterceptorMixin` 的 `attack()` HEAD 处（最早时机）捕获原始 target，存入 `ConcurrentHashMap<UUID, Entity>`。下游通过 `YizModQZKAPI.getOriginalAttackTarget(player)` 取回"玩家真正想攻击的实体"——不受其他模组 Mixin 取消/偷换的影响。
+`AttackTargetLock` 在 `AttackInterceptorMixin` 的 `attack()` HEAD 处捕获原始 target，存入 `ConcurrentHashMap<UUID, Entity>`。下游通过 `YizModQZKAPI.getOriginalAttackTarget(player)` 取回"玩家真正想攻击的实体"。
+
+### Unsafe 实例级保护态
+
+通过 `sun.misc.Unsafe` 替换单个 Player 实例的 class 指针 → `ProtectedServerPlayer`。**5 层防御**：
+
+| 层 | 位置 | 机制 |
+|---|------|------|
+| Agent | `LivingEntity.setHealth()` 入口 | `health = max(1, NaN?1:health)` |
+| Agent | `LivingEntity.die()` 入口 | `if protected → return` |
+| Agent | `Entity.remove()` 入口 | `if protected → return` |
+| Unsafe | `ProtectedServerPlayer` | 覆盖 `hurt/die/kill/remove/tick/setHealth` |
+| Mixin | `LivingEntityMixin.die()` HEAD | `ci.cancel()` 最终兜底 |
+
+API：
+```java
+YizModQZKAPI.enableProtection(player)   // 开启
+YizModQZKAPI.disableProtection(player)  // 关闭
+YizModQZKAPI.isProtected(player)        // 查询
+```
+
+### 简易指令注册
+
+下游通过 API 一行提交指令，无需自行订阅 `RegisterCommandsEvent`：
+```java
+YizModQZKAPI.registerCommand(Commands.literal("test").then(...));
+YizModQZKAPI.registerSimpleCommand("heal", ctx -> { ... });
+```
 
 ### 物品属性修改（7 属性 × 3 操作）
 
@@ -127,20 +154,6 @@ Delta 系统 → ChannelScanner → DirectHealthFallback
 - 属性 1-5 通过原版 `DataComponents.ATTRIBUTE_MODIFIERS` 读写，`set` 移除旧 modifier 后写入新 `ADD_VALUE` modifier（UUID 基于 MODID+属性名 hash 稳定生成）
 - 属性 6-7 通过 `DataComponents.CUSTOM_DATA` NBT 存储，在 `DefaultDamageCalculator` 中自动汇总攻击者主手+副手的 %增幅/%减免，传入 `ModifierStack` 乘法区参与伤害计算
 - `ItemInfoUI` 自动显示全部 7 种属性（从 `ItemAttributeDisplay.getAvailableAttributes()` 读取）
-
-### 简易指令注册
-
-下游模组无需自行订阅 `RegisterCommandsEvent`，通过 API 一行提交指令：
-
-```java
-// 完整 builder（子命令、参数等）
-YizModQZKAPI.registerCommand(Commands.literal("test").then(...));
-
-// 最简：无参字面指令
-YizModQZKAPI.registerSimpleCommand("heal", ctx -> { ... });
-```
-
-`SimpleCommandRegistry` 持有 pending 列表，在 `RegisterCommandsEvent` 时统一注册。调用时机不限。
 
 ## 开发环境
 

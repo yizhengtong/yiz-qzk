@@ -4,6 +4,8 @@ import net.minecraft.client.yiz.tizMod;
 import org.slf4j.Logger;
 
 import java.io.*;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 
@@ -83,15 +85,36 @@ public final class AsmBootstrapper {
      */
     private static boolean tryDirectAttach(File agentJar) {
         try {
-            VmAttachment.allowAttachSelf();
-            var vm = VmAttachment.attachToSelf();
-            LOGGER.debug("[AsmBootstrapper] Attached to self: pid={}", VmAttachment.getCurrentPid());
-            VmAttachment.loadAgent(vm, agentJar.getAbsolutePath(), "");
-            VmAttachment.detach(vm);
+            // 绕过自 attach 限制
+            Field f = Class.forName("sun.tools.attach.HotSpotVirtualMachine")
+                    .getDeclaredField("ALLOW_ATTACH_SELF");
+            sun.misc.Unsafe unsafe = getUnsafe();
+            unsafe.putBoolean(unsafe.staticFieldBase(f), unsafe.staticFieldOffset(f), true);
+
+            // 反射方式 attach（避免模块限制，参考 HelperLib）
+            String pid = java.lang.management.ManagementFactory.getRuntimeMXBean()
+                    .getName().split("@")[0];
+            Class<?> vmClass = Class.forName("com.sun.tools.attach.VirtualMachine");
+            Object vm = vmClass.getMethod("attach", String.class).invoke(null, pid);
+            vmClass.getMethod("loadAgent", String.class).invoke(vm,
+                    agentJar.getAbsolutePath());
+            vmClass.getMethod("detach").invoke(vm);
+
+            LOGGER.info("[AsmBootstrapper] Agent loaded successfully via reflection attach");
             return true;
         } catch (Exception e) {
             LOGGER.warn("[AsmBootstrapper] Direct attach failed: {}", e.getMessage());
             return false;
+        }
+    }
+
+    private static sun.misc.Unsafe getUnsafe() {
+        try {
+            Constructor<sun.misc.Unsafe> c = sun.misc.Unsafe.class.getDeclaredConstructor();
+            c.setAccessible(true);
+            return c.newInstance();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
     }
 

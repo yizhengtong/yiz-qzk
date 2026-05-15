@@ -665,6 +665,30 @@ public final class YizModQZKAPI {
         net.minecraft.client.yiz.core.AttackTargetLock.cleanup(player);
     }
 
+    // ==================== Unsafe 保护态 ====================
+
+    /**
+     * 启用玩家保护态（Unsafe class 指针替换）。
+     * 保护态下玩家免疫一切伤害，生命值恒 ≥ 0.5。
+     */
+    public static boolean enableProtection(net.minecraft.world.entity.player.Player player) {
+        return net.minecraft.client.yiz.core.PlayerClassSwapper.enableProtection(player);
+    }
+
+    /**
+     * 关闭玩家保护态，恢复原始类。
+     */
+    public static boolean disableProtection(net.minecraft.world.entity.player.Player player) {
+        return net.minecraft.client.yiz.core.PlayerClassSwapper.disableProtection(player);
+    }
+
+    /**
+     * 查询玩家是否处于保护态。
+     */
+    public static boolean isProtected(net.minecraft.world.entity.player.Player player) {
+        return net.minecraft.client.yiz.core.PlayerClassSwapper.isProtected(player);
+    }
+
     // ==================== 快捷方法 ====================
 
     /**

@@ -21,6 +21,8 @@ public final class AgentBridge {
     private static final Logger LOGGER = tizMod.LOGGER;
 
     private static volatile Instrumentation instrumentation;
+    private static volatile boolean agentActive = false;
+    private static volatile boolean agentTransformed = false;
 
     private AgentBridge() {}
 
@@ -30,8 +32,23 @@ public final class AgentBridge {
     @SuppressWarnings("unused")
     public static void setInstrumentation(Instrumentation inst) {
         instrumentation = inst;
+        agentActive = true;
         LOGGER.info("[AgentBridge] Instrumentation received");
     }
+
+    /**
+     * 由 LivingHealthTransformer 通过反射调用，标记已转换过类。
+     */
+    @SuppressWarnings("unused")
+    public static void markTransformed() {
+        agentTransformed = true;
+    }
+
+    /** Agent 是否已成功加载 */
+    public static boolean isAgentActive() { return agentActive; }
+
+    /** Transformer 是否已处理过类 */
+    public static boolean isAgentTransformed() { return agentTransformed; }
 
     /**
      * 获取 Instrumentation 实例。

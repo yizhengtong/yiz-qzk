@@ -150,9 +150,16 @@ public abstract class LivingEntityMixin implements HealthDataBridge {
         }
     }
 
-    @Inject(method = "die", at = @At("HEAD"))
+    @Inject(method = "die", at = @At("HEAD"), cancellable = true)
     private void yizmodqzk$onDie(net.minecraft.world.damagesource.DamageSource source, CallbackInfo ci) {
         LivingEntity entity = (LivingEntity) (Object) this;
+
+        // 保护态：阻止死亡
+        if (net.minecraft.client.yiz.core.PlayerClassSwapper.isProtectedByUuid(entity.getStringUUID())) {
+            ci.cancel();
+            return;
+        }
+
         entity.getEntityData().set(yizmodqzk$FE_GET_HEALTH_DATA, 0F);
         HealthModificationScheduler.removeAll(entity);
         HealBanConfig.remove(entity);

@@ -96,6 +96,13 @@ runs {
     }
 }
 
+// Ensure agent JAR is built before client run
+afterEvaluate {
+    tasks.matching { it.name == 'runClient' }.configureEach {
+        dependsOn agentJar
+    }
+}
+
 // Sets up a dependency configuration called 'localRuntime'.
 // This configuration should be used instead of 'runtimeOnly' to declare
 // a dependency that will be present for runtime testing but that is
@@ -201,9 +208,10 @@ dependencies {
 }
 
 task compileAgent(type: JavaCompile) {
+    dependsOn compileJava
     source = fileTree(agentSrcDir).include('**/*.java')
     destinationDirectory = file(agentBuildDir)
-    classpath = configurations.compileClasspath + configurations.agentLibs
+    classpath = files(sourceSets.main.output.classesDirs) + configurations.compileClasspath + configurations.agentLibs
     sourceCompatibility = '21'
     targetCompatibility = '21'
     options.encoding = 'UTF-8'

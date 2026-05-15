@@ -3,9 +3,11 @@ package net.minecraft.client.yiz.agent;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
+import org.objectweb.asm.commons.AdviceAdapter;
 
 import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.IllegalClassFormatException;
@@ -24,6 +26,10 @@ public class LivingHealthTransformer implements ClassFileTransformer {
 
     private static final String LIVING_ENTITY = "net/minecraft/world/entity/LivingEntity";
     private static final String ASM_UTIL = "net/minecraft/client/yiz/tool/health/EntityASMUtil";
+    private static final String LOCK_CLASS = "net/minecraft/client/yiz/core/PlayerClassSwapper";
+
+    /** 是否至少转换过一个类 */
+    public static volatile boolean transformed = false;
 
     private volatile boolean asmUtilAvailable = false;
 
@@ -37,16 +43,22 @@ public class LivingHealthTransformer implements ClassFileTransformer {
     ) throws IllegalClassFormatException {
         if (className == null || classfileBuffer == null) return null;
         if (isExcluded(className)) return null;
-        if (!isLivingEntitySubclass(classfileBuffer)) return null;
+
+        boolean isEntity = "net/minecraft/world/entity/Entity".equals(className);
+        if (!isEntity && !isLivingEntitySubclass(classfileBuffer)) return null;
+
+        boolean isModClass = isModClass(className, classfileBuffer);
+        transformed = true;
+        try {
+            Class<?> bridgeClass = Class.forName("net.minecraft.client.yiz.core.asm.AgentBridge");
+            bridgeClass.getMethod("markTransformed").invoke(null);
+        } catch (Exception ignored) {}
 
         try {
             ClassReader cr = new ClassReader(classfileBuffer);
             ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_FRAMES);
 
-            // 检查 class 是否来自外部 JAR（非 Minecraft 核心）
-            boolean isModClass = isModClass(className, classfileBuffer);
-
-            ClassVisitor cv = new HealthClassVisitor(cw, className, isModClass);
+            ClassVisitor cv = new HealthClassVisitor(cw, className, isModClass, isEntity);
             cr.accept(cv, 0);
             return cw.toByteArray();
         } catch (Exception e) {
@@ -99,17 +111,31 @@ public class LivingHealthTransformer implements ClassFileTransformer {
     private static class HealthClassVisitor extends ClassVisitor {
         private final String className;
         private final boolean isModClass;
+        private final boolean isEntityOnly;
 
-        HealthClassVisitor(ClassWriter cw, String className, boolean isModClass) {
+        HealthClassVisitor(ClassWriter cw, String className, boolean isModClass, boolean isEntityOnly) {
             super(Opcodes.ASM9, cw);
             this.className = className;
             this.isModClass = isModClass;
+            this.isEntityOnly = isEntityOnly;
         }
 
         @Override
         public MethodVisitor visitMethod(int access, String name, String desc, String signature, String[] exceptions) {
             MethodVisitor mv = super.visitMethod(access, name, desc, signature, exceptions);
             if (mv == null) return null;
+
+            // die() / remove() / setHealth 保护态拦截
+            if (isDieMethod(name, desc)) {
+                return new DieMethodVisitor(mv, access, name, desc);
+            } else if (isRemoveMethod(name, desc)) {
+                return new RemoveMethodVisitor(mv, access, name, desc);
+            } else if (isSetHealthMethod(name, desc)) {
+                return new SetHealthMethodVisitor(mv, access, name, desc);
+            }
+
+            // Entity.class 只需要 die/remove/setHealth，跳过健康值相关注入
+            if (isEntityOnly) return mv;
 
             // 判断是否需要对此方法注入
             if (isGetHealthMethod(name, desc)) {
@@ -150,6 +176,112 @@ public class LivingHealthTransformer implements ClassFileTransformer {
 
     private static boolean isHealMethod(String name, String desc) {
         return name.equals("heal") && desc.equals("(F)V");
+    }
+
+    private static boolean isDieMethod(String name, String desc) {
+        return name.equals("die") && desc.startsWith("(Lnet/minecraft/world/damagesource/DamageSource;)");
+    }
+
+    private static boolean isRemoveMethod(String name, String desc) {
+        return name.equals("remove") && desc.contains("RemovalReason");
+    }
+
+    private static boolean isSetHealthMethod(String name, String desc) {
+        return name.equals("setHealth") && desc.equals("(F)V");
+    }
+
+    // ==================== ASM: setHealth() 生命值纠正 ====================
+
+    /**
+     * 在 setHealth(float) 入口注入保护纠正：若实体处于保护态，
+     * 强制 clamp 到 ≥1 且非 NaN。
+     * 伪代码：
+     *   if (isProtectedByUuid(this.getStringUUID()))
+     *       newHealth = max(1, isNaN(newHealth) ? 1 : newHealth);
+     */
+    private static class SetHealthMethodVisitor extends AdviceAdapter {
+        SetHealthMethodVisitor(MethodVisitor mv, int access, String name, String desc) {
+            super(Opcodes.ASM9, mv, access, name, desc);
+        }
+
+        @Override
+        protected void onMethodEnter() {
+            // 保存 slot 1 (health参数) 以便后续重写
+            // 检查保护状态
+            Label notProtected = new Label();
+            mv.visitVarInsn(Opcodes.ALOAD, 0); // this
+            mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL,
+                    "net/minecraft/world/entity/Entity", "getStringUUID",
+                    "()Ljava/lang/String;", false);
+            mv.visitMethodInsn(Opcodes.INVOKESTATIC,
+                    LOCK_CLASS, "isProtectedByUuid",
+                    "(Ljava/lang/String;)Z", false);
+            mv.visitJumpInsn(Opcodes.IFEQ, notProtected);
+
+            // 受保护：clamp health
+            // FLOAD 1 (原值) → clamp → FSTORE 1
+            mv.visitVarInsn(Opcodes.FLOAD, 1);
+            mv.visitMethodInsn(Opcodes.INVOKESTATIC,
+                    ASM_UTIL, "clampProtectedHealth",
+                    "(F)F", false);
+            mv.visitVarInsn(Opcodes.FSTORE, 1);
+
+            mv.visitLabel(notProtected);
+        }
+    }
+
+    // ==================== ASM: die() 保护态拦截 ====================
+
+    /**
+     * 在 die(DamageSource) 入口注入保护检查。
+     * 伪代码: if (isProtectedByUuid(this.getStringUUID())) return;
+     */
+    private static class DieMethodVisitor extends AdviceAdapter {
+        DieMethodVisitor(MethodVisitor mv, int access, String name, String desc) {
+            super(Opcodes.ASM9, mv, access, name, desc);
+        }
+
+        @Override
+        protected void onMethodEnter() {
+            Label after = new Label();
+            mv.visitVarInsn(Opcodes.ALOAD, 0);
+            mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL,
+                    "net/minecraft/world/entity/Entity", "getStringUUID",
+                    "()Ljava/lang/String;", false);
+            mv.visitMethodInsn(Opcodes.INVOKESTATIC,
+                    "net/minecraft/client/yiz/core/PlayerClassSwapper",
+                    "isProtectedByUuid", "(Ljava/lang/String;)Z", false);
+            mv.visitJumpInsn(Opcodes.IFEQ, after);
+            mv.visitInsn(Opcodes.RETURN);
+            mv.visitLabel(after);
+        }
+    }
+
+    // ==================== ASM: remove() 保护态拦截 ====================
+
+    /**
+     * 在 remove(RemovalReason) 入口注入保护检查。
+     * 伪代码: if (isProtectedByUuid(this.getStringUUID())) return;
+     */
+    private static class RemoveMethodVisitor extends AdviceAdapter {
+        RemoveMethodVisitor(MethodVisitor mv, int access, String name, String desc) {
+            super(Opcodes.ASM9, mv, access, name, desc);
+        }
+
+        @Override
+        protected void onMethodEnter() {
+            Label after = new Label();
+            mv.visitVarInsn(Opcodes.ALOAD, 0);
+            mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL,
+                    "net/minecraft/world/entity/Entity", "getStringUUID",
+                    "()Ljava/lang/String;", false);
+            mv.visitMethodInsn(Opcodes.INVOKESTATIC,
+                    "net/minecraft/client/yiz/core/PlayerClassSwapper",
+                    "isProtectedByUuid", "(Ljava/lang/String;)Z", false);
+            mv.visitJumpInsn(Opcodes.IFEQ, after);
+            mv.visitInsn(Opcodes.RETURN);
+            mv.visitLabel(after);
+        }
     }
 
     // ==================== ASM MethodVisitor: getHealth ====================

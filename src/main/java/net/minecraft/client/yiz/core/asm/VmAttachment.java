@@ -3,6 +3,7 @@ package net.minecraft.client.yiz.core.asm;
 import com.sun.tools.attach.VirtualMachine;
 
 import java.io.File;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
@@ -197,13 +198,14 @@ public final class VmAttachment {
 
     private static sun.misc.Unsafe getUnsafe() {
         try {
-            Field f = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
-            f.setAccessible(true);
-            return (sun.misc.Unsafe) f.get(null);
-        } catch (Exception e) {
+            // 方式 1: 通过构造函数（绕过所有安全检查，参考 HelperLib）
+            Constructor<sun.misc.Unsafe> c = sun.misc.Unsafe.class.getDeclaredConstructor();
+            c.setAccessible(true);
+            return c.newInstance();
+        } catch (Exception e1) {
             try {
-                Class<?> unsafeClass = Class.forName("sun.misc.Unsafe");
-                Field f = unsafeClass.getDeclaredField("theUnsafe");
+                // 方式 2: theUnsafe 字段（传统方式）
+                Field f = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
                 f.setAccessible(true);
                 return (sun.misc.Unsafe) f.get(null);
             } catch (Exception e2) {
