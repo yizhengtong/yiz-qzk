@@ -1,5 +1,6 @@
 package net.minecraft.client.yiz.mixin;
 
+import net.minecraft.client.yiz.core.AttackTargetLock;
 import net.minecraft.client.yiz.api.DamageAttributeRegistry;
 import net.minecraft.client.yiz.api.HealBanAttributeRegistry;
 import net.minecraft.client.yiz.api.SpecialDamageAttributeRegistry;
@@ -45,6 +46,9 @@ public abstract class AttackInterceptorMixin {
     @Inject(method = "attack", at = @At("HEAD"), cancellable = true)
     private void yizmodqzk$onAttackStart(Entity target, CallbackInfo ci) {
         Player attacker = (Player) (Object) this;
+
+        // 锁定原始攻击目标（最早时机，供下游模组通过 API 查询）
+        AttackTargetLock.captureOnAttack(attacker, target);
 
         // 非生物目标不处理
         if (!(target instanceof LivingEntity)) return;

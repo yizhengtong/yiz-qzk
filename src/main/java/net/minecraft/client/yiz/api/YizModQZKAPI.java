@@ -645,6 +645,26 @@ public final class YizModQZKAPI {
         net.minecraft.client.yiz.tool.SimpleCommandRegistry.register(name, action);
     }
 
+    // ==================== 攻击目标锁定 ====================
+
+    /**
+     * 获取玩家最近一次攻击的原始目标。
+     * <p>由 ASM Agent 在 {@code Player.attack()} 最早时机捕获，
+     * 不受其他模组 Mixin 或事件取消/偷换的影响。</p>
+     *
+     * @return 原始目标实体，无记录时返回 null
+     */
+    public static net.minecraft.world.entity.Entity getOriginalAttackTarget(net.minecraft.world.entity.player.Player player) {
+        return net.minecraft.client.yiz.core.AttackTargetLock.getOriginalTarget(player);
+    }
+
+    /**
+     * 清理玩家的攻击目标记录。
+     */
+    public static void cleanupAttackTarget(net.minecraft.world.entity.player.Player player) {
+        net.minecraft.client.yiz.core.AttackTargetLock.cleanup(player);
+    }
+
     // ==================== 快捷方法 ====================
 
     /**
