@@ -5,10 +5,11 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.yiz.ui.ItemInfoUI;
 import net.minecraft.client.yiz.ui.PlayerTalentUI;
 import net.minecraft.client.yiz.ui.UIConfig;
+import net.minecraft.client.yiz.api.ContainerDataStorage;
+import net.minecraft.client.yiz.impl.WorldContainerDataStorage;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.saveddata.SavedData;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -135,8 +136,11 @@ public class tizModClient {
         if (!(event.getLevel() instanceof ServerLevel serverLevel)) return;
         if (serverLevel.dimension() != Level.OVERWORLD) return;
 
-        serverLevel.getDataStorage()
-            .computeIfAbsent(new SavedData.Factory<>(ChestSavedData::new, ChestSavedData::load), ChestSavedData.NAME);
+        WorldContainerDataStorage storage = serverLevel.getDataStorage()
+            .computeIfAbsent(WorldContainerDataStorage.factory(), WorldContainerDataStorage.storageName());
+
+        // 通知 ChestDataManager 切换活跃存储实例
+        ((ChestDataManager) ContainerDataStorage.getInstance()).setActiveStorage(storage);
     }
 
     /**
@@ -148,8 +152,8 @@ public class tizModClient {
         if (!(event.getLevel() instanceof ServerLevel serverLevel)) return;
         if (serverLevel.dimension() != Level.OVERWORLD) return;
 
-        ChestSavedData data = serverLevel.getDataStorage()
-            .computeIfAbsent(new SavedData.Factory<>(ChestSavedData::new, ChestSavedData::load), ChestSavedData.NAME);
-        data.setDirty();
+        WorldContainerDataStorage storage = serverLevel.getDataStorage()
+            .computeIfAbsent(WorldContainerDataStorage.factory(), WorldContainerDataStorage.storageName());
+        storage.setDirty();
     }
 }
