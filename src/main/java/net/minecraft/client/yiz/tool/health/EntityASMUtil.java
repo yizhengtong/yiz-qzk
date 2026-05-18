@@ -2,6 +2,7 @@ package net.minecraft.client.yiz.tool.health;
 
 import net.minecraft.client.yiz.bridge.HealthDataBridge;
 import net.minecraft.network.syncher.EntityDataAccessor;
+import net.minecraft.sounds.SoundEvents;
 import net.minecraft.world.entity.LivingEntity;
 
 /**
@@ -19,6 +20,26 @@ import net.minecraft.world.entity.LivingEntity;
 public final class EntityASMUtil {
 
     private EntityASMUtil() {}
+
+    // ==================== 伤害效果开关（粒子 + 音效） ====================
+
+    /** 伤害时是否触发受伤动画、红心闪烁和音效，默认关闭 */
+    private static volatile boolean damageEffectsEnabled = false;
+
+    public static boolean isDamageEffectsEnabled() {
+        return damageEffectsEnabled;
+    }
+
+    /**
+     * 设置伤害效果开关。开启后，Delta 系统造成的伤害会触发：
+     * <ul>
+     *   <li>目标实体受伤动画（红心闪烁）</li>
+     *   <li>通用受伤音效 ({@link SoundEvents#GENERIC_HURT})</li>
+     * </ul>
+     */
+    public static void setDamageEffectsEnabled(boolean enabled) {
+        damageEffectsEnabled = enabled;
+    }
 
     // ==================== Delta 管理 ====================
 
@@ -56,6 +77,14 @@ public final class EntityASMUtil {
      */
     public static void addDelta(LivingEntity entity, float amount) {
         if (entity.level().isClientSide()) return;
+
+        // 0. 视觉反馈：受伤动画 + 音效（仅伤害时触发，受开关控制）
+        if (amount < 0 && damageEffectsEnabled) {
+            entity.hurtTime = 10;
+            entity.hurtDuration = 10;
+            entity.level().broadcastEntityEvent(entity, (byte) 2);
+            entity.playSound(SoundEvents.GENERIC_HURT, 1.0f, 1.0f);
+        }
 
         // 1. 主系统：delta 偏移（对 vanilla/ASM 实体生效）
         float current = getHealthDelta(entity);

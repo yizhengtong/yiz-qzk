@@ -112,6 +112,14 @@ public final class UnlockManager {
     }
 
     /**
+     * 清除指定玩家的解锁数据。
+     * 用于客户端接收同步包时替换该玩家状态。
+     */
+    public static void clearPlayer(UUID uuid) {
+        unlockedEffects.remove(uuid);
+    }
+
+    /**
      * 清除所有数据（用于测试）。
      */
     public static void clearAll() {

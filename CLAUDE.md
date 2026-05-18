@@ -1,6 +1,6 @@
 # YizMod QZK — CLAUDE.md
 
-NeoForge 1.21.1 **库模组 (Library Mod)**，MODID=`yizmodqzk`，为下游模组提供伤害/效果/健康修改/武器/天赋框架。
+NeoForge 1.21.1 **库模组 (Library Mod)**，MODID=`yizmodqzk`，为下游模组提供伤害/效果/健康修改框架。
 
 ## 构建命令
 
@@ -37,12 +37,10 @@ src/main/java/net/minecraft/client/yiz/
 ├── tool/health/              # ④ 健康修改系统（优先级管道）
 ├── tool/attribute/           # ⑤ 属性修改辅助 + 物品属性读写 (ItemAttributeHandler)
 ├── tool/SimpleCommandRegistry.java  # ⑥ 简易指令注册器
-├── weapon/                   # ⑦ 武器系统
-├── talent/                   # ⑧ 天赋系统
-├── ui/                       # ⑨ 统一UI面板（所有下游模组的效果自动汇聚于此）
-├── attribute/                # ⑩ 属性计算（ModifierStack多乘区引擎）
-├── bridge/                   # ⑪ 数据桥接（NBT序列化）
-└── mixin/                    # ⑫ Mixin（仅3个：Player/LivingEntity/AttackInterceptor）
+├── ui/                       # ⑦ 统一UI面板（所有下游模组的效果自动汇聚于此）
+├── attribute/                # ⑧ 属性计算（ModifierStack多乘区引擎）
+├── bridge/                   # ⑨ 数据桥接（NBT序列化）
+└── mixin/                    # ⑩ Mixin（仅3个：Player/LivingEntity/AttackInterceptor）
 
 agent/src/                    # 独立 Java Agent（ASM字节码改写）
 └── net/minecraft/client/yiz/agent/

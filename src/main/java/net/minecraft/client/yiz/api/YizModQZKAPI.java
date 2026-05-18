@@ -5,10 +5,12 @@ import net.minecraft.client.yiz.core.registry.ModRegistries;
 import net.minecraft.client.yiz.effect.AbstractEffect;
 import net.minecraft.client.yiz.effect.EffectContext;
 import net.minecraft.client.yiz.effect.unlock.UnlockManager;
+import net.minecraft.client.yiz.network.NetworkHandler;
 import net.minecraft.client.yiz.ui.PlayerTalentUI;
 import net.minecraft.client.yiz.tool.health.EntityASMUtil;
 import net.minecraft.core.Holder;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.Attribute;
@@ -343,6 +345,28 @@ public final class YizModQZKAPI {
         }
     }
 
+    // ==================== 伤害效果开关 ====================
+
+    /**
+     * 设置 Delta 改血系统是否触发受伤动画和音效。
+     * <p>
+     * 开启后，通过 {@link #damage} / {@link #modifyHealth} / {@link #setHealth}
+     * 等途径造成的 Delta 伤害都会触发目标实体的受伤闪烁红心和 {@code GENERIC_HURT} 音效。
+     * </p>
+     *
+     * @param enabled {@code true} 开启效果，{@code false} 关闭（默认）
+     */
+    public static void setDamageEffectsEnabled(boolean enabled) {
+        EntityASMUtil.setDamageEffectsEnabled(enabled);
+    }
+
+    /**
+     * 查询 Delta 伤害效果开关状态。
+     */
+    public static boolean isDamageEffectsEnabled() {
+        return EntityASMUtil.isDamageEffectsEnabled();
+    }
+
     // ==================== 健康值根本禁疗（方法③） ====================
 
     /**
@@ -445,9 +469,13 @@ public final class YizModQZKAPI {
 
     /**
      * 为实体解锁效果。
+     * 服务端调用后自动同步到客户端。
      */
     public static void unlockEffect(LivingEntity entity, ResourceLocation effectId) {
         UnlockManager.unlock(entity, effectId);
+        if (entity instanceof ServerPlayer serverPlayer) {
+            NetworkHandler.syncPlayerUnlocks(serverPlayer);
+        }
     }
 
     /**

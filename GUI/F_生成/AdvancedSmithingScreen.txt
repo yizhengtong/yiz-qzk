@@ -1,0 +1,20 @@
+=== 高级锻造台 GUI — 局内拼凑方案 ===
+
+引用积木（全部来自 A_通用/）：
+  fill_white.png              → 铺满背景
+  border_corner_tl/tr/bl/br   → 四角
+  border_edge_top/bottom/left/right → 四边
+  slot_default.png            → 4 个槽位
+  split_bar.png               → 分隔条
+  player_slots_9x4.png        → 玩家背包
+
+尺寸计算：
+  列数 = 9
+  容器行数 = 4  →  容器区高度 = 72px
+  总窗口 = 172 × 172
+
+槽位坐标（Menu/数据坐标，不含 -1 偏移）：
+  放入槽:   (72, 27)   ← 中间左
+  材料槽 A: (72, 9)    ← 上方居中
+  材料槽 B: (72, 45)   ← 下方居中
+  输出槽:   (108, 27)  ← 中间右

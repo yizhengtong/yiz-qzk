@@ -1,10 +1,8 @@
 package net.minecraft.client.yiz.attribute;
 
-import net.minecraft.client.yiz.weapon.AbstractBaseWeapon;
-
 /**
- * Represents an attribute modifier that can be applied to weapons.
- * Used by talents to modify weapon stats.
+ * Represents an attribute modifier for multi-zone damage calculation.
+ * Used by the damage system to apply additive/multiplicative/independent modifiers.
  */
 public class AttributeModifier {
     private final String id;
@@ -37,8 +35,7 @@ public class AttributeModifier {
     }
     
     /**
-     * Apply this modifier to a weapon.
-     * Override for complex conditional modifiers.
+     * Apply this modifier to a base value.
      */
     public double applyTo(double baseValue) {
         return switch (type) {

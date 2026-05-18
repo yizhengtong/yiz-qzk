@@ -8,12 +8,13 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.client.yiz.core.registry.ModRegistries;
 import net.minecraft.client.yiz.effect.AbstractEffect;
-import net.minecraft.client.yiz.effect.perception.EntityPerception;
 import net.minecraft.client.yiz.effect.unlock.UnlockManager;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * 玩家天赋面板 — 窗口化实现
@@ -318,6 +319,12 @@ public class PlayerTalentUI {
         winHeight = Math.clamp(winHeight, MIN_HEIGHT, Math.max(MIN_HEIGHT, sh - 8));
     }
 
+    // ==================== 缓存 ====================
+
+    private static UUID cachedPlayerUuid = null;
+    private static int cachedUnlockCount = -1;
+    private static List<AbstractEffect> cachedTalentList = List.of();
+
     // ==================== 数据 ====================
 
     public static List<AbstractEffect> getPlayerTalents(LocalPlayer player) {
@@ -325,22 +332,27 @@ public class PlayerTalentUI {
     }
 
     /**
-     * 获取实体所有已解锁的天赋（LivingEntity 版本，兼容服务端逻辑）。
+     * 获取实体所有已解锁的天赋。
+     * 仅在玩家变更或解锁数量变化时重建列表，避免每帧 O(n) 扫描。
      */
     public static List<AbstractEffect> getPlayerTalents(LivingEntity entity) {
+        UUID uuid = entity.getUUID();
+        int unlockCount = UnlockManager.getUnlockedEffects(entity).size();
+
+        if (uuid.equals(cachedPlayerUuid) && unlockCount == cachedUnlockCount) {
+            return cachedTalentList;
+        }
+
         List<AbstractEffect> list = new ArrayList<>();
-        for (AbstractEffect effect : ModRegistries.getAllEffects()) {
-            boolean isTalent = effect.getPerceptionModes().stream()
-                .anyMatch(m -> m instanceof EntityPerception);
-            if (!isTalent) continue;
+        for (AbstractEffect effect : ModRegistries.getEntityPerceptionEffects()) {
             if (UnlockManager.isUnlocked(entity, effect.getId())) {
                 list.add(effect);
             }
         }
-        list.sort((a, b) -> {
-            int c = Integer.compare(a.getRarity().ordinal(), b.getRarity().ordinal());
-            return c != 0 ? c : Integer.compare(b.getLevel(), a.getLevel());
-        });
-        return list;
+
+        cachedPlayerUuid = uuid;
+        cachedUnlockCount = unlockCount;
+        cachedTalentList = Collections.unmodifiableList(list);
+        return cachedTalentList;
     }
 }
