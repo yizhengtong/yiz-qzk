@@ -12,6 +12,7 @@ import net.minecraft.client.yiz.tool.health.HealthModifier;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.LivingEntity;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
@@ -236,6 +237,20 @@ public abstract class AbstractEffect {
         return HealthModificationManager.executeModification(
             context.entity(), context
         );
+    }
+
+    // ==================== 天赋面板详情行 ====================
+
+    /**
+     * 获取在天赋面板中额外显示的详情行。
+     * 子类可重写此方法以展示自定义信息（如属性数值、描述文本等）。
+     * 每行支持 Minecraft § 颜色代码。
+     *
+     * @param entity 当前查看的实体（客户端玩家）
+     * @return 详情行列表，每行一个字符串；默认返回空列表
+     */
+    public List<String> getTalentDetailLines(LivingEntity entity) {
+        return Collections.emptyList();
     }
 
     // ==================== Getters ====================

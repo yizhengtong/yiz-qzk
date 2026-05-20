@@ -1,6 +1,9 @@
 package net.minecraft.client.yiz.network;
 
+import net.minecraft.client.yiz.api.PlayerDataAPI;
+import net.minecraft.client.yiz.core.registry.ModAttachments;
 import net.minecraft.client.yiz.effect.unlock.UnlockManager;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.PacketDistributor;
@@ -28,6 +31,11 @@ public final class NetworkHandler {
             SyncUnlocksPayload.STREAM_CODEC,
             SyncUnlocksPayload::handle
         );
+        registrar.playToClient(
+            SyncPlayerDataPayload.TYPE,
+            SyncPlayerDataPayload.STREAM_CODEC,
+            SyncPlayerDataPayload::handle
+        );
     }
 
     /**
@@ -38,5 +46,18 @@ public final class NetworkHandler {
         Set<ResourceLocation> unlocked = UnlockManager.getUnlockedEffects(player.getUUID());
         var payload = new SyncUnlocksPayload(player.getUUID(), List.copyOf(unlocked));
         PacketDistributor.sendToPlayer(player, payload);
+    }
+
+    /**
+     * 注册 PlayerDataAPI 同步回调。
+     * 在 tizMod 初始化时调用一次，使每次 set() 自动同步到客户端。
+     */
+    public static void registerPlayerDataSync() {
+        PlayerDataAPI.setSyncCallback((player, dataJson) -> {
+            if (player instanceof ServerPlayer serverPlayer) {
+                var payload = new SyncPlayerDataPayload(dataJson);
+                PacketDistributor.sendToPlayer(serverPlayer, payload);
+            }
+        });
     }
 }

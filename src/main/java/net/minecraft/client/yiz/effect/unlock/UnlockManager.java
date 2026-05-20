@@ -17,13 +17,23 @@ public final class UnlockManager {
 
     private static final Map<UUID, Set<ResourceLocation>> unlockedEffects = new HashMap<>();
 
+    private static Runnable dirtyCallback = () -> {};
+
     private UnlockManager() {}
+
+    /**
+     * 设置脏标记回调，数据变更时触发。
+     */
+    public static void setDirtyCallback(Runnable callback) {
+        dirtyCallback = callback != null ? callback : () -> {};
+    }
 
     /**
      * 为实体解锁效果。
      */
     public static void unlock(LivingEntity entity, ResourceLocation effectId) {
         unlockedEffects.computeIfAbsent(entity.getUUID(), k -> new HashSet<>()).add(effectId);
+        dirtyCallback.run();
     }
 
     /**
@@ -31,6 +41,7 @@ public final class UnlockManager {
      */
     public static void unlock(UUID uuid, ResourceLocation effectId) {
         unlockedEffects.computeIfAbsent(uuid, k -> new HashSet<>()).add(effectId);
+        dirtyCallback.run();
     }
 
     /**
@@ -48,6 +59,7 @@ public final class UnlockManager {
         Set<ResourceLocation> effects = unlockedEffects.get(entity.getUUID());
         if (effects != null) {
             effects.remove(effectId);
+            dirtyCallback.run();
         }
     }
 
@@ -117,6 +129,7 @@ public final class UnlockManager {
      */
     public static void clearPlayer(UUID uuid) {
         unlockedEffects.remove(uuid);
+        dirtyCallback.run();
     }
 
     /**

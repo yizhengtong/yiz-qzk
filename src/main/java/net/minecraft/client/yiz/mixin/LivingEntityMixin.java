@@ -1,10 +1,16 @@
 package net.minecraft.client.yiz.mixin;
 
+import net.minecraft.client.yiz.api.CounterAttackRegistry;
+import net.minecraft.client.yiz.api.DamageReductionRegistry;
+import net.minecraft.client.yiz.api.KnockbackImmunityRegistry;
+import net.minecraft.client.yiz.api.ProjectileImmunityRegistry;
+import net.minecraft.client.yiz.api.UndyingRegistry;
 import net.minecraft.client.yiz.bridge.HealthDataBridge;
 import net.minecraft.client.yiz.bridge.InvulnerableDataBridge;
 import net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler;
 import net.minecraft.client.yiz.tool.health.EntityASMUtil;
 import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.client.yiz.tool.health.HealBanConfig;
 import net.minecraft.client.yiz.tool.health.HealBanHandler;
 import net.minecraft.client.yiz.tool.health.HealthModificationScheduler;
@@ -14,6 +20,7 @@ import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.client.yiz.tizMod;
 import net.minecraft.world.entity.player.Player;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
@@ -237,7 +244,23 @@ public abstract class LivingEntityMixin implements HealthDataBridge {
         }
 
         LivingEntity self = (LivingEntity) (Object) this;
+
+        // === 保护态生命值纠正（ASM 原逻辑移入 Mixin）：确保血量 ≥1, 非 NaN ===
+        if (net.minecraft.client.yiz.core.PlayerClassSwapper.isProtectedByUuid(self.getStringUUID())) {
+            return EntityASMUtil.clampProtectedHealth(newHealth);
+        }
+
         float current = self.getHealth();
+
+        // === 伤害减免（Agent 优先，Mixin 兜底） ===
+        if (newHealth < current) {
+            // Agent 已处理则跳过，避免重复减免
+            if (DamageReductionRegistry.consumeReductionApplied()) {
+                return newHealth;
+            }
+            return DamageReductionRegistry.applyBeforeSetHealth(self, newHealth);
+        }
+
         if (newHealth <= current) return newHealth;
         if (current <= 0.5f) return newHealth;
 
@@ -269,5 +292,71 @@ public abstract class LivingEntityMixin implements HealthDataBridge {
     @Inject(method = "setHealth", at = @At("RETURN"))
     private void yizmodqzk$onSetHealth(CallbackInfo ci) {
         HealBanHandler.updateBaseline((LivingEntity) (Object) this);
+    }
+
+    // ==================== 投射物免疫 ====================
+
+    @Inject(method = "hurt", at = @At("HEAD"), cancellable = true)
+    private void yizmodqzk$onHurtProjectileImmune(DamageSource source, float amount, CallbackInfoReturnable<Boolean> cir) {
+        if (source.is(net.minecraft.tags.DamageTypeTags.IS_PROJECTILE)) {
+            LivingEntity self = (LivingEntity) (Object) this;
+            if (ProjectileImmunityRegistry.isImmune(self)) {
+                cir.setReturnValue(false);
+            }
+        }
+    }
+
+    // ==================== 复活系统 ====================
+
+    @Inject(method = "checkTotemDeathProtection", at = @At("RETURN"), cancellable = true)
+    private void yizmodqzk$onCheckTotemDeathProtection(DamageSource source, CallbackInfoReturnable<Boolean> cir) {
+        if (cir.getReturnValue()) return; // 图腾已复活
+        LivingEntity self = (LivingEntity) (Object) this;
+        float targetHealth = UndyingRegistry.tryRevive(self, source);
+        if (targetHealth > 0) {
+            cir.setReturnValue(true); // 阻止死亡
+        }
+    }
+
+    // ==================== 回击系统 ====================
+
+    @Inject(method = "hurt", at = @At("RETURN"))
+    private void yizmodqzk$onHurtReturn(DamageSource source, float amount, CallbackInfoReturnable<Boolean> cir) {
+        if (!cir.getReturnValue()) return;
+        LivingEntity self = (LivingEntity) (Object) this;
+        if (self.level().isClientSide()) return;
+        if (!(self instanceof Player player)) return;
+
+        Entity srcEntity = source.getEntity();
+        tizMod.LOGGER.info("[CounterAttack] DBG: player={} sourceEntity={} amount={}",
+                player.getName().getString(),
+                srcEntity != null ? srcEntity.getName().getString() : "null",
+                amount);
+
+        if (!(srcEntity instanceof LivingEntity attacker)) return;
+        if (attacker == player) return;
+
+        tizMod.LOGGER.info("[CounterAttack] FIRE: {} -> {}", player.getName().getString(), attacker.getName().getString());
+        CounterAttackRegistry.tryCounterAttack(player, attacker);
+    }
+
+    // ==================== 击退免疫 ====================
+
+    @Inject(method = "knockback", at = @At("HEAD"), cancellable = true)
+    private void yizmodqzk$onKnockback(double d0, double d1, double d2, CallbackInfo ci) {
+        LivingEntity self = (LivingEntity) (Object) this;
+        if (KnockbackImmunityRegistry.isImmune(self)) {
+            ci.cancel();
+        }
+    }
+
+    // ==================== remove 保护态拦截 ====================
+
+    @Inject(method = "remove", at = @At("HEAD"), cancellable = true)
+    private void yizmodqzk$onRemove(net.minecraft.world.entity.Entity.RemovalReason reason, CallbackInfo ci) {
+        LivingEntity self = (LivingEntity) (Object) this;
+        if (net.minecraft.client.yiz.core.PlayerClassSwapper.isProtectedByUuid(self.getStringUUID())) {
+            ci.cancel();
+        }
     }
 }

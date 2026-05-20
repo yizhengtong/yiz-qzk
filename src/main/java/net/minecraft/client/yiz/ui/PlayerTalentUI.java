@@ -159,7 +159,12 @@ public class PlayerTalentUI {
             int hintY = titleBottom + CONTENT_PAD + 10;
             graphics.drawString(font, hint, hintX, hintY, 0xA0A0A0);
         } else for (AbstractEffect talent : talents) {
-            if (lineY + font.lineHeight > contentMaxY) break; // 裁剪超出内容
+            // 计算整条天赋的完整高度（标准行 + 详情行 + 间距）
+            List<String> details = talent.getTalentDetailLines(mc.player);
+            int needed = font.lineHeight * 4                  // 4 行标准信息
+                       + font.lineHeight * details.size()     // 详情行
+                       + 1 + 2;                                // 标准行后间距 + 天赋间间距
+            if (lineY + needed > contentMaxY) break;
 
             int color = EffectTooltipRenderer.getRarityColor(talent.getRarity());
             String hex = color == 0xFFFF5555 ? "§c" : color == 0xFFFFAA00 ? "§6"
@@ -179,7 +184,14 @@ public class PlayerTalentUI {
 
             graphics.drawString(font, "  §8└─ " + talent.getPerceptionTypeName(),
                 cx, lineY, 0xA0A0A0);
-            lineY += font.lineHeight + 3;
+            lineY += font.lineHeight + 1;
+
+            // 渲染额外详情行
+            for (String detailLine : details) {
+                graphics.drawString(font, "  " + detailLine, cx, lineY, 0xFFFFFFFF);
+                lineY += font.lineHeight;
+            }
+            lineY += 2;
         }
 
         // ── 四角缩放手柄（加粗 L 形，视觉上明确提示可拖拽）──
@@ -319,40 +331,26 @@ public class PlayerTalentUI {
         winHeight = Math.clamp(winHeight, MIN_HEIGHT, Math.max(MIN_HEIGHT, sh - 8));
     }
 
-    // ==================== 缓存 ====================
-
-    private static UUID cachedPlayerUuid = null;
-    private static int cachedUnlockCount = -1;
-    private static List<AbstractEffect> cachedTalentList = List.of();
-
     // ==================== 数据 ====================
-
-    public static List<AbstractEffect> getPlayerTalents(LocalPlayer player) {
-        return getPlayerTalents((LivingEntity) player);
-    }
 
     /**
      * 获取实体所有已解锁的天赋。
-     * 仅在玩家变更或解锁数量变化时重建列表，避免每帧 O(n) 扫描。
+     * 每帧都会重新构建列表，保证动态数据（如星光层数）实时反映在面板上。
      */
     public static List<AbstractEffect> getPlayerTalents(LivingEntity entity) {
-        UUID uuid = entity.getUUID();
-        int unlockCount = UnlockManager.getUnlockedEffects(entity).size();
-
-        if (uuid.equals(cachedPlayerUuid) && unlockCount == cachedUnlockCount) {
-            return cachedTalentList;
-        }
-
         List<AbstractEffect> list = new ArrayList<>();
         for (AbstractEffect effect : ModRegistries.getEntityPerceptionEffects()) {
             if (UnlockManager.isUnlocked(entity, effect.getId())) {
                 list.add(effect);
             }
         }
+        return Collections.unmodifiableList(list);
+    }
 
-        cachedPlayerUuid = uuid;
-        cachedUnlockCount = unlockCount;
-        cachedTalentList = Collections.unmodifiableList(list);
-        return cachedTalentList;
+    /**
+     * 重载：接受 LocalPlayer 参数。
+     */
+    public static List<AbstractEffect> getPlayerTalents(LocalPlayer player) {
+        return getPlayerTalents((LivingEntity) player);
     }
 }

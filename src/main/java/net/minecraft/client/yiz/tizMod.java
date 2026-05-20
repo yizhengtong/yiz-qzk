@@ -1,16 +1,26 @@
 package net.minecraft.client.yiz;
 
+import net.minecraft.client.yiz.api.AttributeBalanceRegistry;
+import net.minecraft.client.yiz.api.ProjectileReflectionSystem;
+import net.minecraft.client.yiz.core.asm.AsmBootstrapper;
 import net.minecraft.client.yiz.core.data.EffectDataLoader;
+import net.minecraft.client.yiz.core.registry.ModAttachments;
+import net.minecraft.client.yiz.effect.unlock.UnlockManager;
+import net.minecraft.client.yiz.effect.unlock.UnlockSavedData;
 import net.minecraft.client.yiz.network.NetworkHandler;
 import net.minecraft.client.yiz.tool.SimpleCommandRegistry;
 import net.minecraft.client.yiz.tool.health.HealBanHandler;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.Level;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.neoforged.neoforge.event.AddReloadListenerEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
+import net.neoforged.neoforge.event.tick.PlayerTickEvent;
+import net.neoforged.neoforge.event.level.LevelEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import org.slf4j.Logger;
 import com.mojang.logging.LogUtils;
@@ -25,6 +35,8 @@ public class tizMod {
 
         // 注册网络同步处理器
         modEventBus.addListener(NetworkHandler::onRegisterPayloadHandlers);
+        // 注册 PlayerDataAPI 自动同步
+        NetworkHandler.registerPlayerDataSync();
 
         // 初始化简易指令注册器（下游模组通过 API 提交指令，无需自行订阅事件）
         SimpleCommandRegistry.init();
@@ -32,12 +44,26 @@ public class tizMod {
         // 注册禁疗事件处理器（攻击后禁疗 + 治疗拦截）
         HealBanHandler.register();
 
+        // 注册玩家数据附件
+        ModAttachments.register(modEventBus);
+
         // Register data reload listener (NeoForge event bus, not mod bus)
         NeoForge.EVENT_BUS.addListener(this::onAddReloadListener);
 
         // Register Forge event handlers
         NeoForge.EVENT_BUS.addListener(this::onPlayerLogin);
         NeoForge.EVENT_BUS.addListener(this::onPlayerClone);
+        NeoForge.EVENT_BUS.addListener(this::onPlayerTick);
+        NeoForge.EVENT_BUS.addListener(this::onLevelLoad);
+        NeoForge.EVENT_BUS.addListener(this::onLevelSave);
+
+        // 延迟加载 ASM Agent（此时 Mixin 已完成，不会与 geckolib 等模组冲突）
+        try {
+            AsmBootstrapper.start();
+            LOGGER.info("ASM Agent bootstrapped from mod constructor");
+        } catch (Exception e) {
+            LOGGER.error("Failed to bootstrap ASM Agent from mod constructor", e);
+        }
     }
 
     private void commonSetup(FMLCommonSetupEvent event) {
@@ -72,6 +98,35 @@ public class tizMod {
                 NetworkHandler.syncPlayerUnlocks(serverPlayer);
                 LOGGER.debug("Player cloned, unlock data resynced");
             }
+        }
+    }
+
+    private void onPlayerTick(PlayerTickEvent.Post event) {
+        ProjectileReflectionSystem.tick(event.getEntity());
+        AttributeBalanceRegistry.enforceFloors(event.getEntity());
+    }
+
+    // ==================== 解锁数据持久化 ====================
+
+    private static UnlockSavedData unlockSavedData;
+
+    private void onLevelLoad(LevelEvent.Load event) {
+        if (!(event.getLevel() instanceof ServerLevel serverLevel)) return;
+        if (serverLevel.dimension() != Level.OVERWORLD) return;
+
+        unlockSavedData = serverLevel.getDataStorage().computeIfAbsent(
+            UnlockSavedData.factory(), UnlockSavedData.dataName()
+        );
+        // 每次解锁新效果时标记存档需要保存
+        UnlockManager.setDirtyCallback(unlockSavedData::setDirty);
+        LOGGER.info("Unlock data loaded from world save");
+    }
+
+    private void onLevelSave(LevelEvent.Save event) {
+        if (!(event.getLevel() instanceof ServerLevel serverLevel)) return;
+        if (serverLevel.dimension() != Level.OVERWORLD) return;
+        if (unlockSavedData != null) {
+            unlockSavedData.setDirty();
         }
     }
 }

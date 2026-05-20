@@ -11,16 +11,16 @@ import java.util.Set;
 
 /**
  * Mixin 配置插件
- * 在 Mixin 初始化阶段触发 ASM Agent 的加载。
+ * 在 Mixin onLoad 回调中触发 ASM Agent 的加载。
  *
- * 为什么选择 Mixin 插件作为触发点：
- * - Mixin 插件在 Mixin 框架初始化时加载，早于任何实体类
- * - Mixin 插件的静态初始化在 ModLauncher 阶段执行
- * - 此时 Minecraft 的核心类尚未加载，ASM Transformer 能及时注册
+ * 为什么选择 onLoad 而不是 static {}：
+ * - static {} 在所有 mixin 配置准备之前执行，会导致 LivingEntity 过早加载
+ * - onLoad 在其他模组的 mixin config 加载完成之后才调用
+ * - 避免与 geckolib 等模组的 LivingEntityMixin 冲突 (MixinTargetAlreadyLoadedException)
  *
  * 触发时序：
- * Mixin 框架初始化
- *   → FantasyEndingPlugin.&lt;clinit&gt;
+ * Mixin 框架初始化（其他模组的 mixin config 先准备）
+ *   → FantasyEndingPlugin.onLoad()
  *     → AsmBootstrapper.start()
  *       → 提取 agent jar → 绕过自 attach → attach 自身 → loadAgent
  *         → agent() 被调用 → Instrumentation.addTransformer(LivingHealthTransformer)
@@ -30,18 +30,12 @@ public final class FantasyEndingPlugin implements IMixinConfigPlugin {
 
     private static final Logger LOGGER = LoggerFactory.getLogger("FantasyEndingPlugin");
 
-    static {
-        LOGGER.info("[FantasyEndingPlugin] Triggering ASM agent bootstrap...");
-        try {
-            AsmBootstrapper.start();
-        } catch (Exception e) {
-            LOGGER.error("[FantasyEndingPlugin] Failed to bootstrap ASM agent", e);
-        }
-    }
-
     @Override
     public void onLoad(String mixinPackage) {
-        // Mixin 包加载时的回调
+        // ASM Agent 加载已移至模组构造器 (tizMod.<init>)，
+        // 避免在 Mixin 准备阶段触发 LivingEntity 过早加载，
+        // 与 geckolib 等模组的 LivingEntityMixin 冲突。
+        LOGGER.info("[FantasyEndingPlugin] onLoad skipped (ASM bootstrap deferred to mod constructor)");
     }
 
     @Override
