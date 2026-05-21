@@ -4,6 +4,8 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.yiz.ui.ItemInfoUI;
 import net.minecraft.client.yiz.ui.PlayerTalentUI;
+import net.minecraft.client.yiz.api.ShaderProtectionRegistry;
+import net.minecraft.client.yiz.api.StarShaderRegistry;
 import net.minecraft.client.yiz.ui.UIConfig;
 import net.minecraft.client.yiz.impl.WorldContainerDataStorage;
 import net.minecraft.server.level.ServerLevel;
@@ -35,6 +37,8 @@ public class tizModClient {
         var modBus = container.getEventBus();
         modBus.addListener(this::onClientSetup);
         modBus.addListener(this::onRegisterKeyMappings);
+        modBus.addListener(ShaderProtectionRegistry::onRegisterShaders);
+        modBus.addListener(StarShaderRegistry::onRegisterShaders);
 
         // Register Forge event bus handlers
         NeoForge.EVENT_BUS.register(this);
