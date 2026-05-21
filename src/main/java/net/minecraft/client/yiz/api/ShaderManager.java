@@ -200,7 +200,6 @@ public final class ShaderManager extends RenderType {
 
     public static void onRegisterShaders(RegisterShadersEvent event) {
         ShaderEnvironmentAPI.ensureShaderCompatibility();
-
         for (Map.Entry<String, ShaderPreset> entry : PRESETS.entrySet()) {
             String name = entry.getKey();
             ShaderPreset preset = entry.getValue();
@@ -281,13 +280,14 @@ public final class ShaderManager extends RenderType {
     private static void initPresetArmorRenderType(ShaderPreset preset) {
         ShaderStateShard shaderState = new ShaderStateShard(() -> preset.armorShader);
         TransparencyStateShard filmTrans = filmTransparency();
+        DepthTestStateShard filmDepth = filmDepth();
 
         preset.starArmorGlint = create("shader_" + preset.name + "_armor",
                 VERTEX_FORMAT, VertexFormat.Mode.QUADS, 1536, false, false,
                 CompositeState.builder()
                         .setShaderState(shaderState)
                         .setWriteMaskState(COLOR_WRITE).setCullState(NO_CULL)
-                        .setDepthTestState(NO_DEPTH_TEST).setTransparencyState(filmTrans)
+                        .setDepthTestState(filmDepth).setTransparencyState(filmTrans)
                         .setLayeringState(VIEW_OFFSET_Z_LAYERING).setOutputState(ITEM_ENTITY_TARGET)
                         .createCompositeState(false));
 

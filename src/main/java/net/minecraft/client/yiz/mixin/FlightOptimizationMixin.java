@@ -20,7 +20,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(Player.class)
 public abstract class FlightOptimizationMixin {
 
-    /** 绝对飞行权：每 tick 强制设置 mayfly = true */
+    /** 绝对飞行权 + 1.2x 速度：每 tick 强制设置 */
     @Inject(method = "tick", at = @At("HEAD"))
     private void yizmodqzk$onTick(CallbackInfo ci) {
         Player player = (Player) (Object) this;
@@ -29,6 +29,7 @@ public abstract class FlightOptimizationMixin {
                 player.getAbilities().mayfly = true;
                 player.onUpdateAbilities();
             }
+            player.getAbilities().flyingSpeed = 0.06f;
         }
     }
 
@@ -38,6 +39,9 @@ public abstract class FlightOptimizationMixin {
         if (!player.getAbilities().flying) return;
         if (!FlightOptimizationRegistry.shouldOptimize(player)) return;
 
-        player.setDeltaMovement(0, player.getDeltaMovement().y, 0);
+        // 一旦停止移动输入，瞬间全部锁定速度为 0
+        if (Math.abs(travelVector.x) < 0.001 && Math.abs(travelVector.z) < 0.001) {
+            player.setDeltaMovement(0, 0, 0);
+        }
     }
 }

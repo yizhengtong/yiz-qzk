@@ -16,6 +16,9 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+/**
+ * 仅对星空物品接管渲染，其余物品完全交由原版（不 cancel）。
+ */
 @Mixin(ItemRenderer.class)
 public class ItemRendererStarMixin {
 
@@ -43,7 +46,11 @@ public class ItemRendererStarMixin {
             CallbackInfo ci
     ) {
         if (itemStack.isEmpty()) return;
+        if (!ShaderManager.hasItemEffect(itemStack)) return;
         if (model.isCustomRenderer()) return;
+
+        ShaderInstance shader = ShaderManager.getActiveItemShader();
+        if (shader == null) return;
 
         poseStack.pushPose();
 
@@ -52,32 +59,26 @@ public class ItemRendererStarMixin {
         );
         poseStack.translate(-0.5F, -0.5F, -0.5F);
 
-        boolean hasStar = ShaderManager.hasItemEffect(itemStack);
-        // 检查着色器是否已加载（RegisterShadersEvent 之前回退）
-        ShaderInstance shader = ShaderManager.getActiveItemShader();
-        boolean shaderReady = hasStar && shader != null;
-        if (shaderReady && shader.getUniform("iTime") != null) {
+        if (shader.getUniform("iTime") != null) {
             shader.getUniform("iTime").set((float) (System.currentTimeMillis() % 100000L) / 1000.0F);
+        }
+
+        RenderType starType;
+        if (displayContext == ItemDisplayContext.GUI) {
+            starType = ShaderManager.getItemGuiRenderType();
+        } else if (displayContext.firstPerson()) {
+            starType = ShaderManager.getItemDirectRenderType();
+        } else {
+            starType = ShaderManager.getItemEntityRenderType();
         }
 
         for (BakedModel pass : transformed.getRenderPasses(itemStack, true)) {
             for (RenderType rt : pass.getRenderTypes(itemStack, true)) {
-                VertexConsumer buf;
-                if (shaderReady) {
-                    RenderType starType;
-                    if (displayContext == ItemDisplayContext.GUI) {
-                        starType = ShaderManager.getItemGuiRenderType();
-                    } else if (displayContext.firstPerson()) {
-                        starType = ShaderManager.getItemDirectRenderType();
-                    } else {
-                        starType = ShaderManager.getItemEntityRenderType();
-                    }
-                    buf = bufferSource.getBuffer(starType);
-                } else {
-                    buf = bufferSource.getBuffer(rt);
-                }
-                this.renderModelLists(pass, itemStack, combinedLight, combinedOverlay, poseStack, buf);
+                this.renderModelLists(pass, itemStack, combinedLight, combinedOverlay, poseStack,
+                        bufferSource.getBuffer(rt));
             }
+            this.renderModelLists(pass, itemStack, combinedLight, combinedOverlay, poseStack,
+                    bufferSource.getBuffer(starType));
         }
 
         poseStack.popPose();
