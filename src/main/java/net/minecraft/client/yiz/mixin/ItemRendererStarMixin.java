@@ -9,7 +9,7 @@ import net.minecraft.client.renderer.entity.ItemRenderer;
 import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.client.yiz.api.StarShaderRegistry;
+import net.minecraft.client.yiz.api.ShaderManager;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
@@ -52,9 +52,9 @@ public class ItemRendererStarMixin {
         );
         poseStack.translate(-0.5F, -0.5F, -0.5F);
 
-        boolean hasStar = StarShaderRegistry.hasStarEffect(itemStack);
+        boolean hasStar = ShaderManager.hasItemEffect(itemStack);
         // 检查着色器是否已加载（RegisterShadersEvent 之前回退）
-        ShaderInstance shader = StarShaderRegistry.getStarShader();
+        ShaderInstance shader = ShaderManager.getActiveItemShader();
         boolean shaderReady = hasStar && shader != null;
         if (shaderReady && shader.getUniform("iTime") != null) {
             shader.getUniform("iTime").set((float) (System.currentTimeMillis() % 100000L) / 1000.0F);
@@ -66,11 +66,11 @@ public class ItemRendererStarMixin {
                 if (shaderReady) {
                     RenderType starType;
                     if (displayContext == ItemDisplayContext.GUI) {
-                        starType = StarShaderRegistry.starGlint();
+                        starType = ShaderManager.getItemGuiRenderType();
                     } else if (displayContext.firstPerson()) {
-                        starType = StarShaderRegistry.starGlintDirect();
+                        starType = ShaderManager.getItemDirectRenderType();
                     } else {
-                        starType = StarShaderRegistry.starEntityGlint();
+                        starType = ShaderManager.getItemEntityRenderType();
                     }
                     buf = bufferSource.getBuffer(starType);
                 } else {

@@ -12,7 +12,7 @@ import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.client.yiz.api.PlayerDataAPI;
-import net.minecraft.client.yiz.api.StarShaderRegistry;
+import net.minecraft.client.yiz.api.ShaderManager;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -49,13 +49,13 @@ public class HumanoidArmorLayerStarMixin {
         boolean hasStar = PlayerDataAPI.get(player, "yizxgmod:star_body");
         if (!hasStar) return;
 
-        ShaderInstance shader = StarShaderRegistry.getStarArmorShader();
+        ShaderInstance shader = ShaderManager.getActiveArmorShader();
         if (shader == null) return;
         if (shader.getUniform("iTime") != null) {
             shader.getUniform("iTime").set((float) (System.currentTimeMillis() % 100000L) / 1000.0F);
         }
 
-        RenderType starType = StarShaderRegistry.starArmorGlint();
+        RenderType starType = ShaderManager.getArmorRenderType();
         if (starType == null) return;
         VertexConsumer starBuffer = bufferSource.getBuffer(starType);
         model.renderToBuffer(poseStack, starBuffer, packedLight, OverlayTexture.NO_OVERLAY);

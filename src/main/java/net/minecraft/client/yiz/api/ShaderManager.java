@@ -1,0 +1,346 @@
+package net.minecraft.client.yiz.api;
+
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import com.mojang.blaze3d.vertex.VertexFormat;
+import net.minecraft.client.renderer.RenderStateShard;
+import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.ShaderInstance;
+import net.minecraft.client.renderer.texture.TextureAtlas;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.ItemStack;
+import net.neoforged.neoforge.client.event.RegisterShadersEvent;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Predicate;
+
+import static net.minecraft.client.renderer.RenderStateShard.*;
+
+/**
+ * 中央着色器管理器 — 管理多个着色器预设 (A/B/C/D) 并可运行时切换。
+ *
+ * <p>每个 {@link ShaderPreset} 封装一套着色器程序 + 对应 RenderType。
+ * 下游模组注册预设后，通过 {@link #setActivePreset} 切换当前使用的效果。</p>
+ *
+ * <h3>使用示例</h3>
+ * <pre>{@code
+ * // 注册预设
+ * ShaderManager.registerPreset("cosmic", new ShaderDescriptor(
+ *     "yizmodqzk", "rendertype_cosmic", "rendertype_cosmic_armor", true
+ * ));
+ * ShaderManager.registerPreset("ember", new ShaderDescriptor(
+ *     "yizmodqzk", "rendertype_ember", null, false
+ * ));
+ *
+ * // 切换
+ * ShaderManager.setActivePreset("cosmic");
+ *
+ * // 物品/盔甲判定
+ * ShaderManager.registerItemPredicate(stack -> stack.is(STAR_VOID.get()));
+ * ShaderManager.registerArmorPredicate(stack -> hasStarBody(...));
+ * }</pre>
+ */
+public final class ShaderManager extends RenderType {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(ShaderManager.class);
+    private static final VertexFormat VERTEX_FORMAT = DefaultVertexFormat.NEW_ENTITY;
+
+    private ShaderManager(String name, VertexFormat format, VertexFormat.Mode mode,
+                          int bufferSize, boolean affectsCrumbling, boolean sortOnUpload,
+                          Runnable setupState, Runnable clearState) {
+        super(name, format, mode, bufferSize, affectsCrumbling, sortOnUpload, setupState, clearState);
+    }
+
+    // ──────────────────────────────────────────────────────────────────
+    //  预设注册表
+    // ──────────────────────────────────────────────────────────────────
+
+    /** 所有已注册的预设 */
+    private static final Map<String, ShaderPreset> PRESETS = new ConcurrentHashMap<>();
+
+    /** 当前激活的预设名 */
+    private static volatile String activePresetName;
+
+    /** 物品判定谓词 */
+    private static final List<Predicate<ItemStack>> ITEM_PREDICATES = new CopyOnWriteArrayList<>();
+
+    /** 盔甲判定谓词 */
+    private static final List<Predicate<ItemStack>> ARMOR_PREDICATES = new CopyOnWriteArrayList<>();
+
+    // ──────────────────────────────────────────────────────────────────
+    //  公开 API
+    // ──────────────────────────────────────────────────────────────────
+
+    /**
+     * 注册一个着色器预设。着色器文件位于:
+     * {@code assets/<namespace>/shaders/core/<path>.json/.vsh/.fsh}
+     *
+     * @param name     预设名称（如 "cosmic", "ember"）
+     * @param desc     着色器描述
+     */
+    public static void registerPreset(String name, ShaderDescriptor desc) {
+        if (PRESETS.containsKey(name)) {
+            LOGGER.warn("Shader preset already registered: {}", name);
+            return;
+        }
+        PRESETS.put(name, new ShaderPreset(name, desc));
+        LOGGER.info("Shader preset registered: {}", name);
+        if (activePresetName == null) {
+            activePresetName = name;
+        }
+    }
+
+    /** 切换当前激活的预设 */
+    public static void setActivePreset(String name) {
+        if (!PRESETS.containsKey(name)) {
+            LOGGER.warn("Unknown shader preset: {}", name);
+            return;
+        }
+        activePresetName = name;
+        LOGGER.info("Active shader preset switched to: {}", name);
+    }
+
+    /** 获取当前激活的预设名 */
+    public static String getActivePresetName() {
+        return activePresetName;
+    }
+
+    /** 注册物品谓词 */
+    public static void registerItemPredicate(Predicate<ItemStack> predicate) {
+        ITEM_PREDICATES.add(predicate);
+    }
+
+    /** 注册盔甲谓词 */
+    public static void registerArmorPredicate(Predicate<ItemStack> predicate) {
+        ARMOR_PREDICATES.add(predicate);
+    }
+
+    /** 判断物品是否应用着色器效果 */
+    public static boolean hasItemEffect(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return false;
+        for (var p : ITEM_PREDICATES) {
+            if (p.test(stack)) return true;
+        }
+        return false;
+    }
+
+    /** 判断盔甲是否应用着色器效果 */
+    public static boolean hasArmorEffect(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return false;
+        for (var p : ARMOR_PREDICATES) {
+            if (p.test(stack)) return true;
+        }
+        return false;
+    }
+
+    // ──────────────────────────────────────────────────────────────────
+    //  RenderType 获取
+    // ──────────────────────────────────────────────────────────────────
+
+    /** 获取当前激活预设的物品 RenderType */
+    public static RenderType getItemRenderType() {
+        ShaderPreset preset = getActivePreset();
+        if (preset == null || preset.starGlint == null)
+            throw new IllegalStateException("No active shader preset");
+        return preset.starGlint;
+    }
+
+    /** 获取当前激活预设的 GUI RenderType */
+    public static RenderType getItemGuiRenderType() {
+        ShaderPreset preset = getActivePreset();
+        if (preset == null || preset.starGlint == null)
+            throw new IllegalStateException("No active shader preset");
+        return preset.starGlint;
+    }
+
+    /** 获取当前激活预设的第一人称 RenderType */
+    public static RenderType getItemDirectRenderType() {
+        ShaderPreset preset = getActivePreset();
+        if (preset == null || preset.starGlintDirect == null)
+            throw new IllegalStateException("No active shader preset");
+        return preset.starGlintDirect;
+    }
+
+    /** 获取当前激活预设的实体 RenderType */
+    public static RenderType getItemEntityRenderType() {
+        ShaderPreset preset = getActivePreset();
+        if (preset == null || preset.starEntityGlint == null)
+            throw new IllegalStateException("No active shader preset");
+        return preset.starEntityGlint;
+    }
+
+    /** 获取当前激活预设的盔甲 RenderType */
+    public static RenderType getArmorRenderType() {
+        ShaderPreset preset = getActivePreset();
+        if (preset == null || preset.starArmorGlint == null)
+            throw new IllegalStateException("No active shader preset");
+        return preset.starArmorGlint;
+    }
+
+    /** 获取当前激活预设的物品着色器 */
+    public static ShaderInstance getActiveItemShader() {
+        ShaderPreset preset = getActivePreset();
+        return preset != null ? preset.itemShader : null;
+    }
+
+    /** 获取当前激活预设的盔甲着色器 */
+    public static ShaderInstance getActiveArmorShader() {
+        ShaderPreset preset = getActivePreset();
+        return preset != null ? preset.armorShader : null;
+    }
+
+    // ──────────────────────────────────────────────────────────────────
+    //  事件处理（由 tizModClient 订阅）
+    // ──────────────────────────────────────────────────────────────────
+
+    public static void onRegisterShaders(RegisterShadersEvent event) {
+        ShaderEnvironmentAPI.ensureShaderCompatibility();
+
+        for (Map.Entry<String, ShaderPreset> entry : PRESETS.entrySet()) {
+            String name = entry.getKey();
+            ShaderPreset preset = entry.getValue();
+            ShaderDescriptor desc = preset.descriptor;
+
+            // 物品着色器
+            try {
+                var id = ResourceLocation.fromNamespaceAndPath(desc.namespace, desc.itemShaderPath);
+                var shader = new ShaderInstance(event.getResourceProvider(), id, VERTEX_FORMAT);
+                event.registerShader(shader, instance -> {
+                    preset.itemShader = instance;
+                    initPresetRenderTypes(preset);
+                    LOGGER.info("Shader preset [{}] item loaded", name);
+                });
+            } catch (IOException e) {
+                LOGGER.error("Failed to load preset [{}] item shader: {}", name, e.getMessage());
+            }
+
+            // 盔甲着色器（可选）
+            if (desc.armorShaderPath != null) {
+                try {
+                    var id = ResourceLocation.fromNamespaceAndPath(desc.namespace, desc.armorShaderPath);
+                    var armorShader = new ShaderInstance(event.getResourceProvider(), id, VERTEX_FORMAT);
+                    event.registerShader(armorShader, instance -> {
+                        preset.armorShader = instance;
+                        initPresetArmorRenderType(preset);
+                        LOGGER.info("Shader preset [{}] armor loaded", name);
+                    });
+                } catch (IOException e) {
+                    LOGGER.error("Failed to load preset [{}] armor shader: {}", name, e.getMessage());
+                }
+            }
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────────────
+    //  内部方法
+    // ──────────────────────────────────────────────────────────────────
+
+    private static ShaderPreset getActivePreset() {
+        return activePresetName != null ? PRESETS.get(activePresetName) : null;
+    }
+
+    private static void initPresetRenderTypes(ShaderPreset preset) {
+        ShaderStateShard shaderState = new ShaderStateShard(() -> preset.itemShader);
+        TextureStateShard texture = new TextureStateShard(TextureAtlas.LOCATION_BLOCKS, false, false);
+        TransparencyStateShard filmTrans = filmTransparency();
+        DepthTestStateShard filmDepth = filmDepth();
+
+        preset.starGlint = create("shader_" + preset.name,
+                VERTEX_FORMAT, VertexFormat.Mode.QUADS, 1536, false, false,
+                CompositeState.builder()
+                        .setShaderState(shaderState).setTextureState(texture)
+                        .setWriteMaskState(COLOR_WRITE).setCullState(NO_CULL)
+                        .setDepthTestState(filmDepth).setTransparencyState(filmTrans)
+                        .createCompositeState(false));
+
+        preset.starGlintDirect = create("shader_" + preset.name + "_direct",
+                VERTEX_FORMAT, VertexFormat.Mode.QUADS, 1536, false, false,
+                CompositeState.builder()
+                        .setShaderState(shaderState).setTextureState(texture)
+                        .setWriteMaskState(COLOR_WRITE).setCullState(NO_CULL)
+                        .setDepthTestState(filmDepth).setTransparencyState(filmTrans)
+                        .createCompositeState(false));
+
+        preset.starEntityGlint = create("shader_" + preset.name + "_entity",
+                VERTEX_FORMAT, VertexFormat.Mode.QUADS, 1536, false, false,
+                CompositeState.builder()
+                        .setShaderState(shaderState).setTextureState(texture)
+                        .setWriteMaskState(COLOR_WRITE).setCullState(NO_CULL)
+                        .setDepthTestState(filmDepth).setTransparencyState(filmTrans)
+                        .setOutputState(ITEM_ENTITY_TARGET)
+                        .createCompositeState(false));
+
+        LOGGER.info("Shader preset [{}] render types created", preset.name);
+    }
+
+    private static void initPresetArmorRenderType(ShaderPreset preset) {
+        ShaderStateShard shaderState = new ShaderStateShard(() -> preset.armorShader);
+        TransparencyStateShard filmTrans = filmTransparency();
+
+        preset.starArmorGlint = create("shader_" + preset.name + "_armor",
+                VERTEX_FORMAT, VertexFormat.Mode.QUADS, 1536, false, false,
+                CompositeState.builder()
+                        .setShaderState(shaderState)
+                        .setWriteMaskState(COLOR_WRITE).setCullState(NO_CULL)
+                        .setDepthTestState(NO_DEPTH_TEST).setTransparencyState(filmTrans)
+                        .setLayeringState(VIEW_OFFSET_Z_LAYERING).setOutputState(ITEM_ENTITY_TARGET)
+                        .createCompositeState(false));
+
+        LOGGER.info("Shader preset [{}] armor render type created", preset.name);
+    }
+
+    // 共享的 RenderStateShard 工厂
+    private static TransparencyStateShard filmTransparency() {
+        return new TransparencyStateShard("film_trans",
+                () -> {
+                    com.mojang.blaze3d.systems.RenderSystem.enableBlend();
+                    com.mojang.blaze3d.systems.RenderSystem.blendFuncSeparate(
+                            com.mojang.blaze3d.platform.GlStateManager.SourceFactor.SRC_COLOR,
+                            com.mojang.blaze3d.platform.GlStateManager.DestFactor.ONE,
+                            com.mojang.blaze3d.platform.GlStateManager.SourceFactor.ZERO,
+                            com.mojang.blaze3d.platform.GlStateManager.DestFactor.ONE);
+                },
+                () -> {
+                    com.mojang.blaze3d.systems.RenderSystem.disableBlend();
+                    com.mojang.blaze3d.systems.RenderSystem.defaultBlendFunc();
+                });
+    }
+
+    private static DepthTestStateShard filmDepth() {
+        return new DepthTestStateShard("<=", 515);
+    }
+
+    // ──────────────────────────────────────────────────────────────────
+    //  数据类型
+    // ──────────────────────────────────────────────────────────────────
+
+    /** 着色器预设描述符（下游模组注册时传入） */
+    public record ShaderDescriptor(
+            String namespace,           // modid
+            String itemShaderPath,      // shader path e.g. "rendertype_cosmic"
+            String armorShaderPath,     // null = no separate armor shader
+            boolean useBlockAtlas       // true = bind TextureAtlas.LOCATION_BLOCKS
+    ) {}
+
+    /** 着色器预设实例（由 ShaderManager 管理） */
+    static class ShaderPreset {
+        final String name;
+        final ShaderDescriptor descriptor;
+        ShaderInstance itemShader;
+        ShaderInstance armorShader;
+        volatile RenderType starGlint;
+        volatile RenderType starGlintDirect;
+        volatile RenderType starEntityGlint;
+        volatile RenderType starArmorGlint;
+
+        ShaderPreset(String name, ShaderDescriptor desc) {
+            this.name = name;
+            this.descriptor = desc;
+        }
+    }
+}

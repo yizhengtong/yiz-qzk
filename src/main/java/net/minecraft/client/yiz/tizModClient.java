@@ -4,8 +4,8 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.yiz.ui.ItemInfoUI;
 import net.minecraft.client.yiz.ui.PlayerTalentUI;
+import net.minecraft.client.yiz.api.ShaderManager;
 import net.minecraft.client.yiz.api.ShaderProtectionRegistry;
-import net.minecraft.client.yiz.api.StarShaderRegistry;
 import net.minecraft.client.yiz.ui.UIConfig;
 import net.minecraft.client.yiz.impl.WorldContainerDataStorage;
 import net.minecraft.server.level.ServerLevel;
@@ -38,7 +38,7 @@ public class tizModClient {
         modBus.addListener(this::onClientSetup);
         modBus.addListener(this::onRegisterKeyMappings);
         modBus.addListener(ShaderProtectionRegistry::onRegisterShaders);
-        modBus.addListener(StarShaderRegistry::onRegisterShaders);
+        modBus.addListener(ShaderManager::onRegisterShaders);
 
         // Register Forge event bus handlers
         NeoForge.EVENT_BUS.register(this);
@@ -46,6 +46,14 @@ public class tizModClient {
 
     private void onClientSetup(FMLClientSetupEvent event) {
         tizMod.LOGGER.info("YizMod QZK Client initialized");
+
+        // 注册默认着色器预设
+        ShaderManager.registerPreset("cosmic", new ShaderManager.ShaderDescriptor(
+                tizMod.MODID,
+                "rendertype_star_glint",
+                "rendertype_star_glint_armor",
+                true
+        ));
     }
 
     /**
