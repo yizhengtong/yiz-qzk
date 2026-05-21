@@ -47,12 +47,12 @@ public class tizModClient {
     private void onClientSetup(FMLClientSetupEvent event) {
         tizMod.LOGGER.info("YizMod QZK Client initialized");
 
-        // 注册默认着色器预设
+        // 注册着色器预设
         ShaderManager.registerPreset("cosmic", new ShaderManager.ShaderDescriptor(
-                tizMod.MODID,
-                "rendertype_star_glint",
-                "rendertype_star_glint_armor",
-                true
+                tizMod.MODID, "rendertype_star_glint", "rendertype_star_glint_armor", true
+        ));
+        ShaderManager.registerPreset("cosmic2", new ShaderManager.ShaderDescriptor(
+                tizMod.MODID, "rendertype_cosmic2", "rendertype_cosmic2_armor", true
         ));
     }
 
