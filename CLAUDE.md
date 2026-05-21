@@ -40,7 +40,7 @@ src/main/java/net/minecraft/client/yiz/
 ├── ui/                       # ⑦ 统一UI面板（所有下游模组的效果自动汇聚于此）
 ├── attribute/                # ⑧ 属性计算（ModifierStack多乘区引擎）
 ├── bridge/                   # ⑨ 数据桥接（NBT序列化）
-└── mixin/                    # ⑩ Mixin（仅3个：Player/LivingEntity/AttackInterceptor）
+└── mixin/                    # 	└── mixin/                    # ⑩ Mixin（5个：Player/LivingEntity/AttackInterceptor/FlightOptimization/NoCollision）
 
 agent/src/                    # 独立 Java Agent（ASM字节码改写）
 └── net/minecraft/client/yiz/agent/
@@ -59,6 +59,9 @@ agent/src/                    # 独立 Java Agent（ASM字节码改写）
 本库不仅是 API 框架，还提供**统一的用户体验入口**。所有下游模组注册的效果自动汇聚到库提供的面板中，无需各模组自行实现 UI：
 
 - **`PlayerTalentUI`** — 在生存背包界面右侧展示玩家所有已解锁天赋。从 `ModRegistries` 读取全部已注册效果，过滤 `EntityPerception` 类型，交叉 `UnlockManager` 状态。下游模组只负责注册效果和解锁，UI 自动汇聚。
+  - **扩展点**：`AbstractEffect.getTalentDetailLines(entity)` — 效果子类可重写此方法返回额外详情行（支持 § 颜色代码），在天赋面板中自动渲染。
+  - **实时刷新**：每帧重建天赋列表（无缓存），保证动态数据（如星光层数）实时反映在面板上。
+  - **自适应裁剪**：窗口缩小时自动跳过无法完整显示的天赋行，避免文字溢出。
 - **`ItemInfoUI`** — 替代原版物品悬浮提示，展示物品的所有 6 维效果（稀有度、父类型、等级、感知方式、生效条件、具体效果）。从 `ModRegistries` + 物品 NBT 自动读取。
 
 设计类比：JEI 提供统一的物品列表界面，本库提供统一的天赋/词缀/随影展示面。删掉这些面板，下游模组就需要各自做 UI，体验割裂。
@@ -83,14 +86,19 @@ Delta 系统 → ChannelScanner → DirectHealthFallback
 - `Premain-Class` / `Agent-Class`: `net.minecraft.client.yiz.agent.HealthAgent`
 - 开发环境通过 `yizmodqzk.agent.jar` 系统属性定位 Agent JAR
 - Agent 依赖 ASM 9.8，通过 `agentLibs` 配置解压进 Agent JAR
+- **Agent 引导时机**：`FantasyEndingPlugin.onLoad()` 不再调用 `AsmBootstrapper.start()`，改为在 `tizMod` 构造器中延迟加载。避免在 Mixin 准备阶段触发 `LivingEntity` 过早加载，防止与 geckolib 等模组的 `MixinTargetAlreadyLoadedException` 冲突。
+- **CoreMod JS 已禁用**：`coremods.json` 置空（`{}`），`yizmodqzk_healban.js` 不再加载。功能由 Mixin + ASM Agent 覆盖。
 
 ### Mixin 策略：薄层
 
-仅 3 个 Mixin：
+5 个 Mixin：
 - `PlayerMixin` / `LivingEntityMixin` — 生命值/伤害拦截
 - `AttackInterceptorMixin` — 强制伤害执行
+- `FlightOptimizationMixin` — 飞行惯性优化
+- `NoCollisionMixin` — 碰撞免疫（推进和碰撞检测）
 
 重逻辑在 Agent 层和事件系统中，Mixin 只做最小量的钩子注入。
+`FlightOptimizationMixin` 和 `NoCollisionMixin` 需在 `mixins.json` 中注册（`src/main/resources/yizmodqzk.mixins.json` 为 5 mixin 完整版，根目录旧版仅 3 个）。
 
 ### NBT 键名约定
 
@@ -124,6 +132,28 @@ YizModQZKAPI.enableProtection(player)   // 开启
 YizModQZKAPI.disableProtection(player)  // 关闭
 YizModQZKAPI.isProtected(player)        // 查询
 ```
+
+### 注册表 API（供下游模组使用）
+
+包路径 `net.minecraft.client.yiz.api`，全部为静态方法注册，下游在模组构造器中调用。
+
+| 注册表 | 注册接口 | 作用 |
+|--------|---------|------|
+| `PlayerDataAPI` | `register(key, codec, default)` | 注册持久化键值对；`get/set/discard` 读写 |
+| `DamageReductionRegistry` | `register(BiFunction<LivingEntity,Float,Float>)` | 伤害减免钩子，在 `setHealth()` 写入前拦截修改 |
+| `CounterAttackRegistry` | `register(BiPredicate<Player,DamageSource>)` | 回击触发条件，命中时反弹伤害 |
+| `UndyingRegistry` | `register(BiPredicate<LivingEntity,DamageSource>)` | 自定义复活（不死图腾路径），返回 true 则触发复活 |
+| `ProjectileReflectionSystem` | `register(Predicate<LivingEntity>)` | 投射物返还，命中时反弹回攻击者 |
+| `ProjectileImmunityRegistry` | `register(Predicate<LivingEntity>)` | 投射物免疫，返回 true 则该实体对投射物免疫 |
+| `NoCollisionRegistry` | `register(Predicate<LivingEntity>)` | 碰撞免疫，返回 true 则实体穿过其他实体/推动 |
+| `KnockbackImmunityRegistry` | `register(Predicate<LivingEntity>)` | 击退霸体，返回 true 则免疫击退 |
+| `FlightOptimizationRegistry` | `register(Predicate<LivingEntity>)` | 飞行惯性优化条件 |
+| `FlightAbilityRegistry` | `register(Predicate<LivingEntity>)` | 权限飞行权，返回 true 则强制允许飞行 |
+| `DamageAttributeRegistry` | `register(Holder<Attribute>, float)` | 把属性值转为额外伤害（乘以缩放系数） |
+| `AttributeBalanceRegistry` | `enableFor(LivingEntity)` | 启用属性正负锁定（每 tick 恢复属性底线） |
+
+所有注册表使用 `CopyOnWriteArrayList` 保证并发安全，支持多模组同时注册。
+下游在 `yizxgMod` 构造器中调用这些 `register()`，运行时由 Mixin/Agent 遍历列表执行。
 
 ### 简易指令注册
 
@@ -167,6 +197,8 @@ YizModQZKAPI.registerSimpleCommand("heal", ctx -> { ... });
 - `EntityPerception` = 天赋 (Talent)，`ItemPerception` = 词缀 (Affix)，`ContainerPerception` = 随影 (Shadow)
 - 效果排序规则：稀有度降序 → 等级降序（Rarity ordinal 越小越稀有）
 - **`PlayerTalentUI` 和 `ItemInfoUI` 是库的核心交付物，不是测试残留** — 它们是所有下游模组效果的统一展示入口，删掉会导致下游模组各自为政
+- **数据自动同步**：`PlayerDataAPI.set()` 每次写入时自动触发 `SyncPlayerDataPayload` 网络包从服务端推送到客户端，下游模组无需手动实现同步。同步由 `NetworkHandler.registerPlayerDataSync()` 在 `tizMod` 初始化时注入 `PlayerDataAPI.onDataSet` 回调完成。
+- **解锁数据持久化**：`UnlockManager` 的解锁状态通过 `UnlockSavedData` 保存到世界存档（`DimensionDataStorage`），在 `LevelEvent.Load` 时加载、`LevelEvent.Save` 时写入。`UnlockManager.unlock()` 自动标记 `setDirty()` 触发存档写入。
 - 1.21.1 中 `ItemStack.getOrCreateTag()` 已移除，自定义 NBT 必须走 `DataComponents.CUSTOM_DATA` + `CustomData` 组件
 - 物品属性 `set` 使用固定 UUID（基于 `yizmodqzk:<属性名>` hash），多次 set 不会产生重复 modifier
 - `ENTITY_INTERACTION_RANGE` 和 `SWEEPING_DAMAGE_RATIO` 通过 `BuiltInRegistries.ATTRIBUTE.getHolder(ResourceLocation)` 查找，不要硬编码字段名
