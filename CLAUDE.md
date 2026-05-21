@@ -206,7 +206,14 @@ YizModQZKAPI.registerSimpleCommand("heal", ctx -> { ... });
 
 ## AI 快速入口
 
+- **完整架构蓝图**（整体框架）：`http://localhost:8080/architecture/blueprint/` 或 `D:\ZM\yizqzk-docs\docs\architecture\blueprint.md`
 - **结构化 API 知识库**（AI 直接读取）：`D:\ZM\yizqzk-docs\docs\llm\knowledge.json`
 - **本地文档网站**：`http://localhost:8080`（需运行 `serve.bat` 或 `mkdocs serve`）
 - **更新文档站**：在会话中调用 `/YIZwikl` Skill 或直接运行 `serve.bat`
 - **下游模组模板**：`D:\ZM\yizxgmod-template-1.21.1`
+
+## 当前开发专注区域
+
+**D. 天赋部分** ✅ — 效果框架 6 维度、12 种注册表、统一 UI 面板已实现。
+A. 境界跨度 / B. 领域 / C. 道宫 为架构设计阶段，尚未编码。
+详见 [整体蓝图](../architecture/blueprint.md)。
