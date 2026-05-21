@@ -203,3 +203,10 @@ YizModQZKAPI.registerSimpleCommand("heal", ctx -> { ... });
 - 物品属性 `set` 使用固定 UUID（基于 `yizmodqzk:<属性名>` hash），多次 set 不会产生重复 modifier
 - `ENTITY_INTERACTION_RANGE` 和 `SWEEPING_DAMAGE_RATIO` 通过 `BuiltInRegistries.ATTRIBUTE.getHolder(ResourceLocation)` 查找，不要硬编码字段名
 - `SimpleCommandRegistry` 调用 `init()` 后生效，下游注册指令无需 import `@SubscribeEvent` 或 `RegisterCommandsEvent`
+
+## AI 快速入口
+
+- **结构化 API 知识库**（AI 直接读取）：`D:\ZM\yizqzk-docs\docs\llm\knowledge.json`
+- **本地文档网站**：`http://localhost:8080`（需运行 `serve.bat` 或 `mkdocs serve`）
+- **更新文档站**：在会话中调用 `/YIZwikl` Skill 或直接运行 `serve.bat`
+- **下游模组模板**：`D:\ZM\yizxgmod-template-1.21.1`
