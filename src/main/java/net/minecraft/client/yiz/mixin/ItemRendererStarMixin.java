@@ -56,8 +56,8 @@ public class ItemRendererStarMixin {
         // 检查着色器是否已加载（RegisterShadersEvent 之前回退）
         ShaderInstance shader = StarShaderRegistry.getStarShader();
         boolean shaderReady = hasStar && shader != null;
-        if (shaderReady && shader.GAME_TIME != null) {
-            shader.GAME_TIME.set((float) (System.currentTimeMillis() % 100000L) / 1000.0F);
+        if (shaderReady && shader.getUniform("iTime") != null) {
+            shader.getUniform("iTime").set((float) (System.currentTimeMillis() % 100000L) / 1000.0F);
         }
 
         for (BakedModel pass : transformed.getRenderPasses(itemStack, true)) {

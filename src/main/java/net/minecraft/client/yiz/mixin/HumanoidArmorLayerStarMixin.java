@@ -4,6 +4,7 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.client.renderer.entity.layers.HumanoidArmorLayer;
 import net.minecraft.client.renderer.texture.OverlayTexture;
@@ -49,11 +50,14 @@ public class HumanoidArmorLayerStarMixin {
         if (!hasStar) return;
 
         ShaderInstance shader = StarShaderRegistry.getStarArmorShader();
-        if (shader != null && shader.GAME_TIME != null) {
-            shader.GAME_TIME.set((float) (System.currentTimeMillis() % 100000L) / 1000.0F);
+        if (shader == null) return;
+        if (shader.getUniform("iTime") != null) {
+            shader.getUniform("iTime").set((float) (System.currentTimeMillis() % 100000L) / 1000.0F);
         }
 
-        VertexConsumer starBuffer = bufferSource.getBuffer(StarShaderRegistry.starArmorGlint());
+        RenderType starType = StarShaderRegistry.starArmorGlint();
+        if (starType == null) return;
+        VertexConsumer starBuffer = bufferSource.getBuffer(starType);
         model.renderToBuffer(poseStack, starBuffer, packedLight, OverlayTexture.NO_OVERLAY);
     }
 }
