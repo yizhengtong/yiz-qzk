@@ -4,6 +4,9 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.yiz.ui.ItemInfoUI;
 import net.minecraft.client.yiz.ui.PlayerTalentUI;
+import net.minecraft.client.renderer.texture.TextureAtlas;
+import net.minecraft.client.renderer.texture.TextureAtlasSprite;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.client.yiz.api.ShaderManager;
 import net.minecraft.client.yiz.api.ShaderProtectionRegistry;
 import net.minecraft.client.yiz.ui.UIConfig;
@@ -20,6 +23,7 @@ import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.neoforge.client.event.InputEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
 import net.neoforged.neoforge.client.event.RenderTooltipEvent;
+import net.neoforged.neoforge.client.event.TextureAtlasStitchedEvent;
 import net.neoforged.neoforge.client.event.ScreenEvent;
 import net.neoforged.neoforge.client.gui.ConfigurationScreen;
 import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
@@ -39,6 +43,7 @@ public class tizModClient {
         modBus.addListener(this::onRegisterKeyMappings);
         modBus.addListener(ShaderProtectionRegistry::onRegisterShaders);
         modBus.addListener(ShaderManager::onRegisterShaders);
+        modBus.addListener(this::onAtlasStitched);
 
         // Register Forge event bus handlers
         NeoForge.EVENT_BUS.register(this);
@@ -47,13 +52,46 @@ public class tizModClient {
     private void onClientSetup(FMLClientSetupEvent event) {
         tizMod.LOGGER.info("YizMod QZK Client initialized");
 
-        // 注册着色器预设
-        ShaderManager.registerPreset("cosmic", new ShaderManager.ShaderDescriptor(
-                tizMod.MODID, "rendertype_star_glint", "rendertype_star_glint_armor", true
-        ));
-        ShaderManager.registerPreset("cosmic2", new ShaderManager.ShaderDescriptor(
+        // 注册着色器预设 (1=星芒, 2=图标贴图, 3=曲速穿越)
+        ShaderManager.registerPreset("1", new ShaderManager.ShaderDescriptor(
                 tizMod.MODID, "rendertype_cosmic2", "rendertype_cosmic2_armor", true
         ));
+        ShaderManager.registerPreset("2", new ShaderManager.ShaderDescriptor(
+                tizMod.MODID, "rendertype_cosmic3", "rendertype_cosmic3_armor", true
+        ));
+        ShaderManager.registerPreset("3", new ShaderManager.ShaderDescriptor(
+                tizMod.MODID, "rendertype_cosmic4", "rendertype_cosmic4_armor", true
+        ));
+        // z系列：70%透明黑底 + 星光铠甲（能看到皮肤）
+        ShaderManager.registerPreset("z1", new ShaderManager.ShaderDescriptor(
+                tizMod.MODID, "rendertype_cosmic2", "rendertype_cosmic2_armor_z", true
+        ));
+        ShaderManager.registerPreset("z2", new ShaderManager.ShaderDescriptor(
+                tizMod.MODID, "rendertype_cosmic3", "rendertype_cosmic3_armor_z", true
+        ));
+        ShaderManager.registerPreset("z3", new ShaderManager.ShaderDescriptor(
+                tizMod.MODID, "rendertype_cosmic4", "rendertype_cosmic4_armor_z", true
+        ));
+        // z0: 纯取消盔甲渲染（调试用）
+        ShaderManager.registerPreset("z0", new ShaderManager.ShaderDescriptor(
+                tizMod.MODID, "rendertype_cosmic2", "rendertype_cosmic2_armor", true
+        ));
+    }
+
+    /** 将 cosmic 图标注册到方块纹理图谱，供 cosmic3 着色器采样 */
+    private void onAtlasStitched(TextureAtlasStitchedEvent event) {
+        if (!event.getAtlas().location().equals(TextureAtlas.LOCATION_BLOCKS)) return;
+
+        float[] uvs = new float[40];
+        for (int i = 0; i < 10; i++) {
+            ResourceLocation loc = ResourceLocation.fromNamespaceAndPath(tizMod.MODID, "cosmic/cosmic_" + i);
+            TextureAtlasSprite sprite = event.getAtlas().getSprite(loc);
+            uvs[i * 4]     = sprite.getU0();
+            uvs[i * 4 + 1] = sprite.getV0();
+            uvs[i * 4 + 2] = sprite.getU1();
+            uvs[i * 4 + 3] = sprite.getV1();
+        }
+        ShaderManager.setCosmicUVs(uvs);
     }
 
     /**

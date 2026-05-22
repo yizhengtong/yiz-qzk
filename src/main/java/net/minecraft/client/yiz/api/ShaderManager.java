@@ -72,6 +72,9 @@ public final class ShaderManager extends RenderType {
     /** 盔甲判定谓词 */
     private static final List<Predicate<ItemStack>> ARMOR_PREDICATES = new CopyOnWriteArrayList<>();
 
+    /** cosmic 图标 UV 坐标（10 个图标 × 4 分量） */
+    private static final float[] COSMIC_UVS = new float[40];
+
     // ──────────────────────────────────────────────────────────────────
     //  公开 API
     // ──────────────────────────────────────────────────────────────────
@@ -118,6 +121,19 @@ public final class ShaderManager extends RenderType {
     /** 注册盔甲谓词 */
     public static void registerArmorPredicate(Predicate<ItemStack> predicate) {
         ARMOR_PREDICATES.add(predicate);
+    }
+
+    /** 设置 cosmic 图标 UV */
+    public static void setCosmicUVs(float[] uvs) {
+        System.arraycopy(uvs, 0, COSMIC_UVS, 0, 40);
+    }
+
+    /** 将 UV 写入着色器的 cosmicuvs uniform（供 Mixin 调用） */
+    public static void applyCosmicUVs(ShaderInstance shader) {
+        if (shader == null) return;
+        var uCosmicUVs = shader.getUniform("cosmicuvs");
+        if (uCosmicUVs == null) return;
+        uCosmicUVs.set(COSMIC_UVS);
     }
 
     /** 判断物品是否应用着色器效果 */
@@ -279,19 +295,41 @@ public final class ShaderManager extends RenderType {
 
     private static void initPresetArmorRenderType(ShaderPreset preset) {
         ShaderStateShard shaderState = new ShaderStateShard(() -> preset.armorShader);
-        TransparencyStateShard filmTrans = filmTransparency();
         DepthTestStateShard filmDepth = filmDepth();
 
+        // 盔甲使用标准 alpha 混合 → 黑底可以遮蔽原盔甲色
+        // COLOR_DEPTH_WRITE 确保模型深度写入 → 避免 Redirect 模式下部件深度测试失败
         preset.starArmorGlint = create("shader_" + preset.name + "_armor",
                 VERTEX_FORMAT, VertexFormat.Mode.QUADS, 1536, false, false,
                 CompositeState.builder()
                         .setShaderState(shaderState)
-                        .setWriteMaskState(COLOR_WRITE).setCullState(NO_CULL)
-                        .setDepthTestState(filmDepth).setTransparencyState(filmTrans)
+                        .setWriteMaskState(COLOR_DEPTH_WRITE).setCullState(NO_CULL)
+                        .setDepthTestState(filmDepth).setTransparencyState(TRANSLUCENT_TRANSPARENCY)
                         .setLayeringState(VIEW_OFFSET_Z_LAYERING).setOutputState(ITEM_ENTITY_TARGET)
                         .createCompositeState(false));
 
         LOGGER.info("Shader preset [{}] armor render type created", preset.name);
+    }
+
+    /**
+     * 为非 z 系列 TAIL 叠加创建 RenderType。使用 EQUAL 深度测试，
+     * 确保星空只渲染在原版盔甲已写入深度的区域（盔甲纹理 cutout 自动生效）。
+     */
+    public static RenderType getArmorStarOverlayType() {
+        ShaderPreset preset = getActivePreset();
+        if (preset == null || preset.armorShader == null) return null;
+
+        ShaderStateShard shaderState = new ShaderStateShard(() -> preset.armorShader);
+        TextureStateShard texture = new TextureStateShard(TextureAtlas.LOCATION_BLOCKS, false, false);
+
+        return create("shader_" + preset.name + "_armor_overlay",
+                VERTEX_FORMAT, VertexFormat.Mode.QUADS, 1536, false, false,
+                CompositeState.builder()
+                        .setShaderState(shaderState).setTextureState(texture)
+                        .setWriteMaskState(COLOR_WRITE).setCullState(NO_CULL)
+                        .setDepthTestState(EQUAL_DEPTH_TEST).setTransparencyState(TRANSLUCENT_TRANSPARENCY)
+                        .setOutputState(ITEM_ENTITY_TARGET)
+                        .createCompositeState(false));
     }
 
     // 共享的 RenderStateShard 工厂

@@ -98,10 +98,6 @@ vec3 DrawStarLayers(vec2 uv, float time, float numberOfLayers) {
 }
 
 void main() {
-    // 采样盔甲纹理只取 alpha（形状），丢掉原色 → 纯黑底
-    vec4 mask = texture(Sampler0, texCoord0);
-    // discard removed — @Redirect mode needs every fragment to pass
-
     float time = iTime * 0.1;
     vec2 uv = fPos.xy * 6.0;
 
@@ -118,10 +114,10 @@ void main() {
     vec3 finalStars = mix(nebulizedStars, starColor, 0.57);
     vec3 finalColor = finalStars + nebulaColor * 0.09;
 
-    // 纯黑底 + 星光，alpha 由 mask 决定形状
     vec3 shade = vertexColor.rgb * 0.2 + vec3(0.8);
     finalColor *= shade;
     finalColor = clamp(finalColor, 0.0, 1.0);
-    // 纯黑底 + 星光，alpha 由 mask 决定形状
-    fragColor = vec4(finalColor, 1.0) * ColorModulator;
+    // fixed alpha — @Redirect mode doesn't have vanilla armor underneath, so
+    // all model faces need to render regardless of block-atlas alpha at their UV
+    fragColor = vec4(finalColor, 0.5) * ColorModulator;
 }

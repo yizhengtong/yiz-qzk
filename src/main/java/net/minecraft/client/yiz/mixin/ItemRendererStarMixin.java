@@ -62,6 +62,7 @@ public class ItemRendererStarMixin {
         if (shader.getUniform("iTime") != null) {
             shader.getUniform("iTime").set((float) (System.currentTimeMillis() % 100000L) / 1000.0F);
         }
+        ShaderManager.applyCosmicUVs(shader);
 
         RenderType starType;
         if (displayContext == ItemDisplayContext.GUI) {
