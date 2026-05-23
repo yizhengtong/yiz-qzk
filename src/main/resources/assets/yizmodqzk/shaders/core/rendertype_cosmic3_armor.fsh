@@ -1,10 +1,10 @@
 #version 150
-#define M_PI 3.1415926535897932384626433832795
-
 uniform sampler2D Sampler0;
+
+#define PI 3.1415926
+
 uniform vec4 ColorModulator;
 uniform float iTime;
-uniform float cosmicuvs[40];
 
 in vec4 vertexColor;
 in vec2 texCoord0;
@@ -12,78 +12,114 @@ in vec3 fPos;
 
 out vec4 fragColor;
 
-mat4 rotationMatrix(vec3 axis, float angle) {
-    axis = normalize(axis);
-    float s = sin(angle), c = cos(angle), oc = 1.0 - c;
-    return mat4(oc*axis.x*axis.x+c, oc*axis.x*axis.y-axis.z*s, oc*axis.z*axis.x+axis.y*s, 0,
-                oc*axis.x*axis.y+axis.z*s, oc*axis.y*axis.y+c, oc*axis.y*axis.z-axis.x*s, 0,
-                oc*axis.z*axis.x-axis.y*s, oc*axis.y*axis.z+axis.x*s, oc*axis.z*axis.z+c, 0,
-                0,0,0,1);
+mat2 ROT45_NoTrig = mat2(0.707, -0.707, 0.707, 0.707);
+
+float Hash21(vec2 p) {
+    p = fract(p * vec2(132.34, 456.76));
+    p += dot(p, p + 61.477);
+    return fract(p.x * p.y);
+}
+
+float smin(float a, float b, float k) {
+    float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0);
+    return mix(b, a, h) - (k * h * (1.0 - h));
+}
+
+float smax(float a, float b, float k) {
+    return smin(a, b, -k);
+}
+
+vec3 HSVtoRGB(vec3 hsv) {
+    float hueSlice = 6.0 * hsv.x;
+    float hueSliceInteger = floor(hueSlice);
+    float hueSliceInterpolant = fract(hueSlice);
+    vec3 tempRGB = vec3(hsv.z * (1.0 - hsv.y),
+        hsv.z * (1.0 - hsv.y * hueSliceInterpolant),
+        hsv.z * (1.0 - hsv.y * (1.0 - hueSliceInterpolant)));
+    float isOddSlice = mod(hueSliceInteger, 2.0);
+    float threeSliceSelector = 0.5 * (hueSliceInteger - isOddSlice);
+    vec3 scrollingRGBForEvenSlices = vec3(hsv.z, tempRGB.zx);
+    vec3 scrollingRGBForOddSlices = vec3(tempRGB.y, hsv.z, tempRGB.x);
+    vec3 scrollingRGB = mix(scrollingRGBForEvenSlices, scrollingRGBForOddSlices, isOddSlice);
+    float isNotFirstSlice = clamp(threeSliceSelector, 0.0, 1.0);
+    float isNotSecondSlice = clamp(threeSliceSelector - 1.0, 0.0, 1.0);
+    return mix(scrollingRGB.xyz, mix(scrollingRGB.zxy, scrollingRGB.yzx, isNotSecondSlice), isNotFirstSlice);
+}
+
+float Star(vec2 uvStar, float orthoFlareStrength, float diagFlareStrength) {
+    float uvLength = length(uvStar);
+    float starBrightness = max(0.0, 0.01 / (uvLength + 0.001));
+    starBrightness *= smoothstep(0.9, 0.1, uvLength);
+    vec2 uvOrthoFlare = abs(uvStar);
+    float orthoFlare = max(0.0, 0.9 - uvOrthoFlare.x * uvOrthoFlare.y * 2048.0);
+    orthoFlare *= orthoFlareStrength;
+    vec2 uvDiagFlare = abs(ROT45_NoTrig * uvStar);
+    float diagFlare = max(0.0, 0.9 - uvDiagFlare.x * uvDiagFlare.y * 4096.0);
+    diagFlare *= diagFlareStrength;
+    float flares = smax(orthoFlare, diagFlare, 1.2);
+    flares *= flares * starBrightness;
+    return starBrightness + flares;
+}
+
+vec3 DrawStarGrid(vec2 uv) {
+    vec3 StarLightContribution = vec3(0.0);
+    vec2 uvGrid = fract(uv) - 0.5;
+    vec2 idGrid = floor(uv);
+    for (int y = -1; y <= 1; y++)
+    for (int x = -1; x <= 1; x++) {
+        vec2 offset = vec2(float(x), float(y));
+        vec2 idOffset = idGrid + offset;
+        float rnX = Hash21(idOffset + PI);
+        float rnY = Hash21(fract(rnX * 465.321) * idOffset);
+        float rnZ = Hash21(fract(rnY * 317.664) * idOffset);
+        vec2 randomOffset = vec2(rnX, rnY) - 0.5;
+        vec2 uvStar = uvGrid - offset - randomOffset;
+        float randomSize = max(0.2, rnX * rnY * rnZ * 3.5);
+        vec3 randomColor = normalize(vec3(rnY, rnX, rnZ) + 0.001);
+        float randomOrthoFlare = smoothstep(0.9, 1.0, rnY);
+        float randomDiagFlare = smoothstep(0.6, 1.0, rnZ);
+        StarLightContribution += randomColor * randomSize * Star(uvStar, randomOrthoFlare, randomDiagFlare);
+    }
+    return StarLightContribution;
+}
+
+vec3 DrawStarLayers(vec2 uv, float time, float numberOfLayers) {
+    vec3 color = vec3(0.0);
+    vec2 parallax = vec2(20.0, 14.0) * sin(time * 0.25 * vec2(0.257, 0.631));
+    for (int i = 0; i < 8; i++) {
+        float fi = float(i) / numberOfLayers;
+        float depth = fract(fi - time);
+        float invDepth = 1.0 - depth;
+        float starDepthScaling = 1.0 - (invDepth * invDepth);
+        float fade = smoothstep(0.0, 0.1, depth) * smoothstep(1.0, 0.5, depth);
+        color += DrawStarGrid(uv * starDepthScaling + parallax + fi * 4093.773) * fade;
+    }
+    return color;
 }
 
 void main() {
     vec4 mask = texture(Sampler0, texCoord0);
-    // discard removed — @Redirect mode needs every fragment to pass
-    float time = iTime * 0.4;
-    vec4 col = vec4(0.08, 0.0, 0.04, 1.0);
-    float pulse = mod(time * 0.0025, 1.0);
-    col.g = sin(pulse * M_PI * 2.0) * 0.06 + 0.18;
-    col.b = cos(pulse * M_PI * 2.0) * 0.04 + 0.25;
+    if (mask.a < 0.05) { discard; }
 
-    vec4 dir = normalize(vec4(-fPos, 0));
+    float time = iTime * 0.1;
+    vec2 uv = fPos.xy * 6.0;
 
-    for (int i = 0; i < 16; i++) {
-        int mult = 16 - i;
-        int j = i + 7;
-        float rand1 = float(j * j * 4321 + j * 8) * 2.0;
-        int k = j + 1;
-        float rand2 = float(k * k * k * 239 + k * 37) * 3.6;
-        float rand3 = rand1 * 347.4 + rand2 * 63.4;
-        vec3 axis = normalize(vec3(sin(rand1), sin(rand2), cos(rand3)));
-        vec4 ray = dir * rotationMatrix(axis, mod(rand3, 2.0 * M_PI));
+    vec3 starColor = DrawStarLayers(uv, time, 8.0);
+    vec3 nebulaColor = normalize(sin(time * vec3(0.383, 0.653, 0.829) * 2.0 * PI) * 0.5 + 0.5);
+    float hue = sin(time * 0.0253 * 2.0 * PI) * 0.499 + 0.5;
+    float sat = sin(time * 0.134) * 0.5 + 0.5;
+    sat = sat * 0.15 + 0.85;
+    float val = sin(time * 0.342) * 0.5 + 0.5;
+    val = val * 0.08 + 0.92;
+    nebulaColor = HSVtoRGB(vec3(hue, sat, val));
+    vec3 lum = vec3(0.3, 0.59, 0.11);
+    vec3 nebulizedStars = dot(starColor, lum) * nebulaColor;
+    vec3 finalStars = mix(nebulizedStars, starColor, 0.57);
+    vec3 finalColor = finalStars + nebulaColor * 0.09;
 
-        float rawu = 0.5 + atan(ray.z, ray.x) / (2.0 * M_PI);
-        float rawv = 0.5 + asin(clamp(ray.y, -1.0, 1.0)) / M_PI;
-        float scale = float(mult) * 0.5 + 2.75;
-        float u = rawu * scale;
-        float v = (rawv + time * 0.0003) * scale * 0.6;
-
-        int uvtiles = 16;
-        int tu = int(mod(floor(u * float(uvtiles)), float(uvtiles)));
-        int tv = int(mod(floor(v * float(uvtiles)), float(uvtiles)));
-        int position = (171 * tu + 489 * tv + 303 * (i + 31) + 17209) ^ 10;
-        int symbol = int(mod(float(position), 101.0));
-        int rotation = int(mod(float(tu * tu * tv + tu + 3 + tv * i), 8.0));
-        bool flip = false;
-        if (rotation >= 4) { rotation -= 4; flip = true; }
-
-        if (symbol >= 0 && symbol < 10) {
-            float ru = clamp(mod(u * float(uvtiles) - float(tu), 1.0), 0.0, 1.0);
-            float rv = clamp(mod(v * float(uvtiles) - float(tv), 1.0), 0.0, 1.0);
-            if (flip) ru = 1.0 - ru;
-            float oru = ru, orv = rv;
-            if (rotation == 1) { oru = 1.0 - rv; orv = ru; }
-            else if (rotation == 2) { oru = 1.0 - ru; orv = 1.0 - rv; }
-            else if (rotation == 3) { oru = rv; orv = 1.0 - ru; }
-
-            int b = symbol * 4;
-            float umin = cosmicuvs[b], vmin = cosmicuvs[b + 1];
-            float umax = cosmicuvs[b + 2], vmax = cosmicuvs[b + 3];
-            vec2 cosmictex = vec2(umin + (umax - umin) * oru, vmin + (vmax - vmin) * orv);
-            vec4 tcol = texture(Sampler0, cosmictex);
-
-            float a = tcol.r * (0.5 + 1.0 / float(mult))
-                    * (1.0 - smoothstep(0.15, 0.48, abs(rawv - 0.5)));
-            float r = mod(rand1, 29.0) / 29.0 * 0.3 + 0.4;
-            float g = mod(rand2, 35.0) / 35.0 * 0.4 + 0.6;
-            float bb = mod(rand1, 17.0) / 17.0 * 0.3 + 0.7;
-            col = col + vec4(r, g, bb, 1.0) * a;
-        }
-    }
-
+    // 纯黑底 + 星光，alpha 由 mask 决定形状
     vec3 shade = vertexColor.rgb * 0.2 + vec3(0.8);
-    col.rgb *= shade;
-    col = clamp(col, 0.0, 1.0);
-    col.a = 1.0;
-    fragColor = col * ColorModulator;
+    finalColor *= shade;
+    finalColor = clamp(finalColor, 0.0, 1.0);
+    fragColor = vec4(finalColor, mask.a) * ColorModulator;
 }

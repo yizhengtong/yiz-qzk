@@ -1,4 +1,6 @@
 #version 150
+uniform sampler2D Sampler0;
+
 
 uniform vec4 ColorModulator;
 uniform float iTime;
@@ -21,6 +23,11 @@ float Hash21(vec2 p) {
 }
 
 void main() {
+    vec4 mask = texture(Sampler0, texCoord0);
+    if (mask.a < 0.05) { discard; }
+    
+    
+
     vec2 uv = fPos.xy * 0.8;
     float t = iTime * 0.5;
     vec3 col = vec3(0.05, 0.02, 0.1);
@@ -55,5 +62,5 @@ void main() {
     }
 
     col = clamp(col, 0.0, 1.0);
-    fragColor = vec4(col, 0.5) * ColorModulator;
+    fragColor = vec4(col, mask.a) * ColorModulator;
 }

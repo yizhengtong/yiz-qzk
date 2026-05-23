@@ -1,7 +1,8 @@
 #version 150
+uniform sampler2D Sampler0;
 // 'Warp Speed' by David Hoskins 2013 — armor variant
 
-uniform sampler2D Sampler0;
+
 uniform vec4 ColorModulator;
 uniform float iTime;
 
@@ -13,6 +14,8 @@ out vec4 fragColor;
 
 void main() {
     vec4 mask = texture(Sampler0, texCoord0);
+    if (mask.a < 0.05) { discard; }
+    
     // discard removed — @Redirect mode needs every fragment to pass
     float time = (iTime + 29.0) * 60.0;
     float s = 0.0, v = 0.0;
@@ -38,5 +41,5 @@ void main() {
     vec3 shade = vertexColor.rgb * 0.2 + vec3(0.8);
     col.rgb *= shade;
     col = clamp(col, 0.0, 1.0);
-    fragColor = vec4(col, 1.0) * ColorModulator;
+    fragColor = vec4(col, mask.a) * ColorModulator;
 }

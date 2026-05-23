@@ -29,7 +29,7 @@ public abstract class FlightOptimizationMixin {
                 player.getAbilities().mayfly = true;
                 player.onUpdateAbilities();
             }
-            player.getAbilities().flyingSpeed = 0.06f;
+            player.getAbilities().setFlyingSpeed(0.06f);
         }
     }
 

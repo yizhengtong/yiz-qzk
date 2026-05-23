@@ -1,8 +1,8 @@
 #version 150
+uniform sampler2D Sampler0;
 
 #define PI 3.1415926
 
-uniform sampler2D Sampler0;
 uniform vec4 ColorModulator;
 uniform float iTime;
 
@@ -98,9 +98,8 @@ vec3 DrawStarLayers(vec2 uv, float time, float numberOfLayers) {
 }
 
 void main() {
-    // 采样盔甲纹理只取 alpha（形状），丢掉原色 → 纯黑底
     vec4 mask = texture(Sampler0, texCoord0);
-    // discard removed — @Redirect mode needs every fragment to pass
+    if (mask.a < 0.05) { discard; }
 
     float time = iTime * 0.1;
     vec2 uv = fPos.xy * 6.0;
@@ -122,6 +121,5 @@ void main() {
     vec3 shade = vertexColor.rgb * 0.2 + vec3(0.8);
     finalColor *= shade;
     finalColor = clamp(finalColor, 0.0, 1.0);
-    // 纯黑底 + 星光，alpha 由 mask 决定形状
-    fragColor = vec4(finalColor, 1.0) * ColorModulator;
+    fragColor = vec4(finalColor, mask.a) * ColorModulator;
 }
