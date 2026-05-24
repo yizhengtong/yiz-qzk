@@ -11,19 +11,42 @@ import net.minecraft.world.entity.LivingEntity;
 public class ContainerPerception implements PerceptionMode {
 
     private final ContainerType containerType;
+    private final Class<?> targetContainerClass;
 
     public ContainerPerception(ContainerType containerType) {
+        this(containerType, null);
+    }
+
+    /**
+     * @param containerType        容器类型
+     * @param targetContainerClass 目标容器类（仅 SPECIFIC_CONTAINER 使用，null 表示任意容器）
+     */
+    public ContainerPerception(ContainerType containerType, Class<?> targetContainerClass) {
         this.containerType = containerType;
+        this.targetContainerClass = targetContainerClass;
     }
 
     public ContainerType getContainerType() {
         return containerType;
     }
 
+    public Class<?> getTargetContainerClass() {
+        return targetContainerClass;
+    }
+
     @Override
     public boolean check(LivingEntity entity, EffectContext context) {
         if (entity instanceof net.minecraft.world.entity.player.Player player) {
-            return player.containerMenu != player.inventoryMenu;
+            boolean hasContainerOpen = player.containerMenu != player.inventoryMenu;
+            if (!hasContainerOpen) return false;
+
+            return switch (containerType) {
+                case PERSONAL_CONTAINER -> true;
+                case SPECIFIC_CONTAINER -> {
+                    if (targetContainerClass == null) yield true;
+                    yield targetContainerClass.isInstance(player.containerMenu);
+                }
+            };
         }
         return false;
     }

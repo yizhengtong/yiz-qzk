@@ -39,9 +39,10 @@ public abstract class FlightOptimizationMixin {
         if (!player.getAbilities().flying) return;
         if (!FlightOptimizationRegistry.shouldOptimize(player)) return;
 
-        // 一旦停止移动输入，瞬间全部锁定速度为 0
+        // 一旦停止移动输入，瞬间锁定水平速度为 0，保留 Y 轴（飞行上浮/下降）
         if (Math.abs(travelVector.x) < 0.001 && Math.abs(travelVector.z) < 0.001) {
-            player.setDeltaMovement(0, 0, 0);
+            Vec3 currentMotion = player.getDeltaMovement();
+            player.setDeltaMovement(0, currentMotion.y, 0);
         }
     }
 }

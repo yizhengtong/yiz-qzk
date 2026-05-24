@@ -328,7 +328,7 @@ public abstract class LivingEntityMixin implements HealthDataBridge {
         if (!(self instanceof Player player)) return;
 
         Entity srcEntity = source.getEntity();
-        tizMod.LOGGER.info("[CounterAttack] DBG: player={} sourceEntity={} amount={}",
+        tizMod.LOGGER.debug("[CounterAttack] DBG: player={} sourceEntity={} amount={}",
                 player.getName().getString(),
                 srcEntity != null ? srcEntity.getName().getString() : "null",
                 amount);
@@ -336,7 +336,7 @@ public abstract class LivingEntityMixin implements HealthDataBridge {
         if (!(srcEntity instanceof LivingEntity attacker)) return;
         if (attacker == player) return;
 
-        tizMod.LOGGER.info("[CounterAttack] FIRE: {} -> {}", player.getName().getString(), attacker.getName().getString());
+        tizMod.LOGGER.debug("[CounterAttack] FIRE: {} -> {}", player.getName().getString(), attacker.getName().getString());
         CounterAttackRegistry.tryCounterAttack(player, attacker);
     }
 

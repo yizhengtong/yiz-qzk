@@ -58,8 +58,23 @@ public class ItemPerception implements PerceptionMode {
     }
 
     private ItemStack getStackFromInventory(net.minecraft.world.entity.player.Player player, EffectContext context) {
-        if (context != null && context.itemStack() != null) {
+        // 1. 优先检查 context 来源物品（如交互事件传入的物品）
+        if (context != null && context.itemStack() != null && !context.itemStack().isEmpty()) {
             return context.itemStack();
+        }
+        // 2. 遍历玩家背包 36 格（快捷栏 0-8 + 背包 9-35），找绑定此效果的物品
+        for (int i = 0; i < 36; i++) {
+            ItemStack stack = player.getInventory().getItem(i);
+            if (!stack.isEmpty()) {
+                if (context != null && context.effect() != null) {
+                    List<AbstractEffect> itemEffects = EffectNBTHandler.getItemEffects(stack);
+                    boolean hasEffect = itemEffects.stream()
+                        .anyMatch(e -> e.getId().equals(context.effect().getId()));
+                    if (hasEffect) return stack;
+                } else {
+                    return stack; // 无效果上下文时，返回第一件非空物品
+                }
+            }
         }
         return ItemStack.EMPTY;
     }

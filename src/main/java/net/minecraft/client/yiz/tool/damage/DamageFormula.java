@@ -16,7 +16,7 @@ import java.util.Set;
  *              + maxHealthDamage
  *              × (1 + finalPercentageMultiplier)
  */
-public abstract class DamageFormula {
+public class DamageFormula {
 
     protected final Set<DamageTag> tags = new HashSet<>();
     protected DamageValueProvider valueProvider;

@@ -145,6 +145,9 @@ public final class DefaultDamageCalculator {
             .subtract(context.entity().position())
             .normalize();
 
+        // 零向量 normalize 会产生 NaN，极近距离时跳过击退
+        if (Double.isNaN(direction.x)) return;
+
         target.push(
             direction.x * knockback,
             0.4,

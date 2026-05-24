@@ -40,6 +40,14 @@ public record DamageResult(
     }
 
     /**
+     * 紧凑构造器：防御性拷贝可变集合，防止外部修改。
+     */
+    public DamageResult {
+        tags = Set.copyOf(tags);
+        metadata = Map.copyOf(metadata);
+    }
+
+    /**
      * 检查是否包含特定标签。
      */
     public boolean hasTag(DamageTag tag) {

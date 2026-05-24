@@ -56,9 +56,7 @@ public record EffectContext(
         private MetaKeys() {}
     }
     public EffectContext {
-        if (metadata == null) {
-            metadata = new HashMap<>();
-        }
+        metadata = (metadata == null) ? new HashMap<>() : new HashMap<>(metadata);
     }
 
     /**
