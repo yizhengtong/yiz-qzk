@@ -40,12 +40,20 @@ public abstract class AttackInterceptorMixin {
     private static final Logger yizmodqzk$LOGGER = LoggerFactory.getLogger("YizModQZK");
 
     /**
+     * 标记 HEAD 注入已拦截本次攻击的玩家 UUID。
+     * 使用 ThreadLocal 避免并发问题。
+     */
+    @Unique
+    private static final ThreadLocal<Boolean> yizmodqzk$attackIntercepted = ThreadLocal.withInitial(() -> false);
+
+    /**
      * 在 attack() 方法开头注入。
      * 拦截试图攻击的实体，并检查是否含有强制执行标签。
      */
     @Inject(method = "attack", at = @At("HEAD"), cancellable = true)
     private void yizmodqzk$onAttackStart(Entity target, CallbackInfo ci) {
         Player attacker = (Player) (Object) this;
+        yizmodqzk$attackIntercepted.set(false);
 
         // 锁定原始攻击目标（最早时机，供下游模组通过 API 查询）
         AttackTargetLock.captureOnAttack(attacker, target);
@@ -65,6 +73,7 @@ public abstract class AttackInterceptorMixin {
         if (hasDirectHealthMod) {
             EffectContext effectContext = EffectContext.create(attacker, target);
             DirectHealthModExecutor.executeDirectHealthMod(attacker, target, effectContext);
+            yizmodqzk$attackIntercepted.set(true);
             ci.cancel();
             yizmodqzk$LOGGER.debug("Direct health modification intercepted");
             return;
@@ -93,6 +102,7 @@ public abstract class AttackInterceptorMixin {
             DirectAttackExecutor.executeForcedAttack(attacker, target, context, damage);
 
             // 4. 取消原版 attack 方法
+            yizmodqzk$attackIntercepted.set(true);
             ci.cancel();
             yizmodqzk$LOGGER.debug("Forced attack intercepted: trueDamage={}, armorPiercing={}",
                 hasTrueDamage, hasArmorPiercing);
@@ -123,6 +133,12 @@ public abstract class AttackInterceptorMixin {
      */
     @Inject(method = "attack", at = @At("RETURN"))
     private void yizmodqzk$onAttackReturn(Entity target, CallbackInfo ci) {
+        // 如果 HEAD 已经拦截了本次攻击（强制执行），跳过属性伤害
+        if (yizmodqzk$attackIntercepted.get()) {
+            yizmodqzk$attackIntercepted.remove();
+            return;
+        }
+
         if (!(target instanceof LivingEntity livingTarget)) return;
 
         Player attacker = (Player) (Object) this;

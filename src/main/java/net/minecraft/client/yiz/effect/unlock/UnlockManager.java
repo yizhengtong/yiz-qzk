@@ -8,6 +8,7 @@ import net.minecraft.nbt.StringTag;
 import net.minecraft.nbt.Tag;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 解锁打勾管理器
@@ -15,9 +16,9 @@ import java.util.*;
  */
 public final class UnlockManager {
 
-    private static final Map<UUID, Set<ResourceLocation>> unlockedEffects = new HashMap<>();
+    private static final Map<UUID, Set<ResourceLocation>> unlockedEffects = new ConcurrentHashMap<>();
 
-    private static Runnable dirtyCallback = () -> {};
+    private static volatile Runnable dirtyCallback = () -> {};
 
     private UnlockManager() {}
 
@@ -32,7 +33,7 @@ public final class UnlockManager {
      * 为实体解锁效果。
      */
     public static void unlock(LivingEntity entity, ResourceLocation effectId) {
-        unlockedEffects.computeIfAbsent(entity.getUUID(), k -> new HashSet<>()).add(effectId);
+        unlockedEffects.computeIfAbsent(entity.getUUID(), k -> ConcurrentHashMap.newKeySet()).add(effectId);
         dirtyCallback.run();
     }
 
@@ -40,7 +41,7 @@ public final class UnlockManager {
      * 按 UUID 解锁。
      */
     public static void unlock(UUID uuid, ResourceLocation effectId) {
-        unlockedEffects.computeIfAbsent(uuid, k -> new HashSet<>()).add(effectId);
+        unlockedEffects.computeIfAbsent(uuid, k -> ConcurrentHashMap.newKeySet()).add(effectId);
         dirtyCallback.run();
     }
 
@@ -115,7 +116,7 @@ public final class UnlockManager {
         for (String uuidStr : root.getAllKeys()) {
             UUID uuid = UUID.fromString(uuidStr);
             ListTag list = root.getList(uuidStr, Tag.TAG_STRING);
-            Set<ResourceLocation> effects = new HashSet<>();
+            Set<ResourceLocation> effects = ConcurrentHashMap.newKeySet();
             for (int i = 0; i < list.size(); i++) {
                 effects.add(ResourceLocation.parse(list.getString(i)));
             }

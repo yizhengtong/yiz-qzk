@@ -83,6 +83,19 @@ public class ItemRendererStarMixin {
         }
 
         poseStack.popPose();
+
+        // 补渲染原版 UI 叠加层（附魔光效、耐久条等）
+        // 星空渲染已接管模型渲染，但需要手动补上原版叠加层
+        if (itemStack.hasFoil()) {
+            RenderType foilType = displayContext == ItemDisplayContext.GUI
+                ? RenderType.glint()
+                : RenderType.entityGlint();
+            VertexConsumer foilBuffer = bufferSource.getBuffer(foilType);
+            for (BakedModel pass : transformed.getRenderPasses(itemStack, true)) {
+                this.renderModelLists(pass, itemStack, combinedLight, combinedOverlay, poseStack, foilBuffer);
+            }
+        }
+
         ci.cancel();
     }
 }

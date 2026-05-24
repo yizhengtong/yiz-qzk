@@ -51,9 +51,12 @@ public final class DirectAttackExecutor {
             // 如果有破无敌帧标签，临时清除无敌帧
             if (damage.hasTag(DamageTag.PIERCE_INVULNERABILITY)) {
                 int savedInvulnerableTime = livingTarget.invulnerableTime;
-                livingTarget.invulnerableTime = 0;
-                livingTarget.hurt(source, (float) damage.finalDamage());
-                livingTarget.invulnerableTime = savedInvulnerableTime;
+                try {
+                    livingTarget.invulnerableTime = 0;
+                    livingTarget.hurt(source, (float) damage.finalDamage());
+                } finally {
+                    livingTarget.invulnerableTime = savedInvulnerableTime;
+                }
             } else {
                 livingTarget.hurt(source, (float) damage.finalDamage());
             }
@@ -70,6 +73,7 @@ public final class DirectAttackExecutor {
         if (!(context.target() instanceof LivingEntity livingTarget) || context.entity() == null) return;
 
         boolean isTrueDamage = damage.hasTag(DamageTag.TRUE_DAMAGE);
+        boolean isArmorPiercing = damage.hasTag(DamageTag.ARMOR_PIERCING);
 
         if (isTrueDamage) {
             float currentHealth = livingTarget.getHealth();
@@ -79,6 +83,19 @@ public final class DirectAttackExecutor {
 
             if (livingTarget.getHealth() <= 0) {
                 livingTarget.die(EffectContextHelper.getAttackDamageSource(context.entity()));
+            }
+        } else if (isArmorPiercing) {
+            DamageSource source = context.entity().damageSources().magic();
+            if (damage.hasTag(DamageTag.PIERCE_INVULNERABILITY)) {
+                int saved = livingTarget.invulnerableTime;
+                try {
+                    livingTarget.invulnerableTime = 0;
+                    livingTarget.hurt(source, (float) damage.finalDamage());
+                } finally {
+                    livingTarget.invulnerableTime = saved;
+                }
+            } else {
+                livingTarget.hurt(source, (float) damage.finalDamage());
             }
         } else {
             DamageSource source = context.entity().damageSources().magic();

@@ -181,7 +181,7 @@ public abstract class AbstractEffect {
         EffectContext context, double amount
     ) {
         return HealthModificationManager.executeModification(
-            context.entity(), context
+            context.entity(), context.withMetadata("health_mod_amount", amount)
         );
     }
 
@@ -195,9 +195,8 @@ public abstract class AbstractEffect {
     protected HealthModificationResult executeHealthModificationWithModifier(
         EffectContext context, HealthModifier modifier
     ) {
-        // 通过 EventBus 发布事件，让订阅者可以添加额外修正器
         return HealthModificationManager.executeModification(
-            context.entity(), context
+            context.entity(), context.withMetadata("health_mod_extra_modifier", modifier)
         );
     }
 
@@ -235,7 +234,7 @@ public abstract class AbstractEffect {
         EffectContext context, HealthModifier modifier
     ) {
         return HealthModificationManager.executeModification(
-            context.entity(), context
+            context.entity(), context.withMetadata("health_mod_periodic_modifier", modifier)
         );
     }
 

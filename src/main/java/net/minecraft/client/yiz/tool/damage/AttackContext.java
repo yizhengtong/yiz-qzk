@@ -30,6 +30,12 @@ public class AttackContext {
         this.mainHandItem = attacker.getMainHandItem();
         this.offHandItem = attacker.getOffhandItem();
         this.activeEffects = new ArrayList<>();
+        // 填充攻击者身上所有已解锁的天赋效果
+        for (var effect : net.minecraft.client.yiz.core.registry.ModRegistries.getAllEffects()) {
+            if (effect.isUnlocked(attacker)) {
+                this.activeEffects.add(effect);
+            }
+        }
     }
 
     public static AttackContext create(LivingEntity attacker, Entity target) {
