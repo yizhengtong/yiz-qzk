@@ -54,7 +54,11 @@ public class HumanoidArmorLayerStarMixin {
             CallbackInfo ci
     ) {
         if (!(livingEntity instanceof Player player)) return;
-        if (!(Boolean) PlayerDataAPI.get(player, "yizxgmod:star_body")) return;
+        try {
+            if (!(Boolean) PlayerDataAPI.get(player, "yizxgmod:star_body")) return;
+        } catch (IllegalArgumentException ignored) {
+            return; // downstream mod hasn't registered this data key — skip star rendering
+        }
         var armorStack = livingEntity.getItemBySlot(slot);
         if (armorStack.getItem() instanceof ArmorItem) {
             IS_STAR_SLOT.set(true);

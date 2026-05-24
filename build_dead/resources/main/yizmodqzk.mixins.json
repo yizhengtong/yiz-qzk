@@ -1,0 +1,23 @@
+{
+  "required": true,
+  "package": "net.minecraft.client.yiz.mixin",
+  "plugin": "net.minecraft.client.yiz.core.FantasyEndingPlugin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "AttackInterceptorMixin",
+    "FlightOptimizationMixin",
+    "LivingEntityMixin",
+    "NoCollisionMixin",
+    "PlayerMixin"
+  ],
+  "client": [
+    "ItemRendererStarMixin",
+    "HumanoidArmorLayerStarMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "overwrites": {
+    "requireAnnotations": true
+  }
+}
