@@ -212,8 +212,26 @@ YizModQZKAPI.registerSimpleCommand("heal", ctx -> { ... });
 - **更新文档站**：在会话中调用 `/YIZwikl` Skill 或直接运行 `serve.bat`
 - **下游模组模板**：`D:\ZM\yizxgmod-template-1.21.1`
 
+### 创造标签页自动注册（4 母页系统）
+
+4 个标记接口 + 自动扫描 `BuiltInRegistries.ITEM`，按 (modId, 类别) 分组，为非空分组自动创建 `CreativeModeTab`。
+
+| 母页 | 接口 | 标签页 ID 格式 |
+|------|------|---------------|
+| A 天赋页 | `ITalentItem` | `{modid}:talent` |
+| B 技能页 | `ISkillItem` | `{modid}:skill` |
+| C 物品页 | `IGeneralItem` | `{modid}:item` |
+| D 武器装备页 | `IWeaponItem` | `{modid}:weapon` |
+
+- 标签页标题格式：`{模组显示名}-天赋/技能/物品/武器装备`
+- 空类别不注册标签页
+- 下游模组只需让 Item 实现对应接口，无需手动注册 `CreativeModeTab`
+- 入口：`CreativeTabAutoRegistry.init(modEventBus)`（在 `tizMod` 构造器中调用）
+- API：`YizModQZKAPI.getCreativeTabCategory(item)` / `isCreativeTabRegistered(item)`
+
 ## 当前开发专注区域
 
 **D. 天赋部分** ✅ — 效果框架 6 维度、12 种注册表、统一 UI 面板已实现。
+**E. 创造标签页** ✅ — 4 母页系统 + 4 接口 API，自动注册。
 A. 境界跨度 / B. 领域 / C. 道宫 为架构设计阶段，尚未编码。
 详见 [整体蓝图](../architecture/blueprint.md)。

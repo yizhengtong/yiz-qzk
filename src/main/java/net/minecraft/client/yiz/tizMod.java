@@ -6,6 +6,7 @@ import net.minecraft.client.yiz.api.ProjectileReflectionSystem;
 import net.minecraft.client.yiz.api.RealmProgressionAPI;
 import net.minecraft.client.yiz.core.asm.AsmBootstrapper;
 import net.minecraft.client.yiz.core.data.EffectDataLoader;
+import net.minecraft.client.yiz.core.registry.CreativeTabAutoRegistry;
 import net.minecraft.client.yiz.core.registry.ModAttachments;
 import net.minecraft.client.yiz.effect.unlock.UnlockManager;
 import net.minecraft.client.yiz.effect.unlock.UnlockSavedData;
@@ -56,6 +57,9 @@ public class tizMod {
 
         // 注册玩家数据附件
         ModAttachments.register(modEventBus);
+
+        // 初始化创造标签页自动注册（扫描实现 ITalentItem/ISkillItem/IGeneralItem/IWeaponItem 的物品）
+        CreativeTabAutoRegistry.init(modEventBus);
 
         // Register data reload listener (NeoForge event bus, not mod bus)
         NeoForge.EVENT_BUS.addListener(this::onAddReloadListener);

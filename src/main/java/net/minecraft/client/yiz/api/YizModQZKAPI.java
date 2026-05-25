@@ -15,6 +15,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.Attribute;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.damagesource.DamageSource;
 import net.neoforged.neoforge.common.NeoForge;
 
@@ -776,6 +777,37 @@ public final class YizModQZKAPI {
      */
     public static boolean isProtected(net.minecraft.world.entity.player.Player player) {
         return net.minecraft.client.yiz.core.PlayerClassSwapper.isProtected(player);
+    }
+
+    // ==================== 创造标签页 ====================
+
+    /**
+     * 获取物品所属的创造标签页类别。
+     * <p>
+     * 根据物品实现的接口返回对应类别 key：
+     * {@code talent} / {@code skill} / {@code item} / {@code weapon}。
+     * 未实现任何接口返回 {@code null}。
+     * </p>
+     *
+     * @param item 要查询的物品
+     * @return 类别 key，未分类返回 null
+     */
+    public static String getCreativeTabCategory(Item item) {
+        if (item instanceof ITalentItem) return "talent";
+        if (item instanceof ISkillItem) return "skill";
+        if (item instanceof IGeneralItem) return "item";
+        if (item instanceof IWeaponItem) return "weapon";
+        return null;
+    }
+
+    /**
+     * 检查物品是否实现了任意创造标签页接口（归入任一母页类别）。
+     *
+     * @param item 要检查的物品
+     * @return true 如果物品实现了 ITalentItem/ISkillItem/IGeneralItem/IWeaponItem 中的任意一个
+     */
+    public static boolean isCreativeTabRegistered(Item item) {
+        return getCreativeTabCategory(item) != null;
     }
 
     // ==================== 快捷方法 ====================
