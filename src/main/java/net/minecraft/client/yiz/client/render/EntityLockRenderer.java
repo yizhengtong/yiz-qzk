@@ -9,6 +9,7 @@ import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.yiz.api.EntityLockAPI;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 
@@ -49,18 +50,31 @@ public final class EntityLockRenderer {
         var mc = Minecraft.getInstance();
         if (mc.player == null || !(mc.level instanceof ClientLevel cl)) return;
 
-        // 从 API 读取当前玩家的锁数据
+        // 优先 API 锁数据；无锁时用 60° 锥自动扫描
         var entry = EntityLockAPI.getClient();
-        if (entry == null) return;
+        Entity target;
+        float charge;
+        boolean ready;
 
-        Entity target = null;
-        for (var e : cl.entitiesForRendering()) {
-            if (e != null && e.getUUID().equals(entry.targetUuid())) {
-                target = e;
-                break;
+        if (entry != null) {
+            // API 驱动（会心一击等效果）
+            target = null;
+            for (var e : cl.entitiesForRendering()) {
+                if (e != null && e.getUUID().equals(entry.targetUuid())) {
+                    target = e;
+                    break;
+                }
             }
+            if (target == null) return;
+            charge = entry.charge();
+            ready = entry.ready();
+        } else {
+            // 母效果：60° 锥自动扫描
+            target = findConeTarget(mc.player, cl);
+            if (target == null) return;
+            charge = 1f;
+            ready = false;
         }
-        if (target == null) return;
 
         Camera camera = event.getCamera();
         Vec3 camPos = camera.getPosition();
@@ -80,8 +94,7 @@ public final class EntityLockRenderer {
         float hs = SIZE_BASE * getScaleFactor(dist);
 
         // 充能进度 → alpha；就绪 → 红色
-        float alpha = entry.charge();
-        boolean ready = entry.ready();
+        float alpha = charge;
 
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
@@ -117,5 +130,26 @@ public final class EntityLockRenderer {
         RenderSystem.setShaderColor(1, 1, 1, 1);
         RenderSystem.enableDepthTest();
         RenderSystem.disableBlend();
+    }
+
+    /** 母效果：60° 锥 + 视线最近实体 */
+    private static Entity findConeTarget(net.minecraft.world.entity.player.Player player, ClientLevel cl) {
+        Vec3 eyePos = player.getEyePosition();
+        var lookVec = player.getLookAngle();
+        double range = 32.0;
+        Entity target = null;
+        double bestDot = 0.5;
+        for (Entity e : cl.entitiesForRendering()) {
+            if (!(e instanceof net.minecraft.world.entity.LivingEntity) || e == player || !e.isAlive()) continue;
+            Vec3 toEntity = e.position().subtract(eyePos);
+            double distSqr = toEntity.lengthSqr();
+            if (distSqr > range * range) continue;
+            double dot = lookVec.dot(toEntity) / Math.sqrt(distSqr);
+            if (dot > bestDot) {
+                bestDot = dot;
+                target = e;
+            }
+        }
+        return target;
     }
 }
