@@ -21,7 +21,7 @@ public final class EntityLockRenderer {
 
     // === 缩放参数 ===
     private static final float SIZE_BASE = 0.5f;           // 12+格时的框半边长（世界单位）
-    private static final float SIZE_NEAR_MIN = 0.2f;       // 0格时的框相对大小
+    private static final float SIZE_NEAR_MIN = 0.4f;       // 0格时的框相对大小
     private static final float SIZE_NEAR_MAX = 1.0f;       // 12+格时框相对大小
     private static final float SIZE_RANGE = 12f;            // 缩放范围（格）
 
@@ -118,7 +118,7 @@ public final class EntityLockRenderer {
 
             RenderSystem.setShaderTexture(0, CORNER_TEX[i]);
             RenderSystem.setShaderColor(1, 1, 1, alpha);
-            float cs = CORNER_TEX_SIZE * getScaleFactor(dist);
+            float cs = CORNER_TEX_SIZE;
             BufferBuilder builder = Tesselator.getInstance().begin(
                 VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
             builder.addVertex(ps.last().pose(), -cs, -cs, 0).setUv(0, 0);
