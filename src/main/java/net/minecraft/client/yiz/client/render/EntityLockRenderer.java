@@ -58,37 +58,28 @@ public final class EntityLockRenderer {
         poseStack.pushPose();
         poseStack.translate(ex, ey, ez);
 
-        // 碰撞箱局部坐标（相对于实体位置）
-        AABB bb = target.getBoundingBox();
-        double cx = (bb.minX + bb.maxX) * 0.5 - target.getX();
-        double cy = (bb.minY + bb.maxY) * 0.5 - target.getY();
-        double cz = (bb.minZ + bb.maxZ) * 0.5 - target.getZ();
+        // 身体中心（实体局部坐标：X=0, Z=0, Y=半高偏下）
+        float cy = (float)(target.getBbHeight() * 0.5) - 0.1f;
 
-        // 用碰撞箱实际宽和高的一半来定位 4 角
-        float hw = (float)(bb.maxX - bb.minX) * 0.5f;
-        float hh = (float)(bb.maxY - bb.minY) * 0.5f;
-        float hd = (float)(bb.maxZ - bb.minZ) * 0.5f;
+        // 固定缩放框大小（只随距离变化，不随实体大小）
+        float dist = (float) target.position().distanceTo(camPos);
+        float t = Math.clamp((dist - 3f) / 9f, 0, 1);
+        float factor = 0.4f + t * 0.6f;
+        float hs = 0.5f * factor;
 
         var bufferSource = mc.renderBuffers().bufferSource();
         var consumer = bufferSource.getBuffer(RenderType.LINES);
 
-        // 4 个红色角点标记
+        // 4 个红色角点标记（固定正方形框）
+        float s = 0.06f; // 小方块的半边长
         LevelRenderer.renderLineBox(poseStack, consumer,
-            new AABB(cx - hw - 0.06, cy + hh - 0.06, cz - hd - 0.06,
-                     cx - hw + 0.06, cy + hh + 0.06, cz - hd + 0.06),
-            1f, 0.2f, 0.2f, 1f);
+            new AABB(-hs - s, cy + hs - s, -hs - s, -hs + s, cy + hs + s, -hs + s), 1f, 0.2f, 0.2f, 1f);
         LevelRenderer.renderLineBox(poseStack, consumer,
-            new AABB(cx + hw - 0.06, cy + hh - 0.06, cz - hd - 0.06,
-                     cx + hw + 0.06, cy + hh + 0.06, cz - hd + 0.06),
-            1f, 0.2f, 0.2f, 1f);
+            new AABB( hs - s, cy + hs - s, -hs - s,  hs + s, cy + hs + s, -hs + s), 1f, 0.2f, 0.2f, 1f);
         LevelRenderer.renderLineBox(poseStack, consumer,
-            new AABB(cx + hw - 0.06, cy - hh - 0.06, cz - hd - 0.06,
-                     cx + hw + 0.06, cy - hh + 0.06, cz - hd + 0.06),
-            1f, 0.2f, 0.2f, 1f);
+            new AABB( hs - s, cy - hs - s, -hs - s,  hs + s, cy - hs + s, -hs + s), 1f, 0.2f, 0.2f, 1f);
         LevelRenderer.renderLineBox(poseStack, consumer,
-            new AABB(cx - hw - 0.06, cy - hh - 0.06, cz - hd - 0.06,
-                     cx - hw + 0.06, cy - hh + 0.06, cz - hd + 0.06),
-            1f, 0.2f, 0.2f, 1f);
+            new AABB(-hs - s, cy - hs - s, -hs - s, -hs + s, cy - hs + s, -hs + s), 1f, 0.2f, 0.2f, 1f);
 
         poseStack.popPose();
     }
