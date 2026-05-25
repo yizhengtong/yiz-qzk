@@ -122,6 +122,12 @@ public class tizMod {
     private void onPlayerTick(PlayerTickEvent.Post event) {
         ProjectileReflectionSystem.tick(event.getEntity());
         AttributeBalanceRegistry.enforceFloors(event.getEntity());
+        // 驱动效果系统（抽象效果每 tick 执行 + 词缀/随影）
+        if (!event.getEntity().level().isClientSide) {
+            EffectEventBus.dispatchContext(
+                EffectContext.create(event.getEntity(), null)
+            );
+        }
     }
 
     // ==================== 解锁数据持久化 ====================
