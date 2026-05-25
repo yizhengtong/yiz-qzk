@@ -106,6 +106,71 @@ public final class EffectNBTHandler {
     }
 
     /**
+     * 设置物品上指定效果的等级。等级 <= 0 时移除该效果。
+     * @return true 如果操作成功（找到了该效果并更新或移除）
+     */
+    public static boolean setEffectLevel(ItemStack stack, ResourceLocation effectId, int level) {
+        CompoundTag data = getInternalData(stack);
+        if (data == null) {
+            if (level <= 0) return false;
+            data = new CompoundTag();
+        }
+        ListTag effectsList = data.contains(EFFECTS_KEY, Tag.TAG_LIST)
+            ? data.getList(EFFECTS_KEY, Tag.TAG_COMPOUND)
+            : new ListTag();
+
+        String targetId = effectId.toString();
+        boolean found = false;
+        for (int i = 0; i < effectsList.size(); i++) {
+            if (effectsList.getCompound(i).getString(KEY_ID).equals(targetId)) {
+                if (level <= 0) {
+                    effectsList.remove(i);
+                } else {
+                    CompoundTag updated = effectsList.getCompound(i).copy();
+                    updated.putInt(KEY_LEVEL, level);
+                    effectsList.set(i, updated);
+                }
+                found = true;
+                break;
+            }
+        }
+        if (!found && level > 0) {
+            CompoundTag effectTag = new CompoundTag();
+            effectTag.putString(KEY_ID, targetId);
+            effectTag.putInt(KEY_LEVEL, level);
+            effectsList.add(effectTag);
+        }
+        if (effectsList.isEmpty()) {
+            data.remove(EFFECTS_KEY);
+        } else {
+            data.put(EFFECTS_KEY, effectsList);
+        }
+        if (data.isEmpty()) {
+            stack.remove(DataComponents.CUSTOM_DATA);
+        } else {
+            stack.set(DataComponents.CUSTOM_DATA, CustomData.of(data));
+        }
+        return found || level > 0;
+    }
+
+    /**
+     * 获取物品上指定效果的等级，未找到返回 0。
+     */
+    public static int getEffectLevel(ItemStack stack, ResourceLocation effectId) {
+        CompoundTag data = getInternalData(stack);
+        if (data == null || !data.contains(EFFECTS_KEY)) return 0;
+        ListTag list = data.getList(EFFECTS_KEY, Tag.TAG_COMPOUND);
+        String targetId = effectId.toString();
+        for (int i = 0; i < list.size(); i++) {
+            CompoundTag t = list.getCompound(i);
+            if (targetId.equals(t.getString(KEY_ID))) {
+                return t.getInt(KEY_LEVEL);
+            }
+        }
+        return 0;
+    }
+
+    /**
      * 检查物品是否有任何效果。
      */
     public static boolean hasEffects(ItemStack stack) {
