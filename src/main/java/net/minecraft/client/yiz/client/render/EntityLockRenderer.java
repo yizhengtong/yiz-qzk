@@ -8,9 +8,7 @@ import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.projectile.ProjectileUtil;
 import net.minecraft.world.phys.AABB;
-import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 
@@ -41,19 +39,25 @@ public final class EntityLockRenderer {
         var mc = Minecraft.getInstance();
         if (mc.player == null) return;
 
-        // 射线追踪找目标
+        // 60° 圆锥内找最接近屏幕中心的实体
         Vec3 eyePos = mc.player.getEyePosition();
         Vec3 lookVec = mc.player.getLookAngle();
-        Vec3 endPos = eyePos.add(lookVec.scale(RANGE));
-        AABB searchBox = mc.player.getBoundingBox().expandTowards(lookVec.scale(RANGE)).inflate(1.0);
+        AABB searchBox = mc.player.getBoundingBox().inflate(RANGE);
 
-        EntityHitResult hitResult = ProjectileUtil.getEntityHitResult(
-            mc.player, eyePos, endPos, searchBox,
-            e -> e instanceof LivingEntity && e != mc.player && e.isAlive(),
-            RANGE * RANGE
-        );
-        if (hitResult == null) return;
-        Entity target = hitResult.getEntity();
+        Entity target = null;
+        double bestDot = 0.5; // cos(60°) 门槛
+        for (Entity e : mc.level.getEntities(mc.player, searchBox,
+                e -> e instanceof LivingEntity && e != mc.player && e.isAlive())) {
+            Vec3 toEntity = e.position().subtract(eyePos);
+            double distSqr = toEntity.lengthSqr();
+            if (distSqr > RANGE * RANGE) continue;
+            double dot = lookVec.dot(toEntity) / Math.sqrt(distSqr);
+            if (dot > bestDot) {
+                bestDot = dot;
+                target = e;
+            }
+        }
+        if (target == null) return;
 
         Camera camera = event.getCamera();
         Vec3 camPos = camera.getPosition();
