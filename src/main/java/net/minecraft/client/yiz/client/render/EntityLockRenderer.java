@@ -6,23 +6,26 @@ import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.GameRenderer;
-import net.minecraft.client.yiz.api.EntityLockAPI;
+import net.minecraft.client.yiz.api.TargetFrameManager;
+import net.minecraft.client.yiz.api.TargetFrameProvider;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 
+/**
+ * 锁定框渲染器 — 从 TargetFrameManager 读取最佳供应者并渲染。
+ * 自身不做任何实体扫描，所有逻辑由已注册的 TargetFrameProvider 提供。
+ */
 public final class EntityLockRenderer {
 
     private static final double BODY_HEIGHT_FACTOR = 0.7;
     private static final float SIZE_BASE = 0.5f;
-    private static final float SIZE_NEAR_MIN = 0.4f;
-    private static final float SIZE_NEAR_MAX = 1.0f;
-    private static final float SIZE_RANGE = 12f;
     private static final double ROTATION_SPEED = Math.PI / 6;
-
     private static final float CORNER_TEX_SIZE = 0.15f;
+
     private static final ResourceLocation[] CORNER_TEX = {
         ResourceLocation.fromNamespaceAndPath("yizmodqzk", "textures/gui/lock_tr.png"),
         ResourceLocation.fromNamespaceAndPath("yizmodqzk", "textures/gui/lock_tl.png"),
@@ -33,48 +36,30 @@ public final class EntityLockRenderer {
     private EntityLockRenderer() {}
 
     // ════════════════════════════════════════════
-    //  API
+    //  API（母效果快捷引用）
     // ════════════════════════════════════════════
     public static float getScaleFactor(float dist) {
-        float t = Math.clamp(dist, 0, SIZE_RANGE) / SIZE_RANGE;
-        return SIZE_NEAR_MIN + t * (SIZE_NEAR_MAX - SIZE_NEAR_MIN);
+        float t = Math.clamp(dist, 0, 12f) / 12f;
+        return 0.4f + t * 0.6f;
+    }
+
+    public static double getRotationAngle() {
+        return (System.currentTimeMillis() / 1000.0) * ROTATION_SPEED;
     }
 
     // ════════════════════════════════════════════
-    //  渲染入口
+    //  渲染
     // ════════════════════════════════════════════
 
     public static void onRenderLevelStage(RenderLevelStageEvent event) {
         if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_ENTITIES) return;
-
         var mc = Minecraft.getInstance();
         if (mc.player == null || !(mc.level instanceof ClientLevel cl)) return;
 
-        // 优先 API 锁数据；无锁时用 60° 锥自动扫描
-        var entry = EntityLockAPI.getClient();
-        Entity target;
-        float charge;
-        boolean ready;
-
-        if (entry != null) {
-            // API 驱动（会心一击等效果）
-            target = null;
-            for (var e : cl.entitiesForRendering()) {
-                if (e != null && e.getUUID().equals(entry.targetUuid())) {
-                    target = e;
-                    break;
-                }
-            }
-            if (target == null) return;
-            charge = entry.charge();
-            ready = entry.ready();
-        } else {
-            // 母效果：60° 锥自动扫描
-            target = findConeTarget(mc.player, cl);
-            if (target == null) return;
-            charge = 1f;
-            ready = false;
-        }
+        TargetFrameProvider provider = TargetFrameManager.getBest(mc.player);
+        if (provider == null) return;
+        Entity target = provider.getTarget(mc.player);
+        if (target == null) return;
 
         Camera camera = event.getCamera();
         Vec3 camPos = camera.getPosition();
@@ -85,16 +70,16 @@ public final class EntityLockRenderer {
         Vec3 right = new Vec3(0, 1, 0).cross(forward).normalize();
         Vec3 up = forward.cross(right).normalize();
 
-        double angle = (System.currentTimeMillis() / 1000.0) * ROTATION_SPEED;
+        double angle = getRotationAngle();
         double cosa = Math.cos(angle), sina = Math.sin(angle);
         Vec3 r = right.scale(cosa).add(up.scale(sina));
         Vec3 u = right.scale(-sina).add(up.scale(cosa));
 
         float dist = (float) bodyCenter.distanceTo(camPos);
         float hs = SIZE_BASE * getScaleFactor(dist);
-
-        // 充能进度 → alpha；就绪 → 红色
-        float alpha = charge;
+        float alpha = provider.getCharge();
+        boolean ready = provider.isReady();
+        if (alpha <= 0) return;
 
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
@@ -110,12 +95,7 @@ public final class EntityLockRenderer {
             ps.mulPose(camera.rotation());
 
             RenderSystem.setShaderTexture(0, CORNER_TEX[i]);
-            // 就绪 = 红色，充电 = 白色渐变
-            if (ready) {
-                RenderSystem.setShaderColor(1f, 0.2f, 0.2f, alpha);
-            } else {
-                RenderSystem.setShaderColor(1f, 1f, 1f, alpha);
-            }
+            RenderSystem.setShaderColor(ready ? 1f : 1f, ready ? 0.2f : 1f, ready ? 0.2f : 1f, alpha);
             float cs = CORNER_TEX_SIZE;
             BufferBuilder builder = Tesselator.getInstance().begin(
                 VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
@@ -130,26 +110,5 @@ public final class EntityLockRenderer {
         RenderSystem.setShaderColor(1, 1, 1, 1);
         RenderSystem.enableDepthTest();
         RenderSystem.disableBlend();
-    }
-
-    /** 母效果：60° 锥 + 视线最近实体 */
-    private static Entity findConeTarget(net.minecraft.world.entity.player.Player player, ClientLevel cl) {
-        Vec3 eyePos = player.getEyePosition();
-        var lookVec = player.getLookAngle();
-        double range = 32.0;
-        Entity target = null;
-        double bestDot = 0.5;
-        for (Entity e : cl.entitiesForRendering()) {
-            if (!(e instanceof net.minecraft.world.entity.LivingEntity) || e == player || !e.isAlive()) continue;
-            Vec3 toEntity = e.position().subtract(eyePos);
-            double distSqr = toEntity.lengthSqr();
-            if (distSqr > range * range) continue;
-            double dot = lookVec.dot(toEntity) / Math.sqrt(distSqr);
-            if (dot > bestDot) {
-                bestDot = dot;
-                target = e;
-            }
-        }
-        return target;
     }
 }
