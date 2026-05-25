@@ -9,13 +9,10 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 import java.util.UUID;
 
-/**
- * 锁定同步包 (S2C)
- * 服务端 → 客户端：通知客户端当前玩家的锁定目标。
- */
 public record SyncLockPayload(
     UUID targetUuid,
-    ResourceLocation icon,
+    float charge,
+    boolean ready,
     boolean locked
 ) implements CustomPacketPayload {
 
@@ -27,19 +24,17 @@ public record SyncLockPayload(
         public SyncLockPayload decode(FriendlyByteBuf buf) {
             boolean locked = buf.readBoolean();
             if (locked) {
-                UUID targetUuid = buf.readUUID();
-                ResourceLocation icon = buf.readResourceLocation();
-                return new SyncLockPayload(targetUuid, icon, true);
+                return new SyncLockPayload(buf.readUUID(), buf.readFloat(), buf.readBoolean(), true);
             }
-            return new SyncLockPayload(null, null, false);
+            return new SyncLockPayload(null, 0, false, false);
         }
-
         @Override
         public void encode(FriendlyByteBuf buf, SyncLockPayload payload) {
             buf.writeBoolean(payload.locked);
-            if (payload.locked && payload.targetUuid != null && payload.icon != null) {
+            if (payload.locked) {
                 buf.writeUUID(payload.targetUuid);
-                buf.writeResourceLocation(payload.icon);
+                buf.writeFloat(payload.charge);
+                buf.writeBoolean(payload.ready);
             }
         }
     };
@@ -51,16 +46,12 @@ public record SyncLockPayload(
 
     public void handle(IPayloadContext context) {
         context.enqueueWork(() -> {
-            if (locked && targetUuid != null && icon != null) {
-                EntityLockAPI.putClient(
-                    net.minecraft.client.Minecraft.getInstance().player.getUUID(),
-                    targetUuid, icon
-                );
+            var mc = net.minecraft.client.Minecraft.getInstance();
+            if (mc.player == null) return;
+            if (locked && targetUuid != null) {
+                EntityLockAPI.putClient(mc.player.getUUID(), targetUuid, charge, ready);
             } else {
-                var mc = net.minecraft.client.Minecraft.getInstance();
-                if (mc.player != null) {
-                    EntityLockAPI.putClient(mc.player.getUUID(), null, null);
-                }
+                EntityLockAPI.putClient(mc.player.getUUID(), null, 0, false);
             }
         });
     }

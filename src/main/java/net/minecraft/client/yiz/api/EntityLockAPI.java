@@ -10,98 +10,78 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 实体锁定 API — 服务端追踪 + 自动同步到客户端渲染。
- * <p>
- * 任意效果可在锁定/解锁时调用此 API，客户端自动在锁定实体上方渲染图标。
- * </p>
- *
- * <h3>用法</h3>
- * <pre>{@code
- * EntityLockAPI.lock(player, target, ICON);
- * // ... 渲染器自动在 target 碰撞箱中点画 ICON ...
- * EntityLockAPI.unlock(player);
- * }</pre>
+ * 支持充能进度（透明度渐变）和就绪状态（红色框）。
  */
 public final class EntityLockAPI {
 
     private EntityLockAPI() {}
 
-    // playerUUID → targetEntityUUID
     private static final ConcurrentHashMap<UUID, UUID> LOCKS = new ConcurrentHashMap<>();
-    // playerUUID → icon ResourceLocation
-    private static final ConcurrentHashMap<UUID, ResourceLocation> ICONS = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<UUID, Float> CHARGES = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<UUID, Boolean> READY = new ConcurrentHashMap<>();
 
     /**
-     * 锁定目标实体，客户端会在目标上渲染图标。
-     * 已锁定时再次调用会更新目标。
+     * 锁定目标 + 充能状态。
+     * @param charge 0~1，充能进度（0=完全透明，1=完全不透明）
+     * @param ready true=充能完成，框变红
      */
-    public static void lock(Player player, Entity target, ResourceLocation icon) {
+    public static void lock(Player player, Entity target, float charge, boolean ready) {
         if (player.level().isClientSide) return;
         UUID puid = player.getUUID();
         LOCKS.put(puid, target.getUUID());
-        ICONS.put(puid, icon);
-        sync((ServerPlayer) player, target.getUUID(), icon, true);
+        CHARGES.put(puid, charge);
+        READY.put(puid, ready);
+        sync((ServerPlayer) player, target.getUUID(), charge, ready, true);
     }
 
-    /**
-     * 解锁，移除图标。
-     */
     public static void unlock(Player player) {
         if (player.level().isClientSide) return;
         UUID puid = player.getUUID();
         LOCKS.remove(puid);
-        ICONS.remove(puid);
-        sync((ServerPlayer) player, null, null, false);
+        CHARGES.remove(puid);
+        READY.remove(puid);
+        sync((ServerPlayer) player, null, 0, false, false);
     }
 
-    /** 获取当前锁定目标 UUID，没有返回 null */
     public static UUID getLockedTargetUuid(Player player) {
         return LOCKS.get(player.getUUID());
     }
 
-    /** 获取当前锁定图标，没有返回 null */
-    public static ResourceLocation getLockIcon(Player player) {
-        return ICONS.get(player.getUUID());
-    }
-
-    /** 检查玩家是否有锁定目标 */
     public static boolean hasLock(Player player) {
         return LOCKS.containsKey(player.getUUID());
     }
 
-    // ==================== 同步到客户端 ====================
+    // ==================== 同步 ====================
 
-    private static void sync(ServerPlayer player, UUID targetUuid, ResourceLocation icon, boolean locked) {
-        var payload = new net.minecraft.client.yiz.network.SyncLockPayload(targetUuid, icon, locked);
+    private static void sync(ServerPlayer player, UUID targetUuid, float charge, boolean ready, boolean locked) {
+        var payload = new net.minecraft.client.yiz.network.SyncLockPayload(targetUuid, charge, ready, locked);
         net.neoforged.neoforge.network.PacketDistributor.sendToPlayer(player, payload);
     }
 
-    /** 客户端缓存（由 SyncLockPayload.handle 填充） */
+    // ==================== 客户端缓存 ====================
+
     static final ConcurrentHashMap<UUID, ClientLockEntry> CLIENT_CACHE = new ConcurrentHashMap<>();
 
-    public record ClientLockEntry(UUID targetUuid, ResourceLocation icon) {}
+    public record ClientLockEntry(UUID targetUuid, float charge, boolean ready) {}
 
-    /** 由客户端网络包处理写入 */
-    public static void putClient(UUID playerUuid, UUID targetUuid, ResourceLocation icon) {
-        if (targetUuid == null || icon == null) {
+    public static void putClient(UUID playerUuid, UUID targetUuid, float charge, boolean ready) {
+        if (targetUuid == null) {
             CLIENT_CACHE.remove(playerUuid);
         } else {
-            CLIENT_CACHE.put(playerUuid, new ClientLockEntry(targetUuid, icon));
+            CLIENT_CACHE.put(playerUuid, new ClientLockEntry(targetUuid, charge, ready));
         }
     }
 
-    /** 客户端读取（供渲染器使用） */
     public static ClientLockEntry getClient() {
         var mc = net.minecraft.client.Minecraft.getInstance();
         if (mc.player == null) return null;
         return CLIENT_CACHE.get(mc.player.getUUID());
     }
 
-    /**
-     * 清除所有锁定（世界退出时调用）。
-     */
     public static void clearAll() {
         LOCKS.clear();
-        ICONS.clear();
+        CHARGES.clear();
+        READY.clear();
         CLIENT_CACHE.clear();
     }
 }
