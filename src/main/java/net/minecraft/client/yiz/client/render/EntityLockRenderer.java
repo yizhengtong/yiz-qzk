@@ -64,29 +64,29 @@ public final class EntityLockRenderer {
         double cy = (bb.minY + bb.maxY) * 0.5 - target.getY();
         double cz = (bb.minZ + bb.maxZ) * 0.5 - target.getZ();
 
-        // 正方形框大小（基于碰撞箱）
-        float boxSize = (float) Math.max(bb.maxX - bb.minX, bb.maxY - bb.minY) * 0.6f * 0.5f;
+        // 用碰撞箱实际宽和高的一半来定位 4 角
+        float hw = (float)(bb.maxX - bb.minX) * 0.5f;
+        float hh = (float)(bb.maxY - bb.minY) * 0.5f;
 
         var bufferSource = mc.renderBuffers().bufferSource();
         var consumer = bufferSource.getBuffer(RenderType.LINES);
-        float hs = boxSize;
 
         // 4 个红色角点标记
         LevelRenderer.renderLineBox(poseStack, consumer,
-            new AABB(cx - hs - 0.06, cy + hs - 0.06, cz - 0.06,
-                     cx - hs + 0.06, cy + hs + 0.06, cz + 0.06),
+            new AABB(cx - hw - 0.06, cy + hh - 0.06, cz - 0.06,
+                     cx - hw + 0.06, cy + hh + 0.06, cz + 0.06),
             1f, 0.2f, 0.2f, 1f);
         LevelRenderer.renderLineBox(poseStack, consumer,
-            new AABB(cx + hs - 0.06, cy + hs - 0.06, cz - 0.06,
-                     cx + hs + 0.06, cy + hs + 0.06, cz + 0.06),
+            new AABB(cx + hw - 0.06, cy + hh - 0.06, cz - 0.06,
+                     cx + hw + 0.06, cy + hh + 0.06, cz + 0.06),
             1f, 0.2f, 0.2f, 1f);
         LevelRenderer.renderLineBox(poseStack, consumer,
-            new AABB(cx + hs - 0.06, cy - hs - 0.06, cz - 0.06,
-                     cx + hs + 0.06, cy - hs + 0.06, cz + 0.06),
+            new AABB(cx + hw - 0.06, cy - hh - 0.06, cz - 0.06,
+                     cx + hw + 0.06, cy - hh + 0.06, cz + 0.06),
             1f, 0.2f, 0.2f, 1f);
         LevelRenderer.renderLineBox(poseStack, consumer,
-            new AABB(cx - hs - 0.06, cy - hs - 0.06, cz - 0.06,
-                     cx - hs + 0.06, cy - hs + 0.06, cz + 0.06),
+            new AABB(cx - hw - 0.06, cy - hh - 0.06, cz - 0.06,
+                     cx - hw + 0.06, cy - hh + 0.06, cz + 0.06),
             1f, 0.2f, 0.2f, 1f);
 
         poseStack.popPose();
