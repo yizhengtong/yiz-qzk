@@ -345,6 +345,36 @@ public final class YizModQZKAPI {
         }
     }
 
+    /**
+     * Delta 通道持续回血——走 {@link #modifyHealth} 绕过原版 {@code heal()}。
+     * <p>
+     * 跟 {@link #modifyHealth} 一样走三层 Delta 通道（delta 偏移 →
+     * Float 通道扫描 → 反射保底），不触发 {@code LivingHealEvent}，
+     * 不受禁疗系统拦截。专门给境界回血、持续性治疗效果用。
+     * </p>
+     *
+     * @param target 目标实体
+     * @param amount 每 tick 回复量（正数，单位：血量点）
+     */
+    public static void healthRegen(LivingEntity target, float amount) {
+        if (target == null || amount <= 0) return;
+        if (target.getHealth() >= target.getMaxHealth()) return;
+        EntityASMUtil.modifyHealth(target, amount);
+    }
+
+    /**
+     * 饱食增幅回血——满血不拦截，走 Delta 通道填到上限。
+     * <p>
+     * 跟 {@link #healthRegen} 的区别：不检查当前血量是否已满，
+     * 留给 {@code modifyHealth} 自己处理上限。专门给饱食增幅用——
+     * 增幅后的数值可能让血量超出上限的那部分由底层截断。
+     * </p>
+     */
+    public static void healWithFoodBonus(LivingEntity target, float amount) {
+        if (target == null || amount <= 0) return;
+        EntityASMUtil.modifyHealth(target, amount);
+    }
+
     // ==================== 伤害效果开关 ====================
 
     /**
@@ -517,6 +547,37 @@ public final class YizModQZKAPI {
      */
     public static List<AbstractEffect> getEntityTalents(LivingEntity entity) {
         return PlayerTalentUI.getPlayerTalents(entity);
+    }
+
+    /**
+     * 按稀有度统计实体已解锁天赋数量。
+     * <p>
+     * 返回 Map 包含以下键：{@code total}（总数）、{@code mythic}（神话）、
+     * {@code legendary}（传说）、{@code epic}（史诗）。
+     * </p>
+     *
+     * @param entity 目标实体
+     * @return 稀有度 → 数量
+     */
+    public static java.util.Map<String, Integer> countTalentsByRarity(LivingEntity entity) {
+        java.util.Map<String, Integer> counts = new java.util.HashMap<>();
+        counts.put("total", 0);
+        counts.put("mythic", 0);
+        counts.put("legendary", 0);
+        counts.put("epic", 0);
+
+        for (net.minecraft.resources.ResourceLocation id : UnlockManager.getUnlockedEffects(entity)) {
+            java.util.Optional<AbstractEffect> effect = ModRegistries.getEffect(id);
+            if (effect.isPresent()) {
+                counts.merge("total", 1, Integer::sum);
+                switch (effect.get().getRarity()) {
+                    case MYTHIC    -> counts.merge("mythic", 1, Integer::sum);
+                    case LEGENDARY -> counts.merge("legendary", 1, Integer::sum);
+                    case EPIC      -> counts.merge("epic", 1, Integer::sum);
+                }
+            }
+        }
+        return java.util.Collections.unmodifiableMap(counts);
     }
 
     // ==================== UI 刷新 ====================

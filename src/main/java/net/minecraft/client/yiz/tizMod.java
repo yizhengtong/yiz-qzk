@@ -1,7 +1,9 @@
 package net.minecraft.client.yiz;
 
 import net.minecraft.client.yiz.api.AttributeBalanceRegistry;
+import net.minecraft.client.yiz.api.DaoPalaceAPI;
 import net.minecraft.client.yiz.api.ProjectileReflectionSystem;
+import net.minecraft.client.yiz.api.RealmProgressionAPI;
 import net.minecraft.client.yiz.core.asm.AsmBootstrapper;
 import net.minecraft.client.yiz.core.data.EffectDataLoader;
 import net.minecraft.client.yiz.core.registry.ModAttachments;
@@ -37,6 +39,14 @@ public class tizMod {
         modEventBus.addListener(NetworkHandler::onRegisterPayloadHandlers);
         // 注册 PlayerDataAPI 自动同步
         NetworkHandler.registerPlayerDataSync();
+
+        // 注册境界跨度数据 + 同步
+        RealmProgressionAPI.initDataKey();
+        NetworkHandler.registerRealmSync();
+
+        // 注册道宫数据 + 同步
+        DaoPalaceAPI.initDataKey();
+        NetworkHandler.registerDaoPalaceSync();
 
         // 初始化简易指令注册器（下游模组通过 API 提交指令，无需自行订阅事件）
         SimpleCommandRegistry.init();
@@ -84,6 +94,8 @@ public class tizMod {
     private void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
         if (event.getEntity() instanceof ServerPlayer serverPlayer) {
             NetworkHandler.syncPlayerUnlocks(serverPlayer);
+            NetworkHandler.syncPlayerRealm(serverPlayer);
+            NetworkHandler.syncPlayerDaoPalaces(serverPlayer);
             LOGGER.debug("Synced unlocks for player {} on login", serverPlayer.getGameProfile().getName());
         }
     }
@@ -96,6 +108,8 @@ public class tizMod {
         if (event.isWasDeath()) {
             if (event.getEntity() instanceof ServerPlayer serverPlayer) {
                 NetworkHandler.syncPlayerUnlocks(serverPlayer);
+                NetworkHandler.syncPlayerRealm(serverPlayer);
+                NetworkHandler.syncPlayerDaoPalaces(serverPlayer);
                 LOGGER.debug("Player cloned, unlock data resynced");
             }
         }

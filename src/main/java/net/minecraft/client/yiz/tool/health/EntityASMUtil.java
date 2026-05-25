@@ -332,13 +332,31 @@ public final class EntityASMUtil {
 
     // ==================== 保护态生命值纠正 ====================
 
+    /** ThreadLocal：允许本次 setHealth 通过保护态（如 /kill 指令） */
+    private static final ThreadLocal<Boolean> BYPASS_PROTECTION = ThreadLocal.withInitial(() -> false);
+
+    /**
+     * 临时放行保护态——调用方在触发能杀死实体的操作前设置，
+     * 调用后必须清除。用于 /kill 等必须让血量归零的场景。
+     */
+    public static void beginBypassProtection() {
+        BYPASS_PROTECTION.set(true);
+    }
+
+    public static void endBypassProtection() {
+        BYPASS_PROTECTION.remove();
+    }
+
     /**
      * 由 ASM Agent 注入的 {@code setHealth(float)} 钩子调用。
-     * 确保生命值 never &lt;1, never NaN。
+     * 确保生命值 never NaN，通常 never &lt;1（保护态），
+     * 但可通过 {@link #beginBypassProtection()} 临时放行（如 /kill）。
      */
     @SuppressWarnings("unused")
     public static float clampProtectedHealth(float health) {
-        if (Float.isNaN(health) || health < 1.0F) return 1.0F;
+        if (Float.isNaN(health)) return 1.0F;
+        if (BYPASS_PROTECTION.get()) return health; // 放行：允许 0 或负值
+        if (health < 1.0F) return 1.0F;
         return health;
     }
 }

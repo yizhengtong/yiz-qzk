@@ -6,6 +6,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EquipmentSlotGroup;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.Attribute;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
@@ -13,13 +14,20 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.item.component.ItemAttributeModifiers;
 
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
 /**
- * 物品属性读写工具。
+ * 物品 + 实体 属性读写工具。
  *
  * <p>支持 7 种属性的 set/add/get。原版属性通过 {@link DataComponents#ATTRIBUTE_MODIFIERS} 读写，
  * 自定义属性通过 {@link DataComponents#CUSTOM_DATA} NBT 读写。</p>
+ *
+ * <p>实体级方法直接操作 {@link LivingEntity#getAttribute(Holder)}，
+ * 自定义属性（伤害增幅/减免）通过内存 Map 存储，{@link #getTotalDamageAmplification(LivingEntity)}
+ * 和 {@link #getTotalDamageReduction(LivingEntity)} 自动合并物品 + 实体两边的值。</p>
  */
 public final class ItemAttributeHandler {
 
@@ -186,21 +194,105 @@ public final class ItemAttributeHandler {
     }
 
     // ══════════════════════════════════════════════════════════════
-    //  批量查询
+    //  批量查询（物品 + 实体合并）
     // ══════════════════════════════════════════════════════════════
 
-    public static double getTotalDamageAmplification(net.minecraft.world.entity.LivingEntity entity) {
+    /** 合并物品 + 实体级的伤害增幅总值 */
+    public static double getTotalDamageAmplification(LivingEntity entity) {
         double total = 0;
         total += getDamageAmplification(entity.getMainHandItem());
         total += getDamageAmplification(entity.getOffhandItem());
+        total += entityAmplification.getOrDefault(entity.getUUID(), 0.0);
         return total;
     }
 
-    public static double getTotalDamageReduction(net.minecraft.world.entity.LivingEntity entity) {
+    /** 合并物品 + 实体级的伤害减免总值 */
+    public static double getTotalDamageReduction(LivingEntity entity) {
         double total = 0;
         total += getDamageReduction(entity.getMainHandItem());
         total += getDamageReduction(entity.getOffhandItem());
+        total += entityReduction.getOrDefault(entity.getUUID(), 0.0);
         return total;
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    //  实体级属性（直接挂载到 LivingEntity，不需要物品）
+    // ══════════════════════════════════════════════════════════════
+
+    /** 实体伤害增幅内存存储（非物品、非 NBT，纯服务端计算用） */
+    private static final Map<UUID, Double> entityAmplification = new ConcurrentHashMap<>();
+    /** 实体伤害减免内存存储 */
+    private static final Map<UUID, Double> entityReduction = new ConcurrentHashMap<>();
+
+    /**
+     * 通用：给实体挂载/更新原版属性修饰器。
+     * @param value 修饰器数值；传 0 则移除
+     */
+    public static void setEntityAttribute(LivingEntity entity, Holder<Attribute> attribute,
+                                          String idKey, double value, AttributeModifier.Operation op) {
+        ResourceLocation id = ResourceLocation.fromNamespaceAndPath("yizmodqzk", "entity_" + idKey);
+        var inst = entity.getAttribute(attribute);
+        if (inst == null) return;
+        inst.removeModifier(id);
+        if (value != 0.0 && op != null) {
+            inst.addPermanentModifier(new AttributeModifier(id, value, op));
+        }
+    }
+
+    /** 实体攻击力 [ADD_VALUE] */
+    public static void setEntityAttackDamage(LivingEntity entity, double value) {
+        setEntityAttribute(entity, Attributes.ATTACK_DAMAGE, "attack_damage",
+                value, AttributeModifier.Operation.ADD_VALUE);
+    }
+
+    /**
+     * 实体攻速 [ADD_MULTIPLIED_TOTAL]。
+     * @param factor 攻速倍率，例如 0.01 表示 1% 攻速（-99% 减速）
+     */
+    public static void setEntityAttackSpeed(LivingEntity entity, double factor) {
+        setEntityAttribute(entity, Attributes.ATTACK_SPEED, "attack_speed",
+                factor - 1.0, AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL);
+    }
+
+    /** 实体生命上限 [ADD_VALUE] */
+    public static void setEntityMaxHealth(LivingEntity entity, double bonus) {
+        setEntityAttribute(entity, Attributes.MAX_HEALTH, "max_health",
+                bonus, AttributeModifier.Operation.ADD_VALUE);
+    }
+
+    /** 实体伤害增幅（存入内存，{@link #getTotalDamageAmplification} 自动合并） */
+    public static void setEntityDamageAmplification(LivingEntity entity, double value) {
+        if (value == 0) entityAmplification.remove(entity.getUUID());
+        else entityAmplification.put(entity.getUUID(), value);
+    }
+
+    public static double getEntityDamageAmplification(LivingEntity entity) {
+        return entityAmplification.getOrDefault(entity.getUUID(), 0.0);
+    }
+
+    /** 实体伤害减免（存入内存，{@link #getTotalDamageReduction} 自动合并） */
+    public static void setEntityDamageReduction(LivingEntity entity, double value) {
+        if (value == 0) entityReduction.remove(entity.getUUID());
+        else entityReduction.put(entity.getUUID(), value);
+    }
+
+    public static double getEntityDamageReduction(LivingEntity entity) {
+        return entityReduction.getOrDefault(entity.getUUID(), 0.0);
+    }
+
+    /** 清除实体上所有 yizmodqzk 修饰器（死亡/退出时调用） */
+    public static void clearEntityAttributes(LivingEntity entity) {
+        entityAmplification.remove(entity.getUUID());
+        entityReduction.remove(entity.getUUID());
+        removeModifierById(entity, Attributes.ATTACK_DAMAGE, "attack_damage");
+        removeModifierById(entity, Attributes.ATTACK_SPEED, "attack_speed");
+        removeModifierById(entity, Attributes.MAX_HEALTH, "max_health");
+    }
+
+    private static void removeModifierById(LivingEntity entity, Holder<Attribute> attr, String idKey) {
+        ResourceLocation id = ResourceLocation.fromNamespaceAndPath("yizmodqzk", "entity_" + idKey);
+        var inst = entity.getAttribute(attr);
+        if (inst != null) inst.removeModifier(id);
     }
 
     // ══════════════════════════════════════════════════════════════
