@@ -60,17 +60,19 @@ public final class EntityLockRenderer {
         Vec3 right = new Vec3(0, 1, 0).cross(forward).normalize();
         Vec3 up = forward.cross(right).normalize();
 
-        // 框大小
+        // 框大小 + 透明度（近处缩小虚化，12格外全尺寸）
         float dist = (float) bodyCenter.distanceTo(camPos);
-        float t = Math.clamp((dist - 3f) / 9f, 0, 1);
-        float hs = 0.5f * (0.4f + t * 0.6f);
+        float t = Math.clamp(dist / 12f, 0, 1);
+        float factor = 0.2f + t * 0.8f; // 近处 20%，远处 100%
+        float hs = 0.5f * factor;
+        float alpha = 0.3f + t * 0.7f; // 近处 30% 透明，远处 100%
 
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
         RenderSystem.disableDepthTest();
         RenderSystem.setShader(GameRenderer::getPositionTexShader);
 
-        float cs = 0.2f;
+        float cs = 0.15f + t * 0.05f; // 角片本身也微缩
         PoseStack ps = event.getPoseStack();
         float[][] localCorners = {{-hs, hs}, {hs, hs}, {hs, -hs}, {-hs, -hs}};
         for (int i = 0; i < 4; i++) {
@@ -80,6 +82,7 @@ public final class EntityLockRenderer {
             ps.mulPose(camera.rotation());
 
             RenderSystem.setShaderTexture(0, CORNER_TEX[i]);
+            RenderSystem.setShaderColor(1, 1, 1, alpha);
             BufferBuilder builder = Tesselator.getInstance().begin(
                 VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
             builder.addVertex(ps.last().pose(), -cs, -cs, 0).setUv(0, 0);
@@ -91,6 +94,7 @@ public final class EntityLockRenderer {
             ps.popPose();
         }
 
+        RenderSystem.setShaderColor(1, 1, 1, 1);
         RenderSystem.enableDepthTest();
         RenderSystem.disableBlend();
     }
