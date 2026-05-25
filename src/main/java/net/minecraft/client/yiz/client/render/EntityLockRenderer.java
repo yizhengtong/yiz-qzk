@@ -22,20 +22,16 @@ import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
  */
 public final class EntityLockRenderer {
 
-    private static final ResourceLocation LOCK_ICON =
-        ResourceLocation.fromNamespaceAndPath("yizmodqzk", "textures/gui/lock_icon.png");
+    private static final ResourceLocation[] CORNER_TEX = {
+        ResourceLocation.fromNamespaceAndPath("yizmodqzk", "textures/gui/lock_tl.png"),  // 左上
+        ResourceLocation.fromNamespaceAndPath("yizmodqzk", "textures/gui/lock_tr.png"),  // 右上
+        ResourceLocation.fromNamespaceAndPath("yizmodqzk", "textures/gui/lock_br.png"),  // 右下
+        ResourceLocation.fromNamespaceAndPath("yizmodqzk", "textures/gui/lock_bl.png"),  // 左下
+    };
 
     private static final double RANGE = 32.0;
     private static final double CLOSE_DIST = 3.0;
     private static final double FAR_DIST = 12.0;
-
-    // 4 角 UV：左上/右上/右下/左下（各占原图四分之一）
-    private static final float[][] CORNER_UVS = {
-        {0, 0, 0.5f, 0.5f},           // 左上
-        {0.5f, 0, 1, 0.5f},           // 右上
-        {0.5f, 0.5f, 1, 1},           // 右下
-        {0, 0.5f, 0.5f, 1},           // 左下
-    };
 
     private EntityLockRenderer() {}
 
@@ -94,14 +90,12 @@ public final class EntityLockRenderer {
         RenderSystem.defaultBlendFunc();
         RenderSystem.disableDepthTest();
         RenderSystem.setShader(GameRenderer::getPositionTexShader);
-        RenderSystem.setShaderTexture(0, LOCK_ICON);
 
         for (int i = 0; i < 4; i++) {
-            float u0 = CORNER_UVS[i][0], v0 = CORNER_UVS[i][1];
-            float u1 = CORNER_UVS[i][2], v1 = CORNER_UVS[i][3];
+            RenderSystem.setShaderTexture(0, CORNER_TEX[i]);
 
             var cornerPos = corners[i];
-            float cornerSize = 0.3f + dist * 0.02f; // 角片本身大小随距离微增
+            float cornerSize = 0.3f + dist * 0.02f;
             float hs = cornerSize / 2;
 
             poseStack.pushPose();
@@ -113,10 +107,10 @@ public final class EntityLockRenderer {
 
             BufferBuilder builder = Tesselator.getInstance().begin(
                 VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
-            builder.addVertex(-hs, -hs, 0).setUv(u0, v0);
-            builder.addVertex( hs, -hs, 0).setUv(u1, v0);
-            builder.addVertex( hs,  hs, 0).setUv(u1, v1);
-            builder.addVertex(-hs,  hs, 0).setUv(u0, v1);
+            builder.addVertex(-hs, -hs, 0).setUv(0, 0);
+            builder.addVertex( hs, -hs, 0).setUv(1, 0);
+            builder.addVertex( hs,  hs, 0).setUv(1, 1);
+            builder.addVertex(-hs,  hs, 0).setUv(0, 1);
             BufferUploader.drawWithShader(builder.buildOrThrow());
 
             poseStack.popPose();
