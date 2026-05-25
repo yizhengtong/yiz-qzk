@@ -9,7 +9,9 @@ import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.projectile.ProjectileUtil;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 
@@ -21,9 +23,8 @@ public final class EntityLockRenderer {
     private static final ResourceLocation LOCK_ICON =
         ResourceLocation.fromNamespaceAndPath("yizmodqzk", "textures/gui/lock_icon.png");
 
-    private static final float SIZE = 0.4f;
+    private static final float SIZE = 0.5f;
     private static final double RANGE = 16.0;
-    private static final double ANGLE_COS = 0.5; // cos(60°)
 
     private EntityLockRenderer() {}
 
@@ -33,34 +34,26 @@ public final class EntityLockRenderer {
         var mc = Minecraft.getInstance();
         if (mc.player == null || !(mc.level instanceof ClientLevel cl)) return;
 
-        // 视野前方 60° 内找最近存活实体
+        // 沿视线射线追踪第一个命中实体（精确瞄准）
         Vec3 eyePos = mc.player.getEyePosition();
         Vec3 lookVec = mc.player.getLookAngle();
-        Entity target = null;
-        double closestDist = RANGE * RANGE;
+        Vec3 endPos = eyePos.add(lookVec.scale(RANGE));
+        AABB searchBox = mc.player.getBoundingBox().expandTowards(lookVec.scale(RANGE)).inflate(1.0);
 
-        AABB searchBox = mc.player.getBoundingBox().inflate(RANGE);
-        for (Entity e : cl.entitiesForRendering()) {
-            if (e == mc.player || !e.isAlive() || !(e instanceof LivingEntity)) continue;
-
-            Vec3 toEntity = e.position().subtract(eyePos);
-            double distSqr = toEntity.lengthSqr();
-            if (distSqr > closestDist) continue;
-
-            // 角度检查：dot(lookVec, toEntity.normalized()) >= cos(60°)
-            double dot = lookVec.dot(toEntity) / Math.sqrt(distSqr);
-            if (dot >= ANGLE_COS) {
-                closestDist = distSqr;
-                target = e;
-            }
-        }
+        EntityHitResult hitResult = ProjectileUtil.getEntityHitResult(
+            mc.player, eyePos, endPos, searchBox,
+            e -> e instanceof LivingEntity && e != mc.player && e.isAlive(),
+            RANGE * RANGE
+        );
+        if (hitResult == null) return;
+        Entity target = hitResult.getEntity();
         if (target == null) return;
 
         Camera camera = event.getCamera();
         PoseStack poseStack = event.getPoseStack();
         Vec3 camPos = camera.getPosition();
 
-        Vec3 center = target.getBoundingBox().getCenter();
+        Vec3 center = new Vec3(target.getX(), target.getBoundingBox().maxY + 0.8, target.getZ());
 
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
