@@ -95,7 +95,7 @@ public final class EntityLockRenderer {
             ps.mulPose(camera.rotation());
 
             RenderSystem.setShaderTexture(0, CORNER_TEX[i]);
-            RenderSystem.setShaderColor(1f, ready ? 0.4f : 1f, ready ? 0.4f : 1f, alpha);
+            RenderSystem.setShaderColor(1f, 1f, 1f, alpha);
             float cs = CORNER_TEX_SIZE;
             BufferBuilder builder = Tesselator.getInstance().begin(
                 VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
