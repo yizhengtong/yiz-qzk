@@ -1,22 +1,27 @@
 package net.minecraft.client.yiz.client.render;
 
+import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.*;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.LevelRenderer;
-import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.GameRenderer;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
-import com.mojang.blaze3d.vertex.PoseStack;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 
-/**
- * 锁定目标瞄准框 — 仿 F3+B 碰撞箱渲染，纯世界坐标。
- */
 public final class EntityLockRenderer {
 
     private static final double RANGE = 32.0;
+
+    private static final ResourceLocation[] CORNER_TEX = {
+        ResourceLocation.fromNamespaceAndPath("yizmodqzk", "textures/gui/lock_tl.png"),
+        ResourceLocation.fromNamespaceAndPath("yizmodqzk", "textures/gui/lock_tr.png"),
+        ResourceLocation.fromNamespaceAndPath("yizmodqzk", "textures/gui/lock_br.png"),
+        ResourceLocation.fromNamespaceAndPath("yizmodqzk", "textures/gui/lock_bl.png"),
+    };
 
     private EntityLockRenderer() {}
 
@@ -26,7 +31,6 @@ public final class EntityLockRenderer {
         var mc = Minecraft.getInstance();
         if (mc.player == null || mc.level == null) return;
 
-        // 60° 圆锥找最接近屏幕中心的实体
         Vec3 eyePos = mc.player.getEyePosition();
         var lookVec = mc.player.getLookAngle();
         AABB searchBox = mc.player.getBoundingBox().inflate(RANGE);
@@ -49,13 +53,11 @@ public final class EntityLockRenderer {
         Camera camera = event.getCamera();
         Vec3 camPos = camera.getPosition();
 
-        // 身体中心世界坐标
+        // 身体中心 + 面向玩家局部坐标系
         Vec3 bodyCenter = new Vec3(target.getX(), target.getY() + target.getBbHeight() * 0.7, target.getZ());
-
-        // 面向玩家的局部坐标系
-        Vec3 forward = camPos.subtract(bodyCenter).normalize(); // Z = 指向玩家
+        Vec3 forward = camPos.subtract(bodyCenter).normalize();
         Vec3 worldUp = new Vec3(0, 1, 0);
-        Vec3 right = new Vec3(worldUp.x, worldUp.y, worldUp.z).cross(forward).normalize();
+        Vec3 right = new Vec3(0, 1, 0).cross(forward).normalize();
         Vec3 up = forward.cross(right).normalize();
 
         // 框大小
@@ -63,22 +65,37 @@ public final class EntityLockRenderer {
         float t = Math.clamp((dist - 3f) / 9f, 0, 1);
         float hs = 0.5f * (0.4f + t * 0.6f);
 
-        var bufferSource = mc.renderBuffers().bufferSource();
-        var consumer = bufferSource.getBuffer(RenderType.LINES);
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
+        RenderSystem.disableDepthTest();
+        RenderSystem.setShader(GameRenderer::getPositionTexShader);
 
-        float s = 0.06f;
-        // 4 个角的局部坐标（上下左右），用局部坐标系展开成世界坐标
+        float cs = 0.2f; // 角片半边长
         float[][] localCorners = {{-hs, hs}, {hs, hs}, {hs, -hs}, {-hs, -hs}};
-        for (float[] lc : localCorners) {
-            Vec3 worldPos = bodyCenter.add(right.scale(lc[0])).add(up.scale(lc[1]));
+        for (int i = 0; i < 4; i++) {
+            Vec3 worldPos = bodyCenter.add(right.scale(localCorners[i][0])).add(up.scale(localCorners[i][1]));
             double rx = worldPos.x - camPos.x;
             double ry = worldPos.y - camPos.y;
             double rz = worldPos.z - camPos.z;
 
             PoseStack ps = new PoseStack();
             ps.translate(rx, ry, rz);
-            LevelRenderer.renderLineBox(ps, consumer,
-                new AABB(-s, -s, -s,  s,  s,  s), 1f, 0.2f, 0.2f, 1f);
+            ps.mulPose(camera.rotation());
+
+            RenderSystem.setShaderTexture(0, CORNER_TEX[i]);
+            RenderSystem.getModelViewStack().set(ps.last().pose());
+            RenderSystem.applyModelViewMatrix();
+
+            BufferBuilder builder = Tesselator.getInstance().begin(
+                VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
+            builder.addVertex(-cs, -cs, 0).setUv(0, 0);
+            builder.addVertex( cs, -cs, 0).setUv(1, 0);
+            builder.addVertex( cs,  cs, 0).setUv(1, 1);
+            builder.addVertex(-cs,  cs, 0).setUv(0, 1);
+            BufferUploader.drawWithShader(builder.buildOrThrow());
         }
+
+        RenderSystem.enableDepthTest();
+        RenderSystem.disableBlend();
     }
 }
