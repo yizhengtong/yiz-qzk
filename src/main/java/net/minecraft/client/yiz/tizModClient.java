@@ -170,8 +170,7 @@ public class tizModClient {
         }
 
         // 渲染锁定目标瞄准框
-        net.minecraft.client.yiz.client.render.EntityLockRenderer.renderOverlay(
-            event.getGuiGraphics().pose());
+        // (改为 RenderLevelStageEvent 中执行)
 
         // 清理悬停状态，下一帧如果没有 tooltip 事件就不再显示
         pendingItemStack = ItemStack.EMPTY;
@@ -180,6 +179,11 @@ public class tizModClient {
     // ══════════════════════════════════════════════════════════════════
     //  锁定目标图标渲染
     // ══════════════════════════════════════════════════════════════════
+
+    @SubscribeEvent
+    public void onRenderLevelStage(RenderLevelStageEvent event) {
+        net.minecraft.client.yiz.client.render.EntityLockRenderer.onRenderLevelStage(event);
+    }
 
     // ══════════════════════════════════════════════════════════════════
     //  容器数据持久化事件挂钩（通过 ChestDataManager 管理）
