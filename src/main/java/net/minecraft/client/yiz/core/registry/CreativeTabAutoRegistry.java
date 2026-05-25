@@ -5,9 +5,6 @@ import net.minecraft.client.yiz.api.ISkillItem;
 import net.minecraft.client.yiz.api.ITalentItem;
 import net.minecraft.client.yiz.api.IWeaponItem;
 import net.minecraft.client.yiz.effect.AbstractEffect;
-import net.minecraft.client.yiz.effect.perception.ContainerPerception;
-import net.minecraft.client.yiz.effect.perception.EntityPerception;
-import net.minecraft.client.yiz.effect.perception.ItemPerception;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
@@ -18,6 +15,8 @@ import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.CustomData;
+import net.minecraft.world.item.component.ItemLore;
+import java.util.ArrayList;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModList;
 import net.neoforged.neoforge.registries.RegisterEvent;
@@ -70,28 +69,22 @@ public final class CreativeTabAutoRegistry {
                 .add(item);
         }
 
-        // 预收集效果 — 按 (modId, category) 分组
-        Map<String, Map<String, List<AbstractEffect>>> effectGroups = new LinkedHashMap<>();
+        // 预收集效果 — 按 modId 分组，全部归入天赋页
+        Map<String, List<AbstractEffect>> effectsByMod = new LinkedHashMap<>();
         for (AbstractEffect effect : ModRegistries.getAllEffects()) {
             String modId = effect.getId().getNamespace();
-            String cat = perceptionToCategory(effect);
-            if (cat == null) continue;
-            effectGroups
-                .computeIfAbsent(modId, k -> new LinkedHashMap<>())
-                .computeIfAbsent(cat, k -> new ArrayList<>())
-                .add(effect);
+            effectsByMod.computeIfAbsent(modId, k -> new ArrayList<>()).add(effect);
         }
 
         for (Map.Entry<String, Map<String, List<Item>>> modEntry : grouped.entrySet()) {
             String modId = modEntry.getKey();
             String modName = getModDisplayName(modId);
             Map<String, List<Item>> itemCats = modEntry.getValue();
-            Map<String, List<AbstractEffect>> effectCats = effectGroups.getOrDefault(modId, Map.of());
+            List<AbstractEffect> allEffects = effectsByMod.getOrDefault(modId, List.of());
 
             for (Map.Entry<String, List<Item>> catEntry : itemCats.entrySet()) {
                 String categoryKey = catEntry.getKey();
                 List<Item> items = catEntry.getValue();
-                List<AbstractEffect> effects = effectCats.getOrDefault(categoryKey, List.of());
 
                 String label = TAB_LABELS.getOrDefault(categoryKey, categoryKey);
                 ResourceLocation tabId = ResourceLocation.fromNamespaceAndPath(modId, categoryKey);
@@ -101,19 +94,30 @@ public final class CreativeTabAutoRegistry {
                     .title(Component.literal(modName + "-" + label))
                     .icon(() -> new ItemStack(iconItem))
                     .displayItems((params, output) -> {
-                        // 1. 输出基础物品
                         for (Item item : items) {
                             if (item != null) output.accept(item);
                         }
-                        // 2. 为每个匹配效果生成 NBT 容器物品
-                        Item containerItem = iconItem;
-                        for (AbstractEffect eff : effects) {
-                            ItemStack nbtStack = new ItemStack(containerItem);
-                            CompoundTag tag = new CompoundTag();
-                            tag.putString("yizmodqzk:contained_effect", eff.getId().toString());
-                            tag.putInt("yizmodqzk:max_level", eff.getLevel());
-                            nbtStack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
-                            output.accept(nbtStack);
+                        // 天赋页额外生成 NBT 容器物品（每个效果一个）
+                        if ("talent".equals(categoryKey)) {
+                            for (AbstractEffect eff : allEffects) {
+                                ItemStack nbtStack = new ItemStack(iconItem);
+                                nbtStack.set(DataComponents.CUSTOM_NAME,
+                                    Component.literal(eff.getDisplayName()));
+                                // 天赋详情行 → 物品 lore
+                                List<String> detailLines = eff.getTalentDetailLines(null);
+                                if (!detailLines.isEmpty()) {
+                                    List<Component> lore = new ArrayList<>();
+                                    for (String line : detailLines) {
+                                        lore.add(Component.literal(line));
+                                    }
+                                    nbtStack.set(DataComponents.LORE, new ItemLore(lore));
+                                }
+                                CompoundTag tag = new CompoundTag();
+                                tag.putString("yizmodqzk:contained_effect", eff.getId().toString());
+                                tag.putInt("yizmodqzk:max_level", eff.getLevel());
+                                nbtStack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
+                                output.accept(nbtStack);
+                            }
                         }
                     })
                     .build();
@@ -121,16 +125,6 @@ public final class CreativeTabAutoRegistry {
                 helper.register(tabId, tab);
             }
         }
-    }
-
-    /** 效果感知类型 → 标签页类别 */
-    private static String perceptionToCategory(AbstractEffect effect) {
-        for (var mode : effect.getPerceptionModes()) {
-            if (mode instanceof EntityPerception) return "talent";
-            if (mode instanceof ItemPerception) return "skill";
-            if (mode instanceof ContainerPerception) return "item";
-        }
-        return null;
     }
 
     private static String getCategory(Item item) {
