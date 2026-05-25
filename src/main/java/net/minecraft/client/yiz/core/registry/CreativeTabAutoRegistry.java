@@ -4,34 +4,26 @@ import net.minecraft.client.yiz.api.IGeneralItem;
 import net.minecraft.client.yiz.api.ISkillItem;
 import net.minecraft.client.yiz.api.ITalentItem;
 import net.minecraft.client.yiz.api.IWeaponItem;
+import net.minecraft.client.yiz.effect.AbstractEffect;
+import net.minecraft.client.yiz.effect.perception.ContainerPerception;
+import net.minecraft.client.yiz.effect.perception.EntityPerception;
+import net.minecraft.client.yiz.effect.perception.ItemPerception;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.CustomData;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModList;
 import net.neoforged.neoforge.registries.RegisterEvent;
 
 import java.util.*;
 
-/**
- * 创造标签页自动注册器。
- * <p>
- * 扫描所有已注册 Item，按 4 种 API 接口 + 模组 ID 分组，
- * 为非空分组自动创建 CreativeModeTab。
- * </p>
- *
- * <h3>4 母页</h3>
- * <ul>
- *   <li>A 天赋页 — {@link ITalentItem}</li>
- *   <li>B 技能页 — {@link ISkillItem}</li>
- *   <li>C 物品页 — {@link IGeneralItem}</li>
- *   <li>D 武器装备页 — {@link IWeaponItem}</li>
- * </ul>
- */
 public final class CreativeTabAutoRegistry {
 
     private static final Map<String, Class<?>> TAB_CATEGORIES = new LinkedHashMap<>();
@@ -51,13 +43,10 @@ public final class CreativeTabAutoRegistry {
 
     private CreativeTabAutoRegistry() {}
 
-    /**
-     * 在模组构造器中调用，注册 CREATIVE_MODE_TAB 监听器。
-     */
     public static void init(IEventBus modEventBus) {
         modEventBus.addListener(RegisterEvent.class, event -> {
-            event.register(Registries.CREATIVE_MODE_TAB, registry ->
-                registerAllTabs(registry)
+            event.register(Registries.CREATIVE_MODE_TAB, helper ->
+                registerAllTabs(helper)
             );
         });
     }
@@ -81,14 +70,28 @@ public final class CreativeTabAutoRegistry {
                 .add(item);
         }
 
+        // 预收集效果 — 按 (modId, category) 分组
+        Map<String, Map<String, List<AbstractEffect>>> effectGroups = new LinkedHashMap<>();
+        for (AbstractEffect effect : ModRegistries.getAllEffects()) {
+            String modId = effect.getId().getNamespace();
+            String cat = perceptionToCategory(effect);
+            if (cat == null) continue;
+            effectGroups
+                .computeIfAbsent(modId, k -> new LinkedHashMap<>())
+                .computeIfAbsent(cat, k -> new ArrayList<>())
+                .add(effect);
+        }
+
         for (Map.Entry<String, Map<String, List<Item>>> modEntry : grouped.entrySet()) {
             String modId = modEntry.getKey();
             String modName = getModDisplayName(modId);
+            Map<String, List<Item>> itemCats = modEntry.getValue();
+            Map<String, List<AbstractEffect>> effectCats = effectGroups.getOrDefault(modId, Map.of());
 
-            for (Map.Entry<String, List<Item>> catEntry : modEntry.getValue().entrySet()) {
+            for (Map.Entry<String, List<Item>> catEntry : itemCats.entrySet()) {
                 String categoryKey = catEntry.getKey();
                 List<Item> items = catEntry.getValue();
-                if (items.isEmpty()) continue;
+                List<AbstractEffect> effects = effectCats.getOrDefault(categoryKey, List.of());
 
                 String label = TAB_LABELS.getOrDefault(categoryKey, categoryKey);
                 ResourceLocation tabId = ResourceLocation.fromNamespaceAndPath(modId, categoryKey);
@@ -98,10 +101,19 @@ public final class CreativeTabAutoRegistry {
                     .title(Component.literal(modName + "-" + label))
                     .icon(() -> new ItemStack(iconItem))
                     .displayItems((params, output) -> {
+                        // 1. 输出基础物品
                         for (Item item : items) {
-                            if (item != null) {
-                                output.accept(item);
-                            }
+                            if (item != null) output.accept(item);
+                        }
+                        // 2. 为每个匹配效果生成 NBT 容器物品
+                        Item containerItem = iconItem;
+                        for (AbstractEffect eff : effects) {
+                            ItemStack nbtStack = new ItemStack(containerItem);
+                            CompoundTag tag = new CompoundTag();
+                            tag.putString("yizmodqzk:contained_effect", eff.getId().toString());
+                            tag.putInt("yizmodqzk:max_level", eff.getLevel());
+                            nbtStack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
+                            output.accept(nbtStack);
                         }
                     })
                     .build();
@@ -109,6 +121,16 @@ public final class CreativeTabAutoRegistry {
                 helper.register(tabId, tab);
             }
         }
+    }
+
+    /** 效果感知类型 → 标签页类别 */
+    private static String perceptionToCategory(AbstractEffect effect) {
+        for (var mode : effect.getPerceptionModes()) {
+            if (mode instanceof EntityPerception) return "talent";
+            if (mode instanceof ItemPerception) return "skill";
+            if (mode instanceof ContainerPerception) return "item";
+        }
+        return null;
     }
 
     private static String getCategory(Item item) {

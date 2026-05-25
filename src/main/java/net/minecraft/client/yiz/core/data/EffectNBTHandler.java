@@ -171,6 +171,16 @@ public final class EffectNBTHandler {
     }
 
     /**
+     * 给物品写入容器效果 ID 和最大等级，使其成为附魔书式的效果容器。
+     */
+    public static void setContainedEffect(ItemStack stack, ResourceLocation effectId, int maxLevel) {
+        CompoundTag tag = getOrCreateInternalData(stack);
+        tag.putString("contained_effect", effectId.toString());
+        tag.putInt("max_level", maxLevel);
+        saveInternalData(stack, tag);
+    }
+
+    /**
      * 检查物品是否有任何效果。
      */
     public static boolean hasEffects(ItemStack stack) {
