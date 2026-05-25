@@ -49,19 +49,17 @@ public final class EntityLockRenderer {
         Camera camera = event.getCamera();
         Vec3 camPos = camera.getPosition();
 
-        // 实体位置（相对相机）— 与 F3+B 碰撞箱完全相同的定位方式
+        // 实体身体中心（相对相机）
+        double bodyY = target.getY() + target.getBbHeight() * 0.7;
         double ex = target.getX() - camPos.x;
-        double ey = target.getY() - camPos.y;
+        double ey = bodyY - camPos.y;
         double ez = target.getZ() - camPos.z;
 
         PoseStack poseStack = event.getPoseStack();
         poseStack.pushPose();
         poseStack.translate(ex, ey, ez);
 
-        // 身体中心（实体局部坐标：X=0, Z=0, Y=半高偏下）
-        float cy = (float)(target.getBbHeight() * 0.7f);
-
-        // 固定缩放框大小（只随距离变化，不随实体大小）
+        // 固定缩放框大小（只在实体中心展开，无固定朝向偏移）
         float dist = (float) target.position().distanceTo(camPos);
         float t = Math.clamp((dist - 3f) / 9f, 0, 1);
         float factor = 0.4f + t * 0.6f;
@@ -70,16 +68,16 @@ public final class EntityLockRenderer {
         var bufferSource = mc.renderBuffers().bufferSource();
         var consumer = bufferSource.getBuffer(RenderType.LINES);
 
-        // 4 个红色角点标记（固定正方形框）
-        float s = 0.06f; // 小方块的半边长
+        // 4 个角在身体中心展开（Z=0 不偏移，从任何角度都看到框的中心）
+        float s = 0.06f;
         LevelRenderer.renderLineBox(poseStack, consumer,
-            new AABB(-hs - s, cy + hs - s, -hs - s, -hs + s, cy + hs + s, -hs + s), 1f, 0.2f, 0.2f, 1f);
+            new AABB(-hs - s, hs - s, -s, -hs + s, hs + s,  s), 1f, 0.2f, 0.2f, 1f);
         LevelRenderer.renderLineBox(poseStack, consumer,
-            new AABB( hs - s, cy + hs - s, -hs - s,  hs + s, cy + hs + s, -hs + s), 1f, 0.2f, 0.2f, 1f);
+            new AABB( hs - s, hs - s, -s,  hs + s, hs + s,  s), 1f, 0.2f, 0.2f, 1f);
         LevelRenderer.renderLineBox(poseStack, consumer,
-            new AABB( hs - s, cy - hs - s, -hs - s,  hs + s, cy - hs + s, -hs + s), 1f, 0.2f, 0.2f, 1f);
+            new AABB( hs - s,-hs - s, -s,  hs + s,-hs + s,  s), 1f, 0.2f, 0.2f, 1f);
         LevelRenderer.renderLineBox(poseStack, consumer,
-            new AABB(-hs - s, cy - hs - s, -hs - s, -hs + s, cy - hs + s, -hs + s), 1f, 0.2f, 0.2f, 1f);
+            new AABB(-hs - s,-hs - s, -s, -hs + s,-hs + s,  s), 1f, 0.2f, 0.2f, 1f);
 
         poseStack.popPose();
     }
