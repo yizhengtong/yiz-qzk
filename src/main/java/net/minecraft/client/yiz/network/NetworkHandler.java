@@ -49,6 +49,11 @@ public final class NetworkHandler {
             SyncDaoPalacePayload.STREAM_CODEC,
             SyncDaoPalacePayload::handle
         );
+        registrar.playToClient(
+            SyncLockPayload.TYPE,
+            SyncLockPayload.STREAM_CODEC,
+            SyncLockPayload::handle
+        );
     }
 
     /**

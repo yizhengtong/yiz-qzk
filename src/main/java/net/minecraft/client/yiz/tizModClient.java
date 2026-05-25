@@ -22,6 +22,7 @@ import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.neoforge.client.event.InputEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
+import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import net.neoforged.neoforge.client.event.RenderTooltipEvent;
 import net.neoforged.neoforge.client.event.TextureAtlasStitchedEvent;
 import net.neoforged.neoforge.client.event.ScreenEvent;
@@ -170,6 +171,15 @@ public class tizModClient {
 
         // 清理悬停状态，下一帧如果没有 tooltip 事件就不再显示
         pendingItemStack = ItemStack.EMPTY;
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  锁定目标图标渲染
+    // ══════════════════════════════════════════════════════════════════
+
+    @SubscribeEvent
+    public void onRenderLevelStage(RenderLevelStageEvent event) {
+        net.minecraft.client.yiz.client.render.EntityLockRenderer.onRenderLevelStage(event);
     }
 
     // ══════════════════════════════════════════════════════════════════
