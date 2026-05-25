@@ -6,8 +6,11 @@ import net.minecraft.client.yiz.api.ProjectileReflectionSystem;
 import net.minecraft.client.yiz.api.RealmProgressionAPI;
 import net.minecraft.client.yiz.core.asm.AsmBootstrapper;
 import net.minecraft.client.yiz.core.data.EffectDataLoader;
+import net.minecraft.client.yiz.core.event.EffectEventBus;
 import net.minecraft.client.yiz.core.registry.CreativeTabAutoRegistry;
 import net.minecraft.client.yiz.core.registry.ModAttachments;
+import net.minecraft.client.yiz.core.registry.ModRegistries;
+import net.minecraft.client.yiz.effect.EffectContext;
 import net.minecraft.client.yiz.effect.unlock.UnlockManager;
 import net.minecraft.client.yiz.effect.unlock.UnlockSavedData;
 import net.minecraft.client.yiz.network.NetworkHandler;
@@ -127,6 +130,10 @@ public class tizMod {
             EffectEventBus.dispatchContext(
                 EffectContext.create(event.getEntity(), null)
             );
+            if (event.getEntity().tickCount % 40 == 0) {
+                LOGGER.info("[TICK] effect dispatch, effects registered: {}",
+                    ModRegistries.getAllEffects().size());
+            }
         }
     }
 
