@@ -63,29 +63,24 @@ public final class EntityLockRenderer {
         Vec3 camPos = camera.getPosition();
         var bb = target.getBoundingBox();
 
-        // 碰撞箱尺寸
-        double halfW = (bb.maxX - bb.minX) * 0.5;
-        double halfH = (bb.maxY - bb.minY) * 0.5;
-        double halfD = (bb.maxZ - bb.minZ) * 0.5;
+        // 碰撞箱中心 + 正方形框大小
         double cx = (bb.minX + bb.maxX) * 0.5;
         double cy = (bb.minY + bb.maxY) * 0.5;
         double cz = (bb.minZ + bb.maxZ) * 0.5;
+        float boxSize = (float) Math.max(bb.maxX - bb.minX, bb.maxY - bb.minY) * 0.6f;
 
-        // 距离比例：近处内缩 40%，远处 100%
+        // 距离比例缩放
         float dist = (float) camPos.distanceTo(new Vec3(cx, cy, cz));
         float t = Math.clamp((dist - (float)CLOSE_DIST) / (float)(FAR_DIST - CLOSE_DIST), 0, 1);
         float factor = 0.4f + t * 0.6f;
+        float hs = boxSize * factor * 0.5f;
 
-        float hw = (float)(halfW * factor);
-        float hh = (float)(halfH * factor);
-        float hd = (float)(halfD * factor);
-
-        // 4 个角片的世界坐标（取目标朝向玩家的面）
+        // 正方形 4 角
         Vec3[] corners = {
-            new Vec3(cx - hw, cy + hh, cz - hd),  // 左上
-            new Vec3(cx + hw, cy + hh, cz - hd),  // 右上
-            new Vec3(cx + hw, cy - hh, cz - hd),  // 右下
-            new Vec3(cx - hw, cy - hh, cz - hd),  // 左下
+            new Vec3(cx - hs, cy + hs, cz),  // 左上
+            new Vec3(cx + hs, cy + hs, cz),  // 右上
+            new Vec3(cx + hs, cy - hs, cz),  // 右下
+            new Vec3(cx - hs, cy - hs, cz),  // 左下
         };
 
         PoseStack poseStack = event.getPoseStack();
@@ -99,8 +94,7 @@ public final class EntityLockRenderer {
             RenderSystem.setShaderTexture(0, CORNER_TEX[i]);
 
             var cornerPos = corners[i];
-            float cornerSize = 0.3f + dist * 0.02f;
-            float hs = cornerSize / 2;
+            float cSize = 0.25f; // 角片固定大小
 
             poseStack.pushPose();
             poseStack.translate(cornerPos.x - camPos.x, cornerPos.y - camPos.y, cornerPos.z - camPos.z);
@@ -111,10 +105,11 @@ public final class EntityLockRenderer {
 
             BufferBuilder builder = Tesselator.getInstance().begin(
                 VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
-            builder.addVertex(-hs, -hs, 0).setUv(0, 0);
-            builder.addVertex( hs, -hs, 0).setUv(1, 0);
-            builder.addVertex( hs,  hs, 0).setUv(1, 1);
-            builder.addVertex(-hs,  hs, 0).setUv(0, 1);
+            float chs = 0.125f; // 角片自身半尺寸
+            builder.addVertex(-chs, -chs, 0).setUv(0, 0);
+            builder.addVertex( chs, -chs, 0).setUv(1, 0);
+            builder.addVertex( chs,  chs, 0).setUv(1, 1);
+            builder.addVertex(-chs,  chs, 0).setUv(0, 1);
             BufferUploader.drawWithShader(builder.buildOrThrow());
 
             poseStack.popPose();
