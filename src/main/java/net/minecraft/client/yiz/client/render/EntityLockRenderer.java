@@ -15,8 +15,10 @@ import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 
 /**
- * 锁定目标图标渲染器 — 沿玩家视线射线追踪目标，在实体碰撞箱垂直中点绘制
- * 始终保持面对玩家的 billboard 图标，保持固定屏幕空间大小。
+ * 锁定目标图标渲染器 — 4 角片包围碰撞箱的瞄准框。
+ * <p>
+ * 近处角片相对碰撞箱内缩，远处完全贴合碰撞箱四角。
+ * </p>
  */
 public final class EntityLockRenderer {
 
@@ -24,7 +26,16 @@ public final class EntityLockRenderer {
         ResourceLocation.fromNamespaceAndPath("yizmodqzk", "textures/gui/lock_icon.png");
 
     private static final double RANGE = 32.0;
-    private static final float SCREEN_SIZE = 0.4f; // 固定屏幕比例大小
+    private static final double CLOSE_DIST = 3.0;
+    private static final double FAR_DIST = 12.0;
+
+    // 4 角 UV：左上/右上/右下/左下（各占原图四分之一）
+    private static final float[][] CORNER_UVS = {
+        {0, 0, 0.5f, 0.5f},           // 左上
+        {0.5f, 0, 1, 0.5f},           // 右上
+        {0.5f, 0.5f, 1, 1},           // 右下
+        {0, 0.5f, 0.5f, 1},           // 左下
+    };
 
     private EntityLockRenderer() {}
 
@@ -34,7 +45,7 @@ public final class EntityLockRenderer {
         var mc = Minecraft.getInstance();
         if (mc.player == null) return;
 
-        // 射线追踪
+        // 射线追踪找目标
         Vec3 eyePos = mc.player.getEyePosition();
         Vec3 lookVec = mc.player.getLookAngle();
         Vec3 endPos = eyePos.add(lookVec.scale(RANGE));
@@ -47,28 +58,37 @@ public final class EntityLockRenderer {
         );
         if (hitResult == null) return;
         Entity target = hitResult.getEntity();
-        if (target == null) return;
 
         Camera camera = event.getCamera();
         Vec3 camPos = camera.getPosition();
-        // 目标碰撞箱垂直中点（从上到下高度一半）
         var bb = target.getBoundingBox();
-        Vec3 worldPos = new Vec3(target.getX(), (bb.minY + bb.maxY) * 0.5, target.getZ());
 
-        // 计算距离 → 缩放（屏幕大小固定）
-        float dist = (float) worldPos.distanceTo(camPos);
-        float scale = Math.max(0.1f, dist * SCREEN_SIZE);
+        // 碰撞箱尺寸
+        double halfW = (bb.maxX - bb.minX) * 0.5;
+        double halfH = (bb.maxY - bb.minY) * 0.5;
+        double halfD = (bb.maxZ - bb.minZ) * 0.5;
+        double cx = (bb.minX + bb.maxX) * 0.5;
+        double cy = (bb.minY + bb.maxY) * 0.5;
+        double cz = (bb.minZ + bb.maxZ) * 0.5;
+
+        // 距离比例：近处内缩 40%，远处 100%
+        float dist = (float) camPos.distanceTo(new Vec3(cx, cy, cz));
+        float t = Math.clamp((dist - (float)CLOSE_DIST) / (float)(FAR_DIST - CLOSE_DIST), 0, 1);
+        float factor = 0.4f + t * 0.6f;
+
+        float hw = (float)(halfW * factor);
+        float hh = (float)(halfH * factor);
+        float hd = (float)(halfD * factor);
+
+        // 4 个角片的世界坐标（取目标朝向玩家的面）
+        Vec3[] corners = {
+            new Vec3(cx - hw, cy + hh, cz - hd),  // 左上
+            new Vec3(cx + hw, cy + hh, cz - hd),  // 右上
+            new Vec3(cx + hw, cy - hh, cz - hd),  // 右下
+            new Vec3(cx - hw, cy - hh, cz - hd),  // 左下
+        };
 
         PoseStack poseStack = event.getPoseStack();
-        poseStack.pushPose();
-        // 世界坐标 → 相对相机
-        poseStack.translate(worldPos.x - camPos.x, worldPos.y - camPos.y, worldPos.z - camPos.z);
-        // 旋转到面对相机的 billboard
-        poseStack.mulPose(camera.rotation());
-
-        // 上传矩阵到 RenderSystem
-        RenderSystem.getModelViewStack().set(poseStack.last().pose());
-        RenderSystem.applyModelViewMatrix();
 
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
@@ -76,15 +96,32 @@ public final class EntityLockRenderer {
         RenderSystem.setShader(GameRenderer::getPositionTexShader);
         RenderSystem.setShaderTexture(0, LOCK_ICON);
 
-        float h = scale / 2;
-        BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
-        builder.addVertex(-h, -h, 0).setUv(0, 0);
-        builder.addVertex( h, -h, 0).setUv(1, 0);
-        builder.addVertex( h,  h, 0).setUv(1, 1);
-        builder.addVertex(-h,  h, 0).setUv(0, 1);
-        BufferUploader.drawWithShader(builder.buildOrThrow());
+        for (int i = 0; i < 4; i++) {
+            float u0 = CORNER_UVS[i][0], v0 = CORNER_UVS[i][1];
+            float u1 = CORNER_UVS[i][2], v1 = CORNER_UVS[i][3];
 
-        poseStack.popPose();
+            var cornerPos = corners[i];
+            float cornerSize = 0.3f + dist * 0.02f; // 角片本身大小随距离微增
+            float hs = cornerSize / 2;
+
+            poseStack.pushPose();
+            poseStack.translate(cornerPos.x - camPos.x, cornerPos.y - camPos.y, cornerPos.z - camPos.z);
+            poseStack.mulPose(camera.rotation());
+
+            RenderSystem.getModelViewStack().set(poseStack.last().pose());
+            RenderSystem.applyModelViewMatrix();
+
+            BufferBuilder builder = Tesselator.getInstance().begin(
+                VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
+            builder.addVertex(-hs, -hs, 0).setUv(u0, v0);
+            builder.addVertex( hs, -hs, 0).setUv(u1, v0);
+            builder.addVertex( hs,  hs, 0).setUv(u1, v1);
+            builder.addVertex(-hs,  hs, 0).setUv(u0, v1);
+            BufferUploader.drawWithShader(builder.buildOrThrow());
+
+            poseStack.popPose();
+        }
+
         // 恢复 RenderSystem 矩阵
         RenderSystem.getModelViewStack().set(poseStack.last().pose());
         RenderSystem.applyModelViewMatrix();
