@@ -70,29 +70,25 @@ public final class EntityLockRenderer {
         RenderSystem.disableDepthTest();
         RenderSystem.setShader(GameRenderer::getPositionTexShader);
 
-        float cs = 0.2f; // 角片半边长
+        float cs = 0.2f;
+        PoseStack ps = event.getPoseStack();
         float[][] localCorners = {{-hs, hs}, {hs, hs}, {hs, -hs}, {-hs, -hs}};
         for (int i = 0; i < 4; i++) {
             Vec3 worldPos = bodyCenter.add(right.scale(localCorners[i][0])).add(up.scale(localCorners[i][1]));
-            double rx = worldPos.x - camPos.x;
-            double ry = worldPos.y - camPos.y;
-            double rz = worldPos.z - camPos.z;
-
-            PoseStack ps = new PoseStack();
-            ps.translate(rx, ry, rz);
+            ps.pushPose();
+            ps.translate(worldPos.x - camPos.x, worldPos.y - camPos.y, worldPos.z - camPos.z);
             ps.mulPose(camera.rotation());
 
             RenderSystem.setShaderTexture(0, CORNER_TEX[i]);
-            RenderSystem.getModelViewStack().set(ps.last().pose());
-            RenderSystem.applyModelViewMatrix();
-
             BufferBuilder builder = Tesselator.getInstance().begin(
                 VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
-            builder.addVertex(-cs, -cs, 0).setUv(0, 0);
-            builder.addVertex( cs, -cs, 0).setUv(1, 0);
-            builder.addVertex( cs,  cs, 0).setUv(1, 1);
-            builder.addVertex(-cs,  cs, 0).setUv(0, 1);
+            builder.addVertex(ps.last().pose(), -cs, -cs, 0).setUv(0, 0);
+            builder.addVertex(ps.last().pose(),  cs, -cs, 0).setUv(1, 0);
+            builder.addVertex(ps.last().pose(),  cs,  cs, 0).setUv(1, 1);
+            builder.addVertex(ps.last().pose(), -cs,  cs, 0).setUv(0, 1);
             BufferUploader.drawWithShader(builder.buildOrThrow());
+
+            ps.popPose();
         }
 
         RenderSystem.enableDepthTest();
