@@ -65,7 +65,7 @@ public final class EntityLockRenderer {
         float t = Math.clamp(dist / 12f, 0, 1);
         float factor = 0.2f + t * 0.8f; // 近处 20%，远处 100%
         float hs = 0.5f * factor;
-        float alpha = 0.3f + t * 0.7f; // 近处 30% 透明，远处 100%
+        float alpha = t * t; // 平方淡入：0格=0%，6格=25%，12格=100%
 
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
