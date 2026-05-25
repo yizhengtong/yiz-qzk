@@ -5,6 +5,8 @@ import net.minecraft.client.yiz.api.DaoPalaceAPI;
 import net.minecraft.client.yiz.api.ProjectileReflectionSystem;
 import net.minecraft.client.yiz.api.RealmProgressionAPI;
 import net.minecraft.client.yiz.core.asm.AsmBootstrapper;
+import net.minecraft.client.yiz.core.event.EffectEventBus;
+import net.minecraft.client.yiz.effect.EffectContext;
 import net.minecraft.client.yiz.core.data.EffectDataLoader;
 import net.minecraft.client.yiz.core.registry.CreativeTabAutoRegistry;
 import net.minecraft.client.yiz.core.registry.ModAttachments;
@@ -122,6 +124,12 @@ public class tizMod {
     private void onPlayerTick(PlayerTickEvent.Post event) {
         ProjectileReflectionSystem.tick(event.getEntity());
         AttributeBalanceRegistry.enforceFloors(event.getEntity());
+        // 每 tick 分发效果上下文（驱动词缀/随影持续效果，服务端）
+        if (!event.getEntity().level().isClientSide) {
+            EffectEventBus.dispatchContext(
+                EffectContext.create(event.getEntity(), null)
+            );
+        }
     }
 
     // ==================== 解锁数据持久化 ====================

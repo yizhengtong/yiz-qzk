@@ -89,8 +89,10 @@ public final class EffectEventBus {
                     continue;
                 }
 
-                // 2. 检查解锁状态
-                if (!effect.isUnlocked(entity)) {
+                // 2. 检查解锁状态（仅 EntityPerception 需要解锁）
+                boolean needsUnlock = effect.getPerceptionModes().stream()
+                    .anyMatch(m -> m instanceof net.minecraft.client.yiz.effect.perception.EntityPerception);
+                if (needsUnlock && !effect.isUnlocked(entity)) {
                     continue;
                 }
 
