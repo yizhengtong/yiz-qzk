@@ -69,10 +69,11 @@ public final class ItemInfoUI {
         List<AbstractEffect> effects = EffectNBTHandler.getItemEffects(stack);
         if (!effects.isEmpty()) {
             for (AbstractEffect effect : effects) {
+                int lvl = EffectNBTHandler.getEffectLevel(stack, effect.getId());
                 String effectLine = String.format(" §7[§f%s§7] §f%s §7(Lv.%d)",
                     effect.getParentType().getChineseName(),
                     effect.getDisplayName(),
-                    effect.getLevel()
+                    lvl > 0 ? lvl : effect.getLevel()
                 );
                 lines.add(Component.literal(effectLine));
             }

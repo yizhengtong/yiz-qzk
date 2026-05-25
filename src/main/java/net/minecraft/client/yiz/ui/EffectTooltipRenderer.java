@@ -7,11 +7,13 @@ import net.minecraft.client.yiz.core.data.EffectNBTHandler;
 import net.minecraft.client.yiz.effect.AbstractEffect;
 import net.minecraft.client.yiz.effect.rarity.Rarity;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 效果文本渲染器
@@ -67,16 +69,17 @@ public final class EffectTooltipRenderer {
     }
 
     /**
-     * 渲染单个效果文本。
+     * 渲染单个效果文本，支持传入真实等级（e.g. 从 ItemStack NBT 读取）。
      */
-    public static void renderEffect(GuiGraphics graphics, Font font, AbstractEffect effect, int x, int y) {
+    public static void renderEffect(GuiGraphics graphics, Font font, AbstractEffect effect, int x, int y, int actualLevel) {
         if (effect == null) return;
 
         int color = getRarityColor(effect.getRarity());
+        int lvl = actualLevel > 0 ? actualLevel : effect.getLevel();
         String name = String.format("%s %s (Lv.%d)",
             effect.getPerceptionTypeName(),
             effect.getDisplayName(),
-            effect.getLevel()
+            lvl
         );
 
         // 效果名称
@@ -94,13 +97,23 @@ public final class EffectTooltipRenderer {
     }
 
     /**
-     * 渲染效果列表。
+     * 渲染效果列表（使用效果自身等级）。
      */
     public static void renderEffects(GuiGraphics graphics, Font font, List<AbstractEffect> effects, int x, int y) {
+        renderEffects(graphics, font, effects, x, y, java.util.Map.of());
+    }
+
+    /**
+     * 渲染效果列表，支持 ItemStack NBT 真实等级覆盖。
+     * @param levelOverride effectId → 真实等级映射
+     */
+    public static void renderEffects(GuiGraphics graphics, Font font, List<AbstractEffect> effects, int x, int y,
+                                     Map<ResourceLocation, Integer> levelOverride) {
         int currentY = y;
         for (AbstractEffect effect : effects) {
-            renderEffect(graphics, font, effect, x, currentY);
-            currentY += LINE_HEIGHT * 3; // 每个效果占 3 行
+            int lvl = levelOverride.getOrDefault(effect.getId(), 0);
+            renderEffect(graphics, font, effect, x, currentY, lvl);
+            currentY += LINE_HEIGHT * 3;
         }
     }
 }
