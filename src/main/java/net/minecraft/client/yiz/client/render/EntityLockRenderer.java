@@ -5,41 +5,53 @@ import com.mojang.blaze3d.vertex.*;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
-import net.minecraft.client.yiz.api.EntityLockAPI;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 
 /**
- * 锁定目标图标渲染器 — 在锁定实体的碰撞箱中点绘制 billboard 图标。
- * 通过 RenderLevelStageEvent.AFTER_ENTITIES 阶段注入。
+ * 锁定目标图标渲染器 — 视野前方 60° 内最近存活实体碰撞箱中点绘制 billboard 图标。
  */
 public final class EntityLockRenderer {
 
     private static final ResourceLocation LOCK_ICON =
         ResourceLocation.fromNamespaceAndPath("yizmodqzk", "textures/gui/lock_icon.png");
 
-    private static final float SIZE = 0.4f; // 世界空间中的图标大小
+    private static final float SIZE = 0.4f;
+    private static final double RANGE = 16.0;
+    private static final double ANGLE_COS = 0.5; // cos(60°)
 
     private EntityLockRenderer() {}
 
     public static void onRenderLevelStage(RenderLevelStageEvent event) {
         if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_ENTITIES) return;
-        if (Minecraft.getInstance().player == null) return;
 
-        var lockEntry = EntityLockAPI.getClient();
-        if (lockEntry == null) return;
+        var mc = Minecraft.getInstance();
+        if (mc.player == null || !(mc.level instanceof ClientLevel cl)) return;
 
-        var clientLevel = Minecraft.getInstance().level;
-        if (!(clientLevel instanceof ClientLevel cl)) return;
-
+        // 视野前方 60° 内找最近存活实体
+        Vec3 eyePos = mc.player.getEyePosition();
+        Vec3 lookVec = mc.player.getLookAngle();
         Entity target = null;
-        for (var e : cl.entitiesForRendering()) {
-            if (e != null && e.getUUID().equals(lockEntry.targetUuid())) {
+        double closestDist = RANGE * RANGE;
+
+        AABB searchBox = mc.player.getBoundingBox().inflate(RANGE);
+        for (Entity e : cl.entitiesForRendering()) {
+            if (e == mc.player || !e.isAlive() || !(e instanceof LivingEntity)) continue;
+
+            Vec3 toEntity = e.position().subtract(eyePos);
+            double distSqr = toEntity.lengthSqr();
+            if (distSqr > closestDist) continue;
+
+            // 角度检查：dot(lookVec, toEntity.normalized()) >= cos(60°)
+            double dot = lookVec.dot(toEntity) / Math.sqrt(distSqr);
+            if (dot >= ANGLE_COS) {
+                closestDist = distSqr;
                 target = e;
-                break;
             }
         }
         if (target == null) return;
@@ -48,10 +60,8 @@ public final class EntityLockRenderer {
         PoseStack poseStack = event.getPoseStack();
         Vec3 camPos = camera.getPosition();
 
-        // 锁定实体碰撞箱中点
         Vec3 center = target.getBoundingBox().getCenter();
 
-        // 保存渲染状态
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
         RenderSystem.disableDepthTest();
@@ -59,12 +69,9 @@ public final class EntityLockRenderer {
         RenderSystem.setShaderTexture(0, LOCK_ICON);
 
         poseStack.pushPose();
-        // 平移到实体位置（相对相机）
         poseStack.translate(center.x - camPos.x, center.y - camPos.y, center.z - camPos.z);
-        // 面向相机
         poseStack.mulPose(camera.rotation());
 
-        // 4 顶点 billboard
         float h = SIZE / 2;
         BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
         builder.addVertex(-h, -h, 0).setUv(0, 0);
