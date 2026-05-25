@@ -59,7 +59,7 @@ public final class EntityLockRenderer {
         poseStack.translate(ex, ey, ez);
 
         // 身体中心（实体局部坐标：X=0, Z=0, Y=半高偏下）
-        float cy = (float)(target.getBbHeight() * 0.5) - 0.1f;
+        float cy = (float)(target.getBbHeight() * 0.7f);
 
         // 固定缩放框大小（只随距离变化，不随实体大小）
         float dist = (float) target.position().distanceTo(camPos);
