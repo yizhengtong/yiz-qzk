@@ -49,36 +49,36 @@ public final class EntityLockRenderer {
         Camera camera = event.getCamera();
         Vec3 camPos = camera.getPosition();
 
-        // 实体身体中心（相对相机）
-        double bodyY = target.getY() + target.getBbHeight() * 0.7;
-        double ex = target.getX() - camPos.x;
-        double ey = bodyY - camPos.y;
-        double ez = target.getZ() - camPos.z;
+        // 身体中心世界坐标
+        Vec3 bodyCenter = new Vec3(target.getX(), target.getY() + target.getBbHeight() * 0.7, target.getZ());
 
-        PoseStack poseStack = event.getPoseStack();
-        poseStack.pushPose();
-        poseStack.translate(ex, ey, ez);
+        // 面向玩家的局部坐标系
+        Vec3 forward = camPos.subtract(bodyCenter).normalize(); // Z = 指向玩家
+        Vec3 worldUp = new Vec3(0, 1, 0);
+        Vec3 right = new Vec3(worldUp.x, worldUp.y, worldUp.z).cross(forward).normalize();
+        Vec3 up = forward.cross(right).normalize();
 
-        // 固定缩放框大小（只在实体中心展开，无固定朝向偏移）
-        float dist = (float) target.position().distanceTo(camPos);
+        // 框大小
+        float dist = (float) bodyCenter.distanceTo(camPos);
         float t = Math.clamp((dist - 3f) / 9f, 0, 1);
-        float factor = 0.4f + t * 0.6f;
-        float hs = 0.5f * factor;
+        float hs = 0.5f * (0.4f + t * 0.6f);
 
         var bufferSource = mc.renderBuffers().bufferSource();
         var consumer = bufferSource.getBuffer(RenderType.LINES);
 
-        // 4 个角在身体中心展开（Z=0 不偏移，从任何角度都看到框的中心）
         float s = 0.06f;
-        LevelRenderer.renderLineBox(poseStack, consumer,
-            new AABB(-hs - s, hs - s, -s, -hs + s, hs + s,  s), 1f, 0.2f, 0.2f, 1f);
-        LevelRenderer.renderLineBox(poseStack, consumer,
-            new AABB( hs - s, hs - s, -s,  hs + s, hs + s,  s), 1f, 0.2f, 0.2f, 1f);
-        LevelRenderer.renderLineBox(poseStack, consumer,
-            new AABB( hs - s,-hs - s, -s,  hs + s,-hs + s,  s), 1f, 0.2f, 0.2f, 1f);
-        LevelRenderer.renderLineBox(poseStack, consumer,
-            new AABB(-hs - s,-hs - s, -s, -hs + s,-hs + s,  s), 1f, 0.2f, 0.2f, 1f);
+        // 4 个角的局部坐标（上下左右），用局部坐标系展开成世界坐标
+        float[][] localCorners = {{-hs, hs}, {hs, hs}, {hs, -hs}, {-hs, -hs}};
+        for (float[] lc : localCorners) {
+            Vec3 worldPos = bodyCenter.add(right.scale(lc[0])).add(up.scale(lc[1]));
+            double rx = worldPos.x - camPos.x;
+            double ry = worldPos.y - camPos.y;
+            double rz = worldPos.z - camPos.z;
 
-        poseStack.popPose();
+            PoseStack ps = new PoseStack();
+            ps.translate(rx, ry, rz);
+            LevelRenderer.renderLineBox(ps, consumer,
+                new AABB(-s, -s, -s,  s,  s,  s), 1f, 0.2f, 0.2f, 1f);
+        }
     }
 }
