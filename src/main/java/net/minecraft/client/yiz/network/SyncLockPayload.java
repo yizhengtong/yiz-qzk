@@ -50,8 +50,6 @@ public record SyncLockPayload(
             if (mc.player == null) return;
             if (locked && targetUuid != null) {
                 EntityLockAPI.putClient(mc.player.getUUID(), targetUuid, charge, ready);
-                if (mc.player.tickCount % 20 == 0)
-                    net.minecraft.client.yiz.tizMod.LOGGER.info("[SYNC] client received lock charge={} ready={}", charge, ready);
             } else {
                 EntityLockAPI.putClient(mc.player.getUUID(), null, 0, false);
             }

@@ -130,10 +130,6 @@ public class tizMod {
             EffectEventBus.dispatchContext(
                 EffectContext.create(event.getEntity(), null)
             );
-            if (event.getEntity().tickCount % 40 == 0) {
-                LOGGER.info("[TICK] effect dispatch, effects registered: {}",
-                    ModRegistries.getAllEffects().size());
-            }
         }
     }
 

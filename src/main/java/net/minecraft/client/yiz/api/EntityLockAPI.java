@@ -32,9 +32,6 @@ public final class EntityLockAPI {
         CHARGES.put(puid, charge);
         READY.put(puid, ready);
         sync((ServerPlayer) player, target.getUUID(), charge, ready, true);
-        if (player.tickCount % 40 == 0)
-            net.minecraft.client.yiz.tizMod.LOGGER.info("[LOCK] API lock sent: target={} charge={} ready={}",
-                target.getName().getString(), charge, ready);
     }
 
     public static void unlock(Player player) {
