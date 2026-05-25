@@ -8,20 +8,23 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * 母效果模板：60° 锥自动扫描最近实体。
+ * 母模板2 — 60° 锥自动扫描，使用第二套角片纹理。
  * 不会被自动注册，模组按需 register。
- *
- * <pre>{@code
- * TargetFrameManager.register(new ConeTargetProvider(5)); // priority=5 的母效果
- * }</pre>
  */
-public class ConeTargetProvider implements TargetFrameProvider {
+public class ConeTargetProvider2 implements TargetFrameProvider {
 
     private static final double RANGE = 32.0;
-    private static final double CONE_DOT = 0.5; // cos(60°)
+    private static final double CONE_DOT = 0.5;
     private final int priority;
 
-    public ConeTargetProvider(int priority) {
+    public static final ResourceLocation[] CORNER_TEX = {
+        ResourceLocation.fromNamespaceAndPath("yizmodqzk", "textures/gui/lock2_tr.png"),
+        ResourceLocation.fromNamespaceAndPath("yizmodqzk", "textures/gui/lock2_tl.png"),
+        ResourceLocation.fromNamespaceAndPath("yizmodqzk", "textures/gui/lock2_bl.png"),
+        ResourceLocation.fromNamespaceAndPath("yizmodqzk", "textures/gui/lock2_br.png"),
+    };
+
+    public ConeTargetProvider2(int priority) {
         this.priority = priority;
     }
 
@@ -47,12 +50,5 @@ public class ConeTargetProvider implements TargetFrameProvider {
     @Override public float getCharge() { return 1f; }
     @Override public boolean isReady() { return false; }
     @Override public int getPriority() { return priority; }
-    @Override public ResourceLocation[] getCornerTextures() {
-        return new ResourceLocation[]{
-            ResourceLocation.fromNamespaceAndPath("yizmodqzk", "textures/gui/lock_tr.png"),
-            ResourceLocation.fromNamespaceAndPath("yizmodqzk", "textures/gui/lock_tl.png"),
-            ResourceLocation.fromNamespaceAndPath("yizmodqzk", "textures/gui/lock_br.png"),
-            ResourceLocation.fromNamespaceAndPath("yizmodqzk", "textures/gui/lock_bl.png"),
-        };
-    }
+    @Override public ResourceLocation[] getCornerTextures() { return CORNER_TEX; }
 }

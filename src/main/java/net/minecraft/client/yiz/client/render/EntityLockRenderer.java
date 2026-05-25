@@ -86,6 +86,9 @@ public final class EntityLockRenderer {
         RenderSystem.disableDepthTest();
         RenderSystem.setShader(GameRenderer::getPositionTexShader);
 
+        ResourceLocation[] tex = provider.getCornerTextures();
+        if (tex == null) tex = CORNER_TEX;
+
         PoseStack ps = event.getPoseStack();
         float[][] corners = {{-hs, hs}, {hs, hs}, {hs, -hs}, {-hs, -hs}};
         for (int i = 0; i < 4; i++) {
@@ -94,7 +97,7 @@ public final class EntityLockRenderer {
             ps.translate(worldPos.x - camPos.x, worldPos.y - camPos.y, worldPos.z - camPos.z);
             ps.mulPose(camera.rotation());
 
-            RenderSystem.setShaderTexture(0, CORNER_TEX[i]);
+            RenderSystem.setShaderTexture(0, tex[i]);
             RenderSystem.setShaderColor(1f, 1f, 1f, alpha);
             float cs = CORNER_TEX_SIZE;
             BufferBuilder builder = Tesselator.getInstance().begin(

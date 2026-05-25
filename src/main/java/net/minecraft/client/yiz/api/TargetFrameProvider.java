@@ -1,5 +1,6 @@
 package net.minecraft.client.yiz.api;
 
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 
@@ -10,7 +11,8 @@ import net.minecraft.world.entity.player.Player;
  */
 public interface TargetFrameProvider {
     Entity getTarget(Player player);
-    float getCharge();   // 0~1
-    boolean isReady();   // 充能满→红色框
+    float getCharge();
+    boolean isReady();
     int getPriority();
+    default ResourceLocation[] getCornerTextures() { return null; } // null = use default
 }
