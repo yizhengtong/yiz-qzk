@@ -70,16 +70,17 @@ public final class EntityLockRenderer {
         Vec3 right = new Vec3(0, 1, 0).cross(forward).normalize();
         Vec3 up = forward.cross(right).normalize();
 
-        double angle = getRotationAngle();
-        double cosa = Math.cos(angle), sina = Math.sin(angle);
-        Vec3 r = right.scale(cosa).add(up.scale(sina));
-        Vec3 u = right.scale(-sina).add(up.scale(cosa));
-
         float dist = (float) bodyCenter.distanceTo(camPos);
         float hs = SIZE_BASE * getScaleFactor(dist);
         float alpha = provider.getCharge();
         boolean ready = provider.isReady();
         if (alpha <= 0) return;
+
+        // 满蓄力停止转动
+        double angle = ready ? 0 : getRotationAngle();
+        double cosa = Math.cos(angle), sina = Math.sin(angle);
+        Vec3 r = right.scale(cosa).add(up.scale(sina));
+        Vec3 u = right.scale(-sina).add(up.scale(cosa));
 
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
