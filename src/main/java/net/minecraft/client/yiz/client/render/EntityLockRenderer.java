@@ -67,26 +67,27 @@ public final class EntityLockRenderer {
         // 用碰撞箱实际宽和高的一半来定位 4 角
         float hw = (float)(bb.maxX - bb.minX) * 0.5f;
         float hh = (float)(bb.maxY - bb.minY) * 0.5f;
+        float hd = (float)(bb.maxZ - bb.minZ) * 0.5f;
 
         var bufferSource = mc.renderBuffers().bufferSource();
         var consumer = bufferSource.getBuffer(RenderType.LINES);
 
         // 4 个红色角点标记
         LevelRenderer.renderLineBox(poseStack, consumer,
-            new AABB(cx - hw - 0.06, cy + hh - 0.06, cz - 0.06,
-                     cx - hw + 0.06, cy + hh + 0.06, cz + 0.06),
+            new AABB(cx - hw - 0.06, cy + hh - 0.06, cz - hd - 0.06,
+                     cx - hw + 0.06, cy + hh + 0.06, cz - hd + 0.06),
             1f, 0.2f, 0.2f, 1f);
         LevelRenderer.renderLineBox(poseStack, consumer,
-            new AABB(cx + hw - 0.06, cy + hh - 0.06, cz - 0.06,
-                     cx + hw + 0.06, cy + hh + 0.06, cz + 0.06),
+            new AABB(cx + hw - 0.06, cy + hh - 0.06, cz - hd - 0.06,
+                     cx + hw + 0.06, cy + hh + 0.06, cz - hd + 0.06),
             1f, 0.2f, 0.2f, 1f);
         LevelRenderer.renderLineBox(poseStack, consumer,
-            new AABB(cx + hw - 0.06, cy - hh - 0.06, cz - 0.06,
-                     cx + hw + 0.06, cy - hh + 0.06, cz + 0.06),
+            new AABB(cx + hw - 0.06, cy - hh - 0.06, cz - hd - 0.06,
+                     cx + hw + 0.06, cy - hh + 0.06, cz - hd + 0.06),
             1f, 0.2f, 0.2f, 1f);
         LevelRenderer.renderLineBox(poseStack, consumer,
-            new AABB(cx - hw - 0.06, cy - hh - 0.06, cz - 0.06,
-                     cx - hw + 0.06, cy - hh + 0.06, cz + 0.06),
+            new AABB(cx - hw - 0.06, cy - hh - 0.06, cz - hd - 0.06,
+                     cx - hw + 0.06, cy - hh + 0.06, cz - hd + 0.06),
             1f, 0.2f, 0.2f, 1f);
 
         poseStack.popPose();
