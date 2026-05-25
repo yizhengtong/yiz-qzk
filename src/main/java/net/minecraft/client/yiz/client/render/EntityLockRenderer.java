@@ -33,6 +33,7 @@ public final class EntityLockRenderer {
         ResourceLocation.fromNamespaceAndPath("yizmodqzk", "textures/gui/lock_br.png"),
     };
 
+    private static double lastLockedAngle = 0;
     private EntityLockRenderer() {}
 
     // ════════════════════════════════════════════
@@ -76,8 +77,10 @@ public final class EntityLockRenderer {
         boolean ready = provider.isReady();
         if (alpha <= 0) return;
 
-        // 满蓄力停止转动
-        double angle = ready ? 0 : getRotationAngle();
+        // 满蓄力：冻结当前旋转角（继承当前位置），切换纹理
+        double currentAngle = getRotationAngle();
+        double angle = ready ? lastLockedAngle : currentAngle;
+        if (!ready) lastLockedAngle = currentAngle;
         double cosa = Math.cos(angle), sina = Math.sin(angle);
         Vec3 r = right.scale(cosa).add(up.scale(sina));
         Vec3 u = right.scale(-sina).add(up.scale(cosa));
