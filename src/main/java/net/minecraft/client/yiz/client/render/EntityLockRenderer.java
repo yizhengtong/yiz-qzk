@@ -66,11 +66,11 @@ public final class EntityLockRenderer {
         float factor = 0.2f + t * 0.8f; // 近处 20%，远处 100%
         float hs = 0.5f * factor;
         float alpha;
-        if (dist >= 12) alpha = 1f;
+        if (dist <= 3) alpha = 0f;
+        else if (dist >= 12) alpha = 1f;
         else if (dist >= 9) alpha = 0.8f + (dist - 9) / 3f * 0.2f;
         else if (dist >= 6) alpha = 0.5f + (dist - 6) / 3f * 0.3f;
-        else if (dist >= 3) alpha = 0.18f + (dist - 3) / 3f * 0.32f;
-        else alpha = dist / 3f * 0.18f;
+        else alpha = (dist - 3) / 3f * 0.5f;
 
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
