@@ -56,9 +56,17 @@ public final class EntityLockRenderer {
         // 身体中心 + 面向玩家局部坐标系
         Vec3 bodyCenter = new Vec3(target.getX(), target.getY() + target.getBbHeight() * 0.7, target.getZ());
         Vec3 forward = camPos.subtract(bodyCenter).normalize();
-        Vec3 worldUp = new Vec3(0, 1, 0);
         Vec3 right = new Vec3(0, 1, 0).cross(forward).normalize();
         Vec3 up = forward.cross(right).normalize();
+
+        // 缓慢旋转（绕 forward 轴，约 30°/秒）
+        double angle = (System.currentTimeMillis() / 1000.0) * Math.PI / 6;
+        double cosa = Math.cos(angle);
+        double sina = Math.sin(angle);
+        Vec3 rotatedRight = right.scale(cosa).add(up.scale(sina));
+        Vec3 rotatedUp = right.scale(-sina).add(up.scale(cosa));
+        right = rotatedRight;
+        up = rotatedUp;
 
         // 框大小 + 透明度（近处缩小虚化，12格外全尺寸）
         float dist = (float) bodyCenter.distanceTo(camPos);
