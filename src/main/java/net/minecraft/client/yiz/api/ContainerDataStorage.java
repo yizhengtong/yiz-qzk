@@ -15,6 +15,7 @@ import net.minecraft.world.Container;
  * AutoCloseable handle = storage.register("mod_a", "tombstone_data", container);
  * }</pre>
  */
+// 大白话: 容器存档方法
 public interface ContainerDataStorage {
 
     /**

@@ -14,6 +14,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * 复活系统注册表，挂接原版不死图腾路径 {@code checkTotemDeathProtection}。
  * 自定义复活动画同原版不死图腾。
  */
+// 大白话: 不死方法
 public final class UndyingRegistry {
 
     private static final List<Handler> HANDLERS = new CopyOnWriteArrayList<>();

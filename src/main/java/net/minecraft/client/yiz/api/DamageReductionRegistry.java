@@ -28,6 +28,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * });
  * }</pre>
  */
+// 大白话: 减伤方法
 public final class DamageReductionRegistry {
 
     private static final List<HealthModifier> MODIFIERS = new CopyOnWriteArrayList<>();

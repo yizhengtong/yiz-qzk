@@ -39,6 +39,7 @@ import java.util.function.BiConsumer;
  * PlayerDataAPI.discardAll(player);
  * }</pre>
  */
+// 大白话: 玩家数据方法
 public final class PlayerDataAPI {
 
     private PlayerDataAPI() {}

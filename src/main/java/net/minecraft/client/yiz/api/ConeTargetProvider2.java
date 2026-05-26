@@ -11,6 +11,7 @@ import net.minecraft.world.phys.Vec3;
  * 母模板2 — 60° 锥自动扫描，使用第二套角片纹理。
  * 不会被自动注册，模组按需 register。
  */
+// 大白话: 母模板2方法
 public class ConeTargetProvider2 implements TargetFrameProvider {
 
     private static final double RANGE = 32.0;

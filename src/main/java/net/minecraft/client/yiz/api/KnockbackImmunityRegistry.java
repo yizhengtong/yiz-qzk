@@ -8,6 +8,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 /**
  * 击退免疫注册表
  */
+// 大白话: 击退免疫方法
 public final class KnockbackImmunityRegistry {
 
     private static final List<Condition> CONDITIONS = new CopyOnWriteArrayList<>();

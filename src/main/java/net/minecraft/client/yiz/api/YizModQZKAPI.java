@@ -35,6 +35,7 @@ import java.util.Optional;
  *   <li>{@link #percentDamage(LivingEntity, float, Entity)} — 百分比伤害</li>
  * </ul>
  */
+// 大白话: 总入口方法
 public final class YizModQZKAPI {
 
     private YizModQZKAPI() {}

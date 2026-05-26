@@ -19,6 +19,7 @@ import java.util.Set;
  * 绕过目标实体的自定义 {@code hurt()} 方法。
  * </p>
  */
+// 大白话: 改血方法
 public final class DamageAttributeRegistry {
 
     private static final Map<Holder<Attribute>, Float> DAMAGE_ATTRIBUTES = new HashMap<>();

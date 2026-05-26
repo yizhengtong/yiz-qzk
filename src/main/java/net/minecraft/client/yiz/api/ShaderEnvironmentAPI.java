@@ -26,6 +26,7 @@ import java.lang.reflect.Method;
  *   <li>allowUnknown 配置：1000ms 缓存</li>
  * </ul>
  */
+// 大白话: 光影检测方法
 public final class ShaderEnvironmentAPI {
 
     private ShaderEnvironmentAPI() {}

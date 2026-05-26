@@ -7,6 +7,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 /**
  * 锁定框管理者 — 客户端渲染前调用，选出最高优先级的活跃供应商。
  */
+// 大白话: 锁定框管理方法
 public final class TargetFrameManager {
 
     private static final CopyOnWriteArrayList<TargetFrameProvider> PROVIDERS = new CopyOnWriteArrayList<>();

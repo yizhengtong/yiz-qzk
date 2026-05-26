@@ -15,6 +15,7 @@ import net.neoforged.bus.api.Event;
  * 调用 {@link #cancel(String)} 阻止本次伤害应用。
  * </p>
  */
+// 大白话: 伤害事件方法
 public class DamageEvent extends Event {
 
     private final LivingEntity target;

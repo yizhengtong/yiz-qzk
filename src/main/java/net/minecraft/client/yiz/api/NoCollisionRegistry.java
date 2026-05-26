@@ -8,6 +8,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 /**
  * 碰撞免疫注册表（参考原版旁观者模式 isSpectator → 跳过 push）
  */
+// 大白话: 碰撞免疫方法
 public final class NoCollisionRegistry {
 
     private static final List<Condition> CONDITIONS = new CopyOnWriteArrayList<>();

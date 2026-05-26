@@ -8,6 +8,7 @@ package net.minecraft.client.yiz.api;
  * @param canceled 是否被取消
  * @param reason   取消原因（canceled 为 true 时有效）
  */
+// 大白话: 伤害结果方法
 public record DamageResult(
     float applied,
     float delta,

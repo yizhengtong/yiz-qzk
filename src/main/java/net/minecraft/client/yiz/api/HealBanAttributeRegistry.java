@@ -20,6 +20,7 @@ import java.util.Map;
  *   <li>{@link #registerFixed(Holder)} — 固定值禁疗绑定</li>
  * </ul>
  */
+// 大白话: 禁疗方法
 public final class HealBanAttributeRegistry {
 
     /**

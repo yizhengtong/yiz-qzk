@@ -26,6 +26,7 @@ import java.util.function.BiConsumer;
  *   <li>终端衰减 = max(0.1, 1.0 − 距离/最大范围)</li>
  * </ul>
  */
+// 大白话: 道宫API方法
 public final class DaoPalaceAPI {
 
     private DaoPalaceAPI() {}

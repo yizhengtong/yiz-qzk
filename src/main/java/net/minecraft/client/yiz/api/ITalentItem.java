@@ -9,6 +9,7 @@ import net.minecraft.world.item.Item;
  * 如果某模组没有实现此接口的物品，则该标签页不会注册。
  * </p>
  */
+// 大白话: 天赋标签方法
 public interface ITalentItem {
     /** 创建该物品天赋页使用的默认图标物品。 */
     default Item getTabIcon() {

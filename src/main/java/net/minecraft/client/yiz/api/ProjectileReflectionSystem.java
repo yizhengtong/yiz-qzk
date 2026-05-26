@@ -20,6 +20,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * 无主人 → 移除，有主人 → 转移所有权并追踪原主人。
  * </p>
  */
+// 大白话: 反弹方法
 public final class ProjectileReflectionSystem {
 
     private static final List<ConfigEntry> CONFIGS = new CopyOnWriteArrayList<>();

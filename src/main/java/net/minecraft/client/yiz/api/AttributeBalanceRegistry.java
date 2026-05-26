@@ -13,6 +13,7 @@ import java.util.Map;
  * 后续任何修改都不会让属性值低于记录值。
  * </p>
  */
+// 大白话: 属性平衡方法
 public final class AttributeBalanceRegistry {
 
     private static final Map<AttributeInstance, Double> FLOORS = new IdentityHashMap<>();

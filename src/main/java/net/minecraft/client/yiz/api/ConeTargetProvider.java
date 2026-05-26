@@ -15,6 +15,7 @@ import net.minecraft.world.phys.Vec3;
  * TargetFrameManager.register(new ConeTargetProvider(5)); // priority=5 的母效果
  * }</pre>
  */
+// 大白话: 母模板1方法
 public class ConeTargetProvider implements TargetFrameProvider {
 
     private static final double RANGE = 32.0;

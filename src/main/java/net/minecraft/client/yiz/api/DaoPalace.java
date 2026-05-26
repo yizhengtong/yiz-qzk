@@ -20,6 +20,7 @@ import java.util.Set;
  * @param placedBlocks   已放置方块坐标集合（相对中心偏移）
  * @param totalAnchors   该玩家拥有的落点总数
  */
+// 大白话: 道宫方法
 public record DaoPalace(
     ResourceLocation anchorId,
     BlockPos centerPos,

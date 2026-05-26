@@ -21,6 +21,7 @@ import java.util.Map;
  *   <li>{@link #registerPierceInvulnerability(Holder, float)} — 破无敌帧（与破甲组合使用）</li>
  * </ul>
  */
+// 大白话: 真伤/破甲/破无敌方法
 public final class SpecialDamageAttributeRegistry {
 
     private static final Map<Holder<Attribute>, Float> TRUE_DAMAGE = new HashMap<>();

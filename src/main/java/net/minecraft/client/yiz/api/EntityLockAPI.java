@@ -12,6 +12,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * 实体锁定 API — 服务端追踪 + 自动同步到客户端渲染。
  * 支持充能进度（透明度渐变）和就绪状态（红色框）。
  */
+// 大白话: 锁定方法
 public final class EntityLockAPI {
 
     private EntityLockAPI() {}

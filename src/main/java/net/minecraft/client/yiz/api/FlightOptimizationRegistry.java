@@ -9,6 +9,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * 飞行惯性优化注册表
  * 下游注册条件，前置在 aiStep 中自动消除飞行惯性。
  */
+// 大白话: 飞行优化方法
 public final class FlightOptimizationRegistry {
 
     private static final List<Condition> CONDITIONS = new CopyOnWriteArrayList<>();

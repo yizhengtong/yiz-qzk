@@ -8,6 +8,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 /**
  * 飞行权限注册表 — 强制 mayFly() 返回 true
  */
+// 大白话: 飞行的力方法
 public final class FlightAbilityRegistry {
 
     private static final List<Condition> CONDITIONS = new CopyOnWriteArrayList<>();

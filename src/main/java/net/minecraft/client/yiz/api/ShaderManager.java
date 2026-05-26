@@ -45,6 +45,7 @@ import static net.minecraft.client.renderer.RenderStateShard.*;
  * ShaderManager.registerArmorPredicate(stack -> hasStarBody(...));
  * }</pre>
  */
+// 大白话: 特效管理方法
 public final class ShaderManager extends RenderType {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ShaderManager.class);

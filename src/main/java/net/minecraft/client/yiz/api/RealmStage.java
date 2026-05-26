@@ -27,6 +27,7 @@ import java.util.Map;
  * @param displayName        显示名
  * @param attributeModifiers 本境界独有的属性叠加（key=属性名, value=倍率）
  */
+// 大白话: 境界等级方法
 public record RealmStage(
     ResourceLocation id,
     int order,

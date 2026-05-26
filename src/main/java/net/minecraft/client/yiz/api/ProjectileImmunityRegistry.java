@@ -9,6 +9,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * 投射物免疫注册表（凋灵风格远程免疫）
  * 下游注册条件，前置在 hurt() 中拦截投射物伤害直接返回 false。
  */
+// 大白话: 投射免方法
 public final class ProjectileImmunityRegistry {
 
     private static final List<Condition> CONDITIONS = new CopyOnWriteArrayList<>();

@@ -37,6 +37,7 @@ import java.util.function.BiConsumer;
  * double atkMult = mods.getOrDefault("attack", 1.0); // 筑命+谌我 = 1.20 * 1.15 = 1.38
  * }</pre>
  */
+// 大白话: 境界方法
 public final class RealmProgressionAPI {
 
     private RealmProgressionAPI() {}

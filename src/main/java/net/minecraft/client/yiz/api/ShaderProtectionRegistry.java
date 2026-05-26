@@ -36,6 +36,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * ShaderInstance shader = ShaderProtectionRegistry.getShader(yizxgMod.id("star_body"));
  * }</pre>
  */
+// 大白话: 着色器保护方法
 public final class ShaderProtectionRegistry {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ShaderProtectionRegistry.class);

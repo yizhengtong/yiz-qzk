@@ -41,6 +41,7 @@ import static net.minecraft.client.renderer.RenderStateShard.*;
  * → {@link net.minecraft.client.yiz.mixin.ItemRendererStarMixin} 在物品渲染时调用
  * {@link #hasStarEffect} 判断并叠加渲染
  */
+// 大白话: 星芒方法
 public final class StarShaderRegistry extends RenderType {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(StarShaderRegistry.class);

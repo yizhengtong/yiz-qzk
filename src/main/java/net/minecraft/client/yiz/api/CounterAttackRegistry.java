@@ -18,6 +18,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * 让所有子属性绑定系统自动生效。
  * </p>
  */
+// 大白话: 回击方法
 public final class CounterAttackRegistry {
 
     private static final ResourceLocation MODIFIER_ID = ResourceLocation.parse("yizmodqzk:counter_attack");

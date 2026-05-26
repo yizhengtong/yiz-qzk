@@ -3,6 +3,7 @@ package net.minecraft.client.yiz.api;
 /**
  * 伤害类型
  */
+// 大白话: 伤害类型方法
 public enum DamageType {
     /** 固定数值伤害 */
     FLAT,
