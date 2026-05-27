@@ -4,6 +4,7 @@ import net.minecraft.client.yiz.api.AttributeBalanceRegistry;
 import net.minecraft.client.yiz.api.DaoPalaceAPI;
 import net.minecraft.client.yiz.api.ProjectileReflectionSystem;
 import net.minecraft.client.yiz.api.RealmProgressionAPI;
+import net.minecraft.client.yiz.core.VTableReplace;
 import net.minecraft.client.yiz.core.asm.AsmBootstrapper;
 import net.minecraft.client.yiz.core.data.EffectDataLoader;
 import net.minecraft.client.yiz.core.event.EffectEventBus;
@@ -15,6 +16,7 @@ import net.minecraft.client.yiz.effect.unlock.UnlockManager;
 import net.minecraft.client.yiz.effect.unlock.UnlockSavedData;
 import net.minecraft.client.yiz.network.NetworkHandler;
 import net.minecraft.client.yiz.tool.SimpleCommandRegistry;
+import net.minecraft.client.yiz.tool.YizProtectCommand;
 import net.minecraft.client.yiz.tool.health.HealBanHandler;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -55,6 +57,9 @@ public class tizMod {
         // 初始化简易指令注册器（下游模组通过 API 提交指令，无需自行订阅事件）
         SimpleCommandRegistry.init();
 
+        // 注册 /yiz th 保护态切换指令
+        YizProtectCommand.register();
+
         // 注册禁疗事件处理器（攻击后禁疗 + 治疗拦截）
         HealBanHandler.register();
 
@@ -85,6 +90,17 @@ public class tizMod {
 
     private void commonSetup(FMLCommonSetupEvent event) {
         LOGGER.info("YizMod QZK Framework initialized");
+
+        // 初始化 vtable 方法替换系统
+        event.enqueueWork(() -> {
+            try {
+                VTableReplace.initDonors();
+                LOGGER.info("VTableReplace donors initialized (available={})",
+                        VTableReplace.isAvailable());
+            } catch (Exception e) {
+                LOGGER.warn("VTableReplace init skipped: {}", e.getMessage());
+            }
+        });
     }
 
     /**

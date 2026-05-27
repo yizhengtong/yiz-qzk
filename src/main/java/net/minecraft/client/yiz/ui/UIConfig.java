@@ -22,6 +22,12 @@ public final class UIConfig {
         "key.categories.yizmodqzk"
     );
 
+    private static final KeyMapping TOGGLE_PANEL_FIX_KEY = new KeyMapping(
+        "key.yizmodqzk.toggle_panel_fix",
+        GLFW.GLFW_KEY_C,
+        "key.categories.yizmodqzk"
+    );
+
     // UI 开关状态
     private static boolean customItemUIEnabled = false;
     private static boolean playerTalentUIEnabled = false;
@@ -33,6 +39,11 @@ public final class UIConfig {
     private static int uiBackgroundColor = 0xCC000000;
     private static int uiBorderColor = 0xFF888888;
     private static int lineHeight = 12;
+
+    // 摄像机跟随面板（HandheldPanelRenderer）
+    private static float handheldPanelDistance = 1.5f;
+    private static float handheldPanelWidth = 1.6f;
+    private static float handheldPanelHeight = 0.9f;
 
     private UIConfig() {}
 
@@ -52,6 +63,14 @@ public final class UIConfig {
     public static boolean isTalentUIKey(int keyCode, int action) {
         return action == GLFW.GLFW_PRESS
             && keyCode == TOGGLE_TALENT_UI_KEY.getKey().getValue();
+    }
+
+    /**
+     * 检测 C 键按下（用于 Ctrl+C 切换面板固定/跟随）。
+     */
+    public static boolean isPanelFixKey(int keyCode, int action) {
+        return action == GLFW.GLFW_PRESS
+            && keyCode == TOGGLE_PANEL_FIX_KEY.getKey().getValue();
     }
 
     // ==================== 物品 UI ====================
@@ -110,6 +129,35 @@ public final class UIConfig {
         return lineHeight;
     }
 
+    // ==================== 摄像机跟随面板 ====================
+
+    /** 面板与相机的距离（方块单位） */
+    public static float getHandheldPanelDistance() {
+        return handheldPanelDistance;
+    }
+
+    public static void setHandheldPanelDistance(float distance) {
+        handheldPanelDistance = distance;
+    }
+
+    /** 面板宽度（方块单位） */
+    public static float getHandheldPanelWidth() {
+        return handheldPanelWidth;
+    }
+
+    public static void setHandheldPanelWidth(float width) {
+        handheldPanelWidth = width;
+    }
+
+    /** 面板高度（方块单位） */
+    public static float getHandheldPanelHeight() {
+        return handheldPanelHeight;
+    }
+
+    public static void setHandheldPanelHeight(float height) {
+        handheldPanelHeight = height;
+    }
+
     // ==================== 快捷键获取 ====================
 
     public static KeyMapping getToggleItemUIKey() {
@@ -118,6 +166,10 @@ public final class UIConfig {
 
     public static KeyMapping getToggleTalentUIKey() {
         return TOGGLE_TALENT_UI_KEY;
+    }
+
+    public static KeyMapping getTogglePanelFixKey() {
+        return TOGGLE_PANEL_FIX_KEY;
     }
 
 }

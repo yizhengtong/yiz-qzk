@@ -780,6 +780,97 @@ public final class YizModQZKAPI {
         return net.minecraft.client.yiz.core.PlayerClassSwapper.isProtected(player);
     }
 
+    // ==================== VTable 方法替换 ====================
+
+    /**
+     * 查询 vtable 方法替换系统是否可用。
+     * 在调用 {@link #replaceMethod} / {@link #replaceKillMethods} 之前应先检查。
+     */
+    public static boolean isVTableReplaceAvailable() {
+        return net.minecraft.client.yiz.core.VTableReplace.isAvailable();
+    }
+
+    /**
+     * 通过 vtable 替换，将指定类的某个 void 方法替换为空实现。
+     * <p>
+     * 这是最底层的方法替换——直接覆写 HotSpot 内部方法入口指针，
+     * 不经过 ASM、Agent、Mixin、ClassFileTransformer 任一层。
+     * 一旦替换，所有通过 vtable 虚方法分派到该方法的调用都会进入空实现。
+     * </p>
+     * <p>
+     * 【注意】此操作不可逆（在当前版本中），影响该类的所有实例。
+     * 仅替换 void-returning 方法。
+     * </p>
+     *
+     * @param targetClass 目标类
+     * @param methodName  JVM 方法名（如 "setHealth"、"kill"）
+     * @param paramTypes  方法参数类型（仅用于构造 JVM 描述符）
+     * @return true 表示替换成功
+     */
+    public static boolean replaceMethod(Class<?> targetClass, String methodName,
+                                        Class<?>... paramTypes) {
+        return net.minecraft.client.yiz.core.VTableReplace.replaceVoidMethod(
+                targetClass, methodName, paramTypes);
+    }
+
+    /**
+     * 替换指定类上所有已知的致死方法为空实现。
+     * <p>
+     * 覆盖以下路径：{@code setHealth(float)}、{@code kill()}、
+     * {@code die(DamageSource)}、{@code remove(RemovalReason)}。
+     * 替换后，即使其他模组调用这些方法也无法杀死该类的实例。
+     * </p>
+     *
+     * @param entityClass 目标实体类（通常是某模组自定义的 LivingEntity 子类）
+     * @return 成功替换的方法数量
+     */
+    public static int replaceKillMethods(Class<? extends LivingEntity> entityClass) {
+        if (!isVTableReplaceAvailable()) return 0;
+
+        int count = 0;
+
+        // setHealth(float) — (F)V
+        if (net.minecraft.client.yiz.core.VTableReplace.replaceVoidMethod(
+                entityClass, "setHealth", float.class)) {
+            count++;
+        }
+
+        // kill() — ()V
+        if (net.minecraft.client.yiz.core.VTableReplace.replaceVoidMethod(
+                entityClass, "kill")) {
+            count++;
+        }
+
+        // die(DamageSource) — (Lnet/minecraft/world/damagesource/DamageSource;)V
+        if (net.minecraft.client.yiz.core.VTableReplace.replaceMethod(
+                entityClass, "die",
+                "(Lnet/minecraft/world/damagesource/DamageSource;)V")) {
+            count++;
+        }
+
+        // remove(RemovalReason) — (Lnet/minecraft/world/entity/Entity$RemovalReason;)V
+        if (net.minecraft.client.yiz.core.VTableReplace.replaceMethod(
+                entityClass, "remove",
+                "(Lnet/minecraft/world/entity/Entity$RemovalReason;)V")) {
+            count++;
+        }
+
+        return count;
+    }
+
+    /**
+     * 替换 LivingEntity 基类的所有致死方法为空实现。
+     * <p>
+     * 这会影响所有未 override 这些方法的 LivingEntity 子类实例。
+     * 单独 override 了某个方法的子类不受影响（其 vtable 中有自己的 Method*）。
+     * </p>
+     *
+     * @return 成功替换的方法数量
+     */
+    public static int replaceBaseLivingEntityKillMethods() {
+        return replaceKillMethods(LivingEntity.class);
+    }
+
     // ==================== 创造标签页 ====================
 
     /**

@@ -101,6 +101,7 @@ public class tizModClient {
     private void onRegisterKeyMappings(RegisterKeyMappingsEvent event) {
         event.register(UIConfig.getToggleItemUIKey());
         event.register(UIConfig.getToggleTalentUIKey());
+        event.register(UIConfig.getTogglePanelFixKey());
     }
 
     /**
@@ -123,6 +124,11 @@ public class tizModClient {
         // CTRL + SHIFT: toggle talent UI
         if (ctrlHeld && UIConfig.isTalentUIKey(event.getKey(), event.getAction())) {
             UIConfig.toggleTalentUI();
+        }
+
+        // CTRL + C: 切换面板固定/跟随
+        if (ctrlHeld && UIConfig.isPanelFixKey(event.getKey(), event.getAction())) {
+            net.minecraft.client.yiz.client.render.HandheldPanelRenderer.toggleFixCurrent();
         }
     }
 
@@ -183,6 +189,31 @@ public class tizModClient {
     @SubscribeEvent
     public void onRenderLevelStage(RenderLevelStageEvent event) {
         net.minecraft.client.yiz.client.render.EntityLockRenderer.onRenderLevelStage(event);
+        net.minecraft.client.yiz.client.render.HandheldPanelRenderer.onRenderLevelStage(event);
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  Phase 2.3：FIXED 面板交互（视角冻结 + 鼠标转发）
+    // ══════════════════════════════════════════════════════════════════
+
+    @SubscribeEvent
+    public void onClientTickPost(net.neoforged.neoforge.client.event.ClientTickEvent.Post event) {
+        net.minecraft.client.yiz.client.render.PanelInteractionManager.onClientTick();
+    }
+
+    @SubscribeEvent
+    public void onMouseButtonPre(InputEvent.MouseButton.Pre event) {
+        boolean down = event.getAction() == GLFW.GLFW_PRESS;
+        if (net.minecraft.client.yiz.client.render.PanelInteractionManager.onMouseButton(event.getButton(), down)) {
+            event.setCanceled(true);
+        }
+    }
+
+    @SubscribeEvent
+    public void onMouseScroll(InputEvent.MouseScrollingEvent event) {
+        if (net.minecraft.client.yiz.client.render.PanelInteractionManager.onMouseScroll(event.getScrollDeltaY())) {
+            event.setCanceled(true);
+        }
     }
 
     // ══════════════════════════════════════════════════════════════════
