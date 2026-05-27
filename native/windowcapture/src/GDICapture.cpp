@@ -47,7 +47,8 @@ bool GDICapture::initialize(HWND hwnd) {
     return true;
 }
 
-bool GDICapture::capture(uint8_t* outBuffer, int* outWidth, int* outHeight) {
+bool GDICapture::capture(uint8_t* outBuffer, size_t maxBytes,
+                         int* outWidth, int* outHeight) {
     if (!m_initialized) return false;
 
     // Check if window still exists and has valid size
@@ -59,6 +60,9 @@ bool GDICapture::capture(uint8_t* outBuffer, int* outWidth, int* outHeight) {
     int h = rect.bottom - rect.top;
 
     if (w <= 0 || h <= 0) return false;
+
+    // Refuse to write past caller-provided buffer.
+    if ((size_t)w * h * 4 > maxBytes) return false;
 
     // Recreate bitmap if size changed
     if (w != m_width || h != m_height) {

@@ -102,6 +102,7 @@ public class tizModClient {
         event.register(UIConfig.getToggleItemUIKey());
         event.register(UIConfig.getToggleTalentUIKey());
         event.register(UIConfig.getTogglePanelFixKey());
+        event.register(UIConfig.getTogglePanelKeyboardKey());
     }
 
     /**

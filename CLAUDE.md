@@ -2,6 +2,36 @@
 
 NeoForge 1.21.1 **库模组 (Library Mod)**，MODID=`yizmodqzk`，为下游模组提供伤害/效果/健康修改框架。
 
+## 协作守则（用户明确要求遵守）
+
+### 1. 先验证再相信
+
+用户描述的是**症状或猜测**，文件里的代码才是**事实**。两者经常不一致。
+
+- 收到 bug 报告或修改请求，**先把用户的描述当作"待验证的假设"**，不要当作"既定事实直接动手"
+- 动手改之前，至少完成：读相关文件、grep 调用方、确认改动不会破其他路径
+- 用户说"是不是 X"——按这是问题来验证，验证完再回话；不要直接当结论执行
+- 用户说"删掉 Y"——先查谁在引用 Y。如果有引用，先指出再问要不要一起改
+
+反模式：用户说"修 A"，AI 直接改 A 不问 A 是不是真的根因；用户给一个推测，AI 直接按推测改代码。
+
+### 2. 捕捉描述里的灰色地带，用 AskUserQuestion 反问
+
+用户的话几乎总有歧义。AI 默认填进去的解释经常错，与其赌不如反问。**但反问要给带描述的选项卡，不要空白提问**。
+
+值得反问的信号：
+- 代词/泛指（"这里"、"那个"、"差不多"），且上下文有 ≥2 候选
+- "一定要" 和 "大概" 共存，硬要求和软要求边界不清
+- 用户的两个目标有冲突但他没意识到——主动指出冲突让他选
+
+反问形式：`AskUserQuestion` + 选项卡，每个选项带一句话描述，让用户点选不打字。
+
+反模式："您具体是什么意思呢？"这种空白问题；猜一个解释直接做。
+
+### 3. 不陷入修补循环
+
+同一思路失败 2 次以上，停。退到上一层重新分析根因，而不是在症状层继续微调。第三次还是同一思路 = 90% 还会失败。
+
 ## 构建命令
 
 ```bash
@@ -235,3 +265,39 @@ YizModQZKAPI.registerSimpleCommand("heal", ctx -> { ... });
 **E. 创造标签页** ✅ — 4 母页系统 + 4 接口 API，自动注册。
 A. 境界跨度 / B. 领域 / C. 道宫 为架构设计阶段，尚未编码。
 详见 [整体蓝图](../architecture/blueprint.md)。
+
+## WindowMapper / 手持面板模块（QQ 等外部窗口投影）
+
+`net.minecraft.client.yiz.client.render.*` + `windowmapper.*` + native `WindowCapture.dll`（DXGI Desktop Duplication 抓帧 + InputInjector 注入鼠标键盘）。
+
+### 架构核心：PanelLifecycle 4 状态机
+
+每个 `Panel` 持有一个 `PanelLifecycle`，是"是否抓帧/渲染/转发"的唯一权威源：
+
+- **LIVE**：MC 正常运行，玩家可控（`mc.player/level != null && screen == null && !isPaused && window focused`）
+- **DORMANT**：MC 暂停 / 打开 GUI / 失焦 — 保留资源，停止一切 native I/O（captureFrame 在 native 端直接 return null）
+- **DEAD**：HWND 失效或主动移除 — 触发资源清理
+- DETACHED 是初始态，实际 panel 创建后立即进入 LIVE
+
+### 必守规则
+
+- **状态判断只走 lifecycle**：所有 PanelInteractionManager 的 mouse/key/scroll 事件路径开头查 `lc.canForward()`/`canReceiveKey()`，渲染路径查 `lc.canCapture()`。不要在多处复制 `mc.screen != null` 判断
+- **renderOne 入口的双重 gate 不可去掉**：`!mcReady || !canCapture()` 必须在 capture+update 之前。ESC 事件可能发生在 client tick 之间，单靠 lifecycle 状态会有一帧滞后窗口
+- **LIVE → DORMANT/DEAD 转换必须 flush 已按下的输入**：通过 `sendKeyEventForce`/`sendMouseButtonForce` JNI（绕过 paused gate）补发 release，否则 QQ 会卡键
+- **不要每帧 sendMouseMove**：MC 准星位置就是"光标位置"的天然映射，hover 反馈会在每帧 native 调用上无意义放大崩溃面。仅在点击/滚轮发生那一刻调用 `syncCursorToHit` 一次
+- **Native/Java buffer 边界要双向校验**：native 端 `capture(buf, maxBytes, ...)` 拒绝超出 maxBytes，Java 侧 `WindowTexture.update` 校验 `buffer.remaining() >= W*H*4`，OpenGL 越界读会让驱动崩溃且 hs_err 落在 `nglTexSubImage2D` 难以定位
+- **captureFrame 与 getSize 不是原子的**：renderOne 必须从 ByteBuffer.capacity 推 W*H*4 校验，不能直接信 getSize 返回的尺寸
+
+### 部署流程
+
+mod 通过本地 maven 发布到 `repo/`，下游 `yizxian1.21.1` 通过 `implementation "net.minecraft.client.yiz:yizmodqzk:1.0.0"` 依赖：
+
+```bash
+# 重建 native + jar 后部署：
+cd native/windowcapture && ./build.bat                            # → WindowCapture.dll
+cd ../.. && ./gradlew --offline jar                                # → build/libs/yizmodqzk-1.0.0.jar
+cp build/libs/yizmodqzk-1.0.0.jar repo/net/minecraft/client/yiz/yizmodqzk/1.0.0/
+cp native/windowcapture/WindowCapture.dll ../yizxian1.21.1/run/    # native dll 跑游戏时从 run/ 加载
+```
+
+`./gradlew publish` 在该工程上有 URL 解析 bug（`file://D:\...` 路径），用 cp 替代。

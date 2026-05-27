@@ -140,8 +140,16 @@ bool DXGICapture::setupDuplication() {
     return false;
 }
 
-bool DXGICapture::capture(uint8_t* outBuffer, int* outWidth, int* outHeight) {
+bool DXGICapture::capture(uint8_t* outBuffer, size_t maxBytes,
+                          int* outWidth, int* outHeight) {
     if (!m_initialized || !m_duplication) return false;
+
+    // Skip when target window is invisible/minimized to avoid Desktop
+    // Duplication map/unmap producing dangling staging texture data
+    // around ACCESS_LOST boundaries.
+    if (!IsWindow(m_hwnd) || !IsWindowVisible(m_hwnd) || IsIconic(m_hwnd)) {
+        return false;
+    }
 
     ComPtr<IDXGIResource> desktopResource;
     DXGI_OUTDUPL_FRAME_INFO frameInfo = {};
@@ -170,7 +178,7 @@ bool DXGICapture::capture(uint8_t* outBuffer, int* outWidth, int* outHeight) {
     if (FAILED(hr)) goto cleanup;
 
     // Crop to window region
-    cropToWindow(desktopTexture.Get(), outBuffer, outWidth, outHeight);
+    cropToWindow(desktopTexture.Get(), outBuffer, maxBytes, outWidth, outHeight);
 
 cleanup:
     m_duplication->ReleaseFrame();
@@ -178,7 +186,8 @@ cleanup:
 }
 
 bool DXGICapture::cropToWindow(ID3D11Texture2D* desktopTexture,
-                                uint8_t* outBuffer, int* outWidth, int* outHeight) {
+                                uint8_t* outBuffer, size_t maxBytes,
+                                int* outWidth, int* outHeight) {
     // Get window position in screen coordinates
     RECT windowRect;
     if (!GetWindowRect(m_hwnd, &windowRect)) {
@@ -197,11 +206,6 @@ bool DXGICapture::cropToWindow(ID3D11Texture2D* desktopTexture,
 
     if (width <= 0 || height <= 0) return false;
 
-    *outWidth = width;
-    *outHeight = height;
-    m_width = width;
-    m_height = height;
-
     // Get desktop texture description
     D3D11_TEXTURE2D_DESC texDesc;
     desktopTexture->GetDesc(&texDesc);
@@ -216,6 +220,21 @@ bool DXGICapture::cropToWindow(ID3D11Texture2D* desktopTexture,
     int croppedH = windowRect.bottom - windowRect.top;
 
     if (croppedW <= 0 || croppedH <= 0) return false;
+
+    // Report the *actual* written dimensions, not the unclamped window rect.
+    // Otherwise the caller wraps the buffer with W*H*4 bytes but only
+    // croppedW*croppedH*4 are valid, and downstream glTexSubImage2D reads
+    // past the valid region — EXCEPTION_ACCESS_VIOLATION.
+    *outWidth = croppedW;
+    *outHeight = croppedH;
+    m_width = croppedW;
+    m_height = croppedH;
+
+    // Hard bound: refuse to write past caller-provided buffer.
+    // Caller will see the failure, reallocate based on outWidth/outHeight
+    // (already set above), and retry next frame.
+    size_t writeBytes = (size_t)croppedW * croppedH * 4;
+    if (writeBytes > maxBytes) return false;
 
     // Create/lazy resize staging texture for the crop
     if (!m_stagingTexture ||

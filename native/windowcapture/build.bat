@@ -24,6 +24,7 @@ echo [build] Compiling WindowCapture.dll...
 "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\14.44.35207\bin\Hostx64\x64\cl.exe" ^
     /EHsc ^
     /O2 ^
+    /utf-8 ^
     /Fe:WindowCapture.dll ^
     /I"%JNI_INCLUDE%" ^
     /I"%JNI_WIN32%" ^

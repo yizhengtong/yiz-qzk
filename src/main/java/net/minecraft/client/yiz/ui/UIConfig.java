@@ -28,6 +28,12 @@ public final class UIConfig {
         "key.categories.yizmodqzk"
     );
 
+    private static final KeyMapping TOGGLE_PANEL_KEYBOARD_KEY = new KeyMapping(
+        "key.yizmodqzk.toggle_panel_keyboard",
+        GLFW.GLFW_KEY_Q,
+        "key.categories.yizmodqzk"
+    );
+
     // UI 开关状态
     private static boolean customItemUIEnabled = false;
     private static boolean playerTalentUIEnabled = false;
@@ -71,6 +77,18 @@ public final class UIConfig {
     public static boolean isPanelFixKey(int keyCode, int action) {
         return action == GLFW.GLFW_PRESS
             && keyCode == TOGGLE_PANEL_FIX_KEY.getKey().getValue();
+    }
+
+    /**
+     * 检测面板键盘转发开关键（默认 Q）按下。
+     */
+    public static boolean isPanelKeyboardKey(int keyCode, int action) {
+        return action == GLFW.GLFW_PRESS
+            && keyCode == TOGGLE_PANEL_KEYBOARD_KEY.getKey().getValue();
+    }
+
+    public static int getPanelKeyboardKeyCode() {
+        return TOGGLE_PANEL_KEYBOARD_KEY.getKey().getValue();
     }
 
     // ==================== 物品 UI ====================
@@ -170,6 +188,10 @@ public final class UIConfig {
 
     public static KeyMapping getTogglePanelFixKey() {
         return TOGGLE_PANEL_FIX_KEY;
+    }
+
+    public static KeyMapping getTogglePanelKeyboardKey() {
+        return TOGGLE_PANEL_KEYBOARD_KEY;
     }
 
 }

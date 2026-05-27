@@ -78,6 +78,7 @@ public final class HandheldPanelRenderer {
         final WindowCaptureManager.ManagedSession session;
         final WindowTexture texture;
         final String title;
+        final PanelLifecycle lifecycle;
         Mode mode;
         // FIXED 模式快照：世界坐标 + 朝向
         Vec3 anchor;
@@ -90,9 +91,11 @@ public final class HandheldPanelRenderer {
             this.texture = texture;
             this.title = title;
             this.mode = Mode.FOLLOW;
+            this.lifecycle = new PanelLifecycle(session.handle());
         }
 
         void closeResources() {
+            lifecycle.markDead();
             try { session.close(); } catch (Exception ignored) {}
             // GL 纹理必须在渲染线程清理
             RenderSystem.recordRenderCall(texture::close);
@@ -153,6 +156,31 @@ public final class HandheldPanelRenderer {
     public static synchronized WindowCaptureManager.ManagedSession getSession(int id) {
         Panel p = panels.get(id);
         return p == null ? null : p.session;
+    }
+
+    /** 获取面板的生命周期对象。所有"是否可以转发/抓帧"的判断都查这个。*/
+    public static synchronized PanelLifecycle getLifecycle(int id) {
+        Panel p = panels.get(id);
+        return p == null ? null : p.lifecycle;
+    }
+
+    /**
+     * 每 client tick 调用一次：让所有面板根据当前 MC 状态切换 lifecycle，
+     * 并清理已 DEAD 的面板。
+     */
+    public static synchronized void tickAll(net.minecraft.client.Minecraft mc) {
+        if (panels.isEmpty()) return;
+        java.util.Iterator<java.util.Map.Entry<Integer, Panel>> it = panels.entrySet().iterator();
+        while (it.hasNext()) {
+            Panel p = it.next().getValue();
+            boolean hwndAlive = p.session.isAlive();
+            p.lifecycle.onClientTick(mc, hwndAlive);
+            if (p.lifecycle.state() == PanelLifecycle.State.DEAD) {
+                LOG.info("面板 #{} 进入 DEAD，清理资源", p.id);
+                p.closeResources();
+                it.remove();
+            }
+        }
     }
 
     // ════════════════════════════════════════════
@@ -314,44 +342,60 @@ public final class HandheldPanelRenderer {
     }
 
     private static void renderOne(Panel p, Camera camera, Vec3 camPos, PoseStack ps) {
-        // 抓帧 + 上传纹理
+        // Lifecycle gate: 仅 LIVE 状态抓帧上传。DORMANT/DEAD 时复用上一帧
+        // 已经上传到 GL 纹理的图像（如果有），不走任何 native 路径。
+        // 双重兜底：即使 lifecycle 还没 tick 到，先看 MC 状态——避免 ESC 那一帧
+        // 在 tick 之前就走渲染路径导致 capture 在不安全时机执行。
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+        boolean mcReady = mc.player != null && mc.level != null
+                          && mc.screen == null && !mc.isPaused();
+        if (!mcReady || !p.lifecycle.canCapture()) {
+            if (p.texture.getWidth() <= 1 || p.texture.getHeight() <= 1) return;
+            renderQuad(p, camera, camPos, ps);
+            return;
+        }
+
+        // 抓帧。native 端 paused / hwnd 不可见时返回 null。
         ByteBuffer frame = p.session.captureFrame();
-        int[] size = p.session.getSize();
         boolean updated = false;
-        if (frame != null && size != null && size.length == 2 && size[0] > 0 && size[1] > 0) {
-            int bufW = size[0];
-            int bufH = size[1];
-            int maxPixels = frame.capacity() / 4;
-            if (bufW * bufH > maxPixels) {
-                bufH = maxPixels / bufW;
-                if (bufH <= 0) { bufW = 1; bufH = 1; }
-            }
-            int needed = bufW * bufH * 4;
-            if (needed > 0) {
-                ByteBuffer safe = java.nio.ByteBuffer.allocateDirect(needed);
-                try {
-                    safe.put(frame);
-                    safe.flip();
-                    frame.rewind();
-                    p.texture.update(safe, bufW, bufH);
-                    updated = true;
-                } catch (Exception e) {
-                    LOG.warn("buffer copy failed: {}", e.toString());
-                    ps.popPose();
-                    return;
+        if (frame != null) {
+            // 优先用 buffer 自身的 capacity 推 W/H：避免 captureFrame 与 getSize
+            // 是两次独立 JNI 调用产生的 race。
+            int[] size = p.session.getSize();
+            if (size != null && size.length == 2 && size[0] > 0 && size[1] > 0) {
+                int bufW = size[0];
+                int bufH = size[1];
+                long needed = (long) bufW * bufH * 4L;
+                // 严格校验：buffer 必须恰好等于或大于 W*H*4。任一不一致 → 丢帧
+                if (needed > 0 && needed <= frame.capacity()) {
+                    ByteBuffer safe = java.nio.ByteBuffer.allocateDirect((int) needed);
+                    try {
+                        // 只复制有效字节，不依赖 frame.remaining()
+                        ByteBuffer src = frame.duplicate();
+                        src.position(0).limit((int) needed);
+                        safe.put(src);
+                        safe.flip();
+                        p.texture.update(safe, bufW, bufH);
+                        updated = true;
+                    } catch (Exception e) {
+                        LOG.warn("buffer copy failed: {}", e.toString());
+                    }
                 }
             }
         }
         if (!p.debugFirstCaptureLogged) {
             p.debugFirstCaptureLogged = true;
-            LOG.info("panel #{} first render: frame={}, size={}, updated={}, texW={}, texH={}",
+            LOG.info("panel #{} first render: frame={}, updated={}, texW={}, texH={}",
                 p.id,
                 frame == null ? "null" : ("buf cap=" + frame.capacity()),
-                size == null ? "null" : ("[" + size[0] + "," + size[1] + "]"),
                 updated, p.texture.getWidth(), p.texture.getHeight());
         }
         if (p.texture.getWidth() <= 1 || p.texture.getHeight() <= 1) return;
 
+        renderQuad(p, camera, camPos, ps);
+    }
+
+    private static void renderQuad(Panel p, Camera camera, Vec3 camPos, PoseStack ps) {
         // 面板尺寸：保持源宽高比，缩到配置框内
         float[] sz = computePanelSize(p.texture.getWidth(), p.texture.getHeight());
         float hw = sz[0] * 0.5f;

@@ -37,6 +37,14 @@ public class WindowTexture implements AutoCloseable {
      */
     public boolean update(ByteBuffer buffer, int bufferWidth, int bufferHeight) {
         if (buffer == null) return false;
+        if (bufferWidth <= 0 || bufferHeight <= 0) return false;
+
+        // Defensive: glTexSubImage2D will read W*H*4 bytes from the buffer
+        // starting at position(). If native ever returns a buffer smaller
+        // than that, OpenGL crashes with EXCEPTION_ACCESS_VIOLATION inside
+        // the driver. Drop the frame instead.
+        long needed = (long) bufferWidth * bufferHeight * 4L;
+        if (buffer.remaining() < needed) return false;
 
         long now = System.nanoTime();
         lastUploadNanos = now;

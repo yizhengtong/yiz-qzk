@@ -23,6 +23,9 @@ struct CaptureSession {
     int width;
     int height;
     bool alive;
+    bool paused;             // when true: captureFrame returns nullptr,
+                             // sendKeyEvent/sendMouseButton are no-ops.
+                             // sendKeyEventForce bypasses this for cleanup.
 };
 
 static std::unordered_map<int64_t, std::unique_ptr<CaptureSession>> g_sessions;
@@ -34,6 +37,7 @@ static CaptureSession* createSession(HWND hwnd) {
     session->id = g_nextSessionId++;
     session->hwnd = hwnd;
     session->alive = true;
+    session->paused = false;
 
     // Prefer DXGI: Desktop Duplication captures what's actually on screen.
     // For HW-accelerated windows (Electron/Chromium/QQ NT), GDI PrintWindow returns black.
@@ -209,14 +213,28 @@ Java_net_minecraft_client_yiz_windowmapper_WindowCaptureManager_captureFrame(
     CaptureSession* session = getSession(handle);
     if (!session || !session->alive) return nullptr;
 
-    // 每次 capture 前只扩 buffer 不更新 width/height——实际
-    // crop 尺寸可能比 GetWindowRect 小（桌面边界裁剪等）
+    // Lifecycle: when DORMANT (paused), refuse capture and let caller
+    // skip rendering. Avoids uploading stale frames during MC pause/GUI.
+    if (session->paused) return nullptr;
+
+    // Skip capture when window is invisible/minimized/destroyed to avoid
+    // uploading stale buffers downstream.
+    if (!IsWindow(session->hwnd) || !IsWindowVisible(session->hwnd) || IsIconic(session->hwnd)) {
+        return nullptr;
+    }
+
+    // Pre-grow the buffer so engine->capture has room. We never shrink
+    // here — only grow on demand. The engine itself will refuse to write
+    // beyond bufferSize and report failure, so worst case is a dropped
+    // frame, not a heap overflow.
     RECT wndRect;
     if (GetWindowRect(session->hwnd, &wndRect)) {
         int w = wndRect.right  - wndRect.left;
         int h = wndRect.bottom - wndRect.top;
         if (w > 0 && h > 0) {
-            size_t needed = (size_t)w * h * 4;
+            // 1.25x slack covers user resizing the window between this call
+            // and engine's own GetWindowRect inside cropToWindow.
+            size_t needed = (size_t)w * h * 4 * 5 / 4;
             if (needed > session->bufferSize) {
                 delete[] session->pixelBuffer;
                 session->pixelBuffer = new uint8_t[needed];
@@ -225,19 +243,25 @@ Java_net_minecraft_client_yiz_windowmapper_WindowCaptureManager_captureFrame(
         }
     }
 
-    int outWidth, outHeight;
-    bool ok = session->engine->capture(session->pixelBuffer, &outWidth, &outHeight);
+    int outWidth = 0, outHeight = 0;
+    bool ok = session->engine->capture(session->pixelBuffer, session->bufferSize,
+                                       &outWidth, &outHeight);
 
     if (!ok) return nullptr;
 
-    if (outWidth != session->width || outHeight != session->height) {
-        ensureBufferSize(session, outWidth, outHeight);
+    // Sanity: outWidth*outHeight*4 must fit in the buffer (engine should
+    // already enforce this via maxBytes, but defend anyway).
+    size_t framBytes = (size_t)outWidth * outHeight * 4;
+    if (outWidth <= 0 || outHeight <= 0 || framBytes > session->bufferSize) {
+        return nullptr;
     }
+
+    session->width = outWidth;
+    session->height = outHeight;
 
     // Wrap the buffer in a DirectByteBuffer — caller reads, won't write
     // so it's safe to keep the same buffer across calls
-    return env->NewDirectByteBuffer(session->pixelBuffer,
-                                    (jlong)(outWidth * outHeight * 4));
+    return env->NewDirectByteBuffer(session->pixelBuffer, (jlong)framBytes);
 }
 
 /*
@@ -262,7 +286,7 @@ Java_net_minecraft_client_yiz_windowmapper_WindowCaptureManager_sendMouseMove(
     JNIEnv* env, jclass cls, jlong handle, jdouble nx, jdouble ny)
 {
     CaptureSession* session = getSession(handle);
-    if (!session) return;
+    if (!session || session->paused) return;
     InputInjector::sendMouseMove(session->hwnd, (double)nx, (double)ny);
 }
 
@@ -276,7 +300,7 @@ Java_net_minecraft_client_yiz_windowmapper_WindowCaptureManager_sendMouseButton(
     JNIEnv* env, jclass cls, jlong handle, jint button, jboolean down)
 {
     CaptureSession* session = getSession(handle);
-    if (!session) return;
+    if (!session || session->paused) return;
     InputInjector::sendMouseButton(session->hwnd, (int)button, (bool)down);
 }
 
@@ -290,7 +314,7 @@ Java_net_minecraft_client_yiz_windowmapper_WindowCaptureManager_sendMouseScroll(
     JNIEnv* env, jclass cls, jlong handle, jint delta)
 {
     CaptureSession* session = getSession(handle);
-    if (!session) return;
+    if (!session || session->paused) return;
     InputInjector::sendMouseScroll(session->hwnd, (int)delta);
 }
 
@@ -304,8 +328,87 @@ Java_net_minecraft_client_yiz_windowmapper_WindowCaptureManager_sendKeyEvent(
     JNIEnv* env, jclass cls, jlong handle, jint vkCode, jboolean down)
 {
     CaptureSession* session = getSession(handle);
+    if (!session || session->paused) return;
+    InputInjector::sendKeyEvent(session->hwnd, (int)vkCode, (bool)down);
+}
+
+/*
+ * Cleanup-only variants that bypass the `paused` check. Used by the
+ * lifecycle to flush still-pressed keys/buttons during LIVE→DORMANT.
+ *
+ * Class:     net_minecraft_client_yiz_windowmapper_WindowCaptureManager
+ * Method:    sendKeyEventForce
+ * Signature: (JIZ)V
+ */
+JNIEXPORT void JNICALL
+Java_net_minecraft_client_yiz_windowmapper_WindowCaptureManager_sendKeyEventForce(
+    JNIEnv* env, jclass cls, jlong handle, jint vkCode, jboolean down)
+{
+    CaptureSession* session = getSession(handle);
     if (!session) return;
     InputInjector::sendKeyEvent(session->hwnd, (int)vkCode, (bool)down);
+}
+
+/*
+ * Class:     net_minecraft_client_yiz_windowmapper_WindowCaptureManager
+ * Method:    sendMouseButtonForce
+ * Signature: (JIZ)V
+ */
+JNIEXPORT void JNICALL
+Java_net_minecraft_client_yiz_windowmapper_WindowCaptureManager_sendMouseButtonForce(
+    JNIEnv* env, jclass cls, jlong handle, jint button, jboolean down)
+{
+    CaptureSession* session = getSession(handle);
+    if (!session) return;
+    InputInjector::sendMouseButton(session->hwnd, (int)button, (bool)down);
+}
+
+/*
+ * Lifecycle: pause/resume a session.
+ *
+ * Class:     net_minecraft_client_yiz_windowmapper_WindowCaptureManager
+ * Method:    pauseSession
+ * Signature: (J)V
+ */
+JNIEXPORT void JNICALL
+Java_net_minecraft_client_yiz_windowmapper_WindowCaptureManager_pauseSession(
+    JNIEnv* env, jclass cls, jlong handle)
+{
+    CaptureSession* session = getSession(handle);
+    if (!session) return;
+    session->paused = true;
+}
+
+/*
+ * Class:     net_minecraft_client_yiz_windowmapper_WindowCaptureManager
+ * Method:    resumeSession
+ * Signature: (J)V
+ */
+JNIEXPORT void JNICALL
+Java_net_minecraft_client_yiz_windowmapper_WindowCaptureManager_resumeSession(
+    JNIEnv* env, jclass cls, jlong handle)
+{
+    CaptureSession* session = getSession(handle);
+    if (!session) return;
+    session->paused = false;
+}
+
+/*
+ * Class:     net_minecraft_client_yiz_windowmapper_WindowCaptureManager
+ * Method:    isSessionAlive
+ * Signature: (J)Z
+ *
+ * Returns false when the session no longer exists OR the underlying HWND
+ * has been destroyed. Used by PanelLifecycle to decide DEAD transitions.
+ */
+JNIEXPORT jboolean JNICALL
+Java_net_minecraft_client_yiz_windowmapper_WindowCaptureManager_isSessionAlive(
+    JNIEnv* env, jclass cls, jlong handle)
+{
+    CaptureSession* session = getSession(handle);
+    if (!session) return JNI_FALSE;
+    if (!IsWindow(session->hwnd)) return JNI_FALSE;
+    return JNI_TRUE;
 }
 
 } // extern "C"

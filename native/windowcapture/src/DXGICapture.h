@@ -18,7 +18,8 @@ public:
     ~DXGICapture() override;
 
     bool initialize(HWND hwnd) override;
-    bool capture(uint8_t* outBuffer, int* outWidth, int* outHeight) override;
+    bool capture(uint8_t* outBuffer, size_t maxBytes,
+                 int* outWidth, int* outHeight) override;
     int getWidth() const override { return m_width; }
     int getHeight() const override { return m_height; }
     void release() override;
@@ -35,7 +36,7 @@ private:
 
     /** Crop the full desktop frame to the target window region. */
     bool cropToWindow(ID3D11Texture2D* desktopTexture, uint8_t* outBuffer,
-                      int* outWidth, int* outHeight);
+                      size_t maxBytes, int* outWidth, int* outHeight);
 
     HWND m_hwnd = nullptr;
     int m_width = 0;

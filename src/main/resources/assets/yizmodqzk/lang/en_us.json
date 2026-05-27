@@ -6,6 +6,8 @@
   "key.categories.yizmodqzk": "YizMod QZK",
   "key.yizmodqzk.toggle_item_ui": "Toggle Custom Item UI",
   "key.yizmodqzk.toggle_talent_ui": "Toggle Talent UI",
+  "key.yizmodqzk.toggle_panel_fix": "Toggle Panel Fix/Follow",
+  "key.yizmodqzk.toggle_panel_keyboard": "Toggle Panel Keyboard Forwarding",
 
   "effect.parent.echo": "Echo (残响)",
   "effect.parent.inscription": "Inscription (铭刻)",

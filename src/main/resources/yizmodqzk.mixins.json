@@ -12,7 +12,8 @@
   ],
   "client": [
     "ItemRendererStarMixin",
-    "HumanoidArmorLayerStarMixin"
+    "HumanoidArmorLayerStarMixin",
+    "KeyboardInterceptMixin"
   ],
   "injectors": {
     "defaultRequire": 1

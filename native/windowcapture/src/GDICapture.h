@@ -13,7 +13,8 @@ public:
     ~GDICapture() override;
 
     bool initialize(HWND hwnd) override;
-    bool capture(uint8_t* outBuffer, int* outWidth, int* outHeight) override;
+    bool capture(uint8_t* outBuffer, size_t maxBytes,
+                 int* outWidth, int* outHeight) override;
     int getWidth() const override { return m_width; }
     int getHeight() const override { return m_height; }
     void release() override;

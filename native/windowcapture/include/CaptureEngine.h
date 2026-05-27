@@ -16,10 +16,14 @@ public:
 
     /**
      * Capture one frame into the provided buffer.
-     * Buffer must be at least width * height * 4 bytes (BGRA).
-     * On success, outWidth/outHeight are set to the captured frame dimensions.
+     * Caller passes maxBytes (the buffer's actual capacity in bytes) so the
+     * engine refuses to write beyond it. Returning false signals the caller
+     * to skip this frame and (typically) reallocate before the next try.
+     * On success, outWidth/outHeight are set to the captured frame dimensions
+     * and outBuffer holds outWidth*outHeight*4 BGRA bytes.
      */
-    virtual bool capture(uint8_t* outBuffer, int* outWidth, int* outHeight) = 0;
+    virtual bool capture(uint8_t* outBuffer, size_t maxBytes,
+                         int* outWidth, int* outHeight) = 0;
 
     /** Get the current capture dimensions. */
     virtual int getWidth() const = 0;

@@ -120,6 +120,24 @@ public final class WindowCaptureManager {
      */
     public static native void sendKeyEvent(long handle, int vkCode, boolean down);
 
+    /**
+     * Force-send variants. Bypass the lifecycle paused check; only used by
+     * PanelLifecycle when transitioning LIVE→DORMANT to flush already-pressed
+     * keys/buttons so the target window doesn't see a stuck key.
+     */
+    public static native void sendKeyEventForce(long handle, int vkCode, boolean down);
+    public static native void sendMouseButtonForce(long handle, int button, boolean down);
+
+    /**
+     * Lifecycle gates. While paused, captureFrame returns null and all
+     * non-force send* calls are silent no-ops. Used for ATTACHED_DORMANT.
+     */
+    public static native void pauseSession(long handle);
+    public static native void resumeSession(long handle);
+
+    /** Returns false if the session is gone OR the underlying HWND has been destroyed. */
+    public static native boolean isSessionAlive(long handle);
+
     // ==================== High-Level Helpers ====================
 
     /**
@@ -174,6 +192,17 @@ public final class WindowCaptureManager {
 
         public ByteBuffer captureFrame() {
             return WindowCaptureManager.captureFrame(handle);
+        }
+
+        public void pause()  { WindowCaptureManager.pauseSession(handle); }
+        public void resume() { WindowCaptureManager.resumeSession(handle); }
+        public boolean isAlive() { return WindowCaptureManager.isSessionAlive(handle); }
+
+        public void forceKeyEvent(int vk, boolean down) {
+            WindowCaptureManager.sendKeyEventForce(handle, vk, down);
+        }
+        public void forceMouseButton(int button, boolean down) {
+            WindowCaptureManager.sendMouseButtonForce(handle, button, down);
         }
 
         @Override
