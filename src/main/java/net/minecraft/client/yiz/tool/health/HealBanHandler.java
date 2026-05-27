@@ -8,10 +8,10 @@ import net.neoforged.neoforge.event.entity.living.LivingHealEvent;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.world.entity.LivingEntity;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 禁疗效果处理器
@@ -27,7 +27,7 @@ public final class HealBanHandler {
 
     private static boolean registered = false;
 
-    private static final Map<UUID, BanEntry> BANS = new HashMap<>();
+    private static final Map<UUID, BanEntry> BANS = new ConcurrentHashMap<>();
 
     private HealBanHandler() {}
 
@@ -117,7 +117,7 @@ public final class HealBanHandler {
      * 每个 Float 通道上一个已知的值。
      * 用于检测未经授权的健康值恢复（外部模组直接修改 DataParameter 绕过 heal()）。
      */
-    private static final Map<UUID, Map<Integer, Float>> CHANNEL_SNAPSHOTS = new HashMap<>();
+    private static final Map<UUID, Map<Integer, Float>> CHANNEL_SNAPSHOTS = new ConcurrentHashMap<>();
 
     /**
      * 周期性禁疗强制：检测实体各 Float 通道是否出现了未经授权的增长，

@@ -46,6 +46,7 @@ public final class EntityActuallyHurt {
             ok = true;
         } catch (Exception e) {
             // 反射初始化失败（环境限制），回退到 setHealth()
+            System.err.println("[yizmodqzk] EntityActuallyHurt reflection init failed: " + e.getMessage());
         }
 
         HEALTH_FIELD = healthField;

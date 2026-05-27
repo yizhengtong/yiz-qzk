@@ -183,7 +183,12 @@ public class WorldContainerDataStorage extends SavedData implements ContainerDat
             CompoundTag slotTag = items.getCompound(i);
             int slot = slotTag.getByte("Slot") & 0xFF;
             if (slot >= 0 && slot < container.getContainerSize()) {
-                ItemStack.parse(registries, slotTag).ifPresent(stack -> container.setItem(slot, stack));
+                var parsed = ItemStack.parse(registries, slotTag);
+                if (parsed.isPresent()) {
+                    container.setItem(slot, parsed.get());
+                } else {
+                    LOGGER.warn("Failed to parse item in slot {}, container data may be from removed mod", slot);
+                }
             }
         }
     }

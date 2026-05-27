@@ -71,9 +71,8 @@ public class ItemPerception implements PerceptionMode {
                     boolean hasEffect = itemEffects.stream()
                         .anyMatch(e -> e.getId().equals(context.effect().getId()));
                     if (hasEffect) return stack;
-                } else {
-                    return stack; // 无效果上下文时，返回第一件非空物品
                 }
+                // 无效果上下文时无法验证绑定，跳过此项继续搜索
             }
         }
         return ItemStack.EMPTY;

@@ -10,10 +10,10 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.client.yiz.tizMod;
 import org.slf4j.Logger;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * 效果事件总线
@@ -23,7 +23,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class EffectEventBus {
 
     private static final Logger LOGGER = tizMod.LOGGER;
-    private static final List<EffectListener> listeners = new ArrayList<>();
+    private static final List<EffectListener> listeners = new CopyOnWriteArrayList<>();
     private static final Map<ResourceLocation, Long> dispatchCount = new ConcurrentHashMap<>();
 
     private EffectEventBus() {}

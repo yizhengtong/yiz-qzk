@@ -86,7 +86,9 @@ public final class DirectHealthFallback {
                     }
                 }
             }
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            System.err.println("[yizmodqzk] DirectHealthFallback reflection init failed: " + e.getMessage());
+        }
 
         ITEMS_BY_ID = itemsField;
         IS_DIRTY = dirtyField;

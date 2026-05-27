@@ -10,6 +10,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.client.yiz.tizMod;
 import net.minecraft.world.entity.player.Player;
 
 import java.util.Map;
@@ -148,6 +149,7 @@ public final class PlayerDataAPI {
         try {
             return net.minecraft.nbt.TagParser.parseTag(raw);
         } catch (Exception e) {
+            tizMod.LOGGER.warn("Failed to parse player data NBT for {}, resetting: {}", player.getName().getString(), e.getMessage());
             return new CompoundTag();
         }
     }

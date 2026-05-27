@@ -37,7 +37,9 @@ public final class DirectAttackExecutor {
             livingTarget.setHealth(Math.max(0, currentHealth - (float) damage.finalDamage()));
 
             // 触发受伤动画
-            livingTarget.level().broadcastEntityEvent(livingTarget, (byte) 2);
+            if (livingTarget.level() != null) {
+                livingTarget.level().broadcastEntityEvent(livingTarget, (byte) 2);
+            }
 
             // 检查死亡
             if (livingTarget.getHealth() <= 0) {
@@ -79,7 +81,9 @@ public final class DirectAttackExecutor {
             float currentHealth = livingTarget.getHealth();
             livingTarget.setHealth(Math.max(0, currentHealth - (float) damage.finalDamage()));
             livingTarget.hurtMarked = true;
-            livingTarget.level().broadcastEntityEvent(livingTarget, (byte) 2);
+            if (livingTarget.level() != null) {
+                livingTarget.level().broadcastEntityEvent(livingTarget, (byte) 2);
+            }
 
             if (livingTarget.getHealth() <= 0) {
                 livingTarget.die(EffectContextHelper.getAttackDamageSource(context.entity()));
