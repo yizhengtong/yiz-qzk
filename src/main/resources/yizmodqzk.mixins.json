@@ -11,9 +11,11 @@
     "LivingEntityMixin",
     "NoCollisionMixin",
     "PlayerMixin",
-    "ProjectileHitMixin"
+    "ProjectileHitMixin",
+    "StartupItemRegistryReplaceMixin"
   ],
   "client": [
+    "CreativeTabIconSafetyMixin",
     "ItemRendererStarMixin",
     "HumanoidArmorLayerStarMixin",
     "KeyboardInterceptMixin"

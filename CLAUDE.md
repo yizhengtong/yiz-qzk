@@ -301,3 +301,17 @@ cp native/windowcapture/WindowCapture.dll ../yizxian1.21.1/run/    # native dll 
 ```
 
 `./gradlew publish` 在该工程上有 URL 解析 bug（`file://D:\...` 路径），用 cp 替代。
+
+---
+
+## Unsafe klass swap 的 GC 安全前提
+
+`PlayerClassSwapper` 用 Unsafe 改对象头里的 klass 指针——但**只在源类和目标类有完全相同的字段布局时安全**。原因：
+
+GC 工作线程（G1 Conc）扫堆时按对象头里的 klass 推断该对象占多少字节、有哪些引用字段。klass 一换，GC 按"新 klass 的布局"解析这个对象。如果新 klass 字段大小与原 klass 不同（对象实际占用与 GC 算出的不同），下一个对象的位置就错位 → `EXCEPTION_ACCESS_VIOLATION` 在 G1 Conc 线程崩溃，hs_err 里只有 jvm.dll native frame，没有 Java 栈。
+
+**已踩坑案例**：尝试把 `InfinitySwordItem`（继承 Item，自己加了字段）的单例 klass 换到 `Item.class`，希望禁用后所有 virtual dispatch 走基类。结果几十秒后 G1 Conc 必崩。`ItemKlassSwapper.swapToBase` 因此**不要再调用**——文件作为反面教材保留在 `core/`。
+
+`PlayerClassSwapper` 能用是因为 `ProtectedServerPlayer` 是为此专门设计的同结构子类（继承 ServerPlayer 但不加字段）。
+
+**禁用 mod 物品的右键效果**：正确路径是事件层拦截（监听 `PlayerInteractEvent.RightClickItem` 等，按 AbolitionStateManager 状态 cancel），不是改 klass。VTableReplace 反射+vtable index 那条路对走 Item.use 的子类 override 有效，对走事件回调或 Mixin 的 mod 无效。

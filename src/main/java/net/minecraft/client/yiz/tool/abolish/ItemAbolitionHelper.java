@@ -174,12 +174,18 @@ public final class ItemAbolitionHelper {
 
     /**
      * 按物品 ID 废除（VTable + Mixin + AbolitionStateManager 三重联动）。
+     *
+     * <p>注意：曾尝试用 {@link ItemKlassSwapper#swapToBase} 直接换 Item 单例
+     * 的 klass 指针，但 GC 在解析对象布局时会因新旧 klass 字段大小不同而崩溃
+     * （EXCEPTION_ACCESS_VIOLATION in G1 Conc thread）。此路径已废弃。
+     * 非 vtable 的右键效果（事件层 / Mixin 层 mod 调用）需要走 Mixin
+     * 拦截或事件 cancel 来处理。</p>
      */
     public static int abolishItemById(ResourceLocation itemId) {
         // 1. 先注册到状态管理器（Mixin 层立即生效）
         AbolitionStateManager.abolishItem(itemId);
 
-        // 2. VTable 层（深层次覆写）
+        // 2. VTable 层（按 method 粒度覆写，对 override 的方法有效）
         Item item = BuiltInRegistries.ITEM.get(itemId);
         if (item != null) {
             return abolishItem(item.getClass());

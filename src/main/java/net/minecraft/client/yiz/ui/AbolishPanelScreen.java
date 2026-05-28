@@ -11,6 +11,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.client.yiz.core.AbolitionStateManager;
+import net.minecraft.client.yiz.core.StartupAbolishConfig;
 import net.minecraft.client.yiz.tool.abolish.ItemAbolitionHelper;
 import org.lwjgl.glfw.GLFW;
 
@@ -224,19 +225,29 @@ public class AbolishPanelScreen extends Screen {
             if (iy > contentTop + contentH) break;
 
             boolean abolished = AbolitionStateManager.isItemAbolished(entry.id());
+            boolean startupAbolished = StartupAbolishConfig.isAbolished(entry.id().toString());
             boolean hover = mx >= ix && mx <= ix + ITEM_SIZE && my >= iy && my <= iy + ITEM_SIZE;
 
-            // 背景
-            int slotBg = abolished ? 0x44FF4444 : (hover ? 0x44FFFFFF : 0x33000000);
+            // 背景 — 双重废除用混合色
+            int slotBg;
+            if (abolished && startupAbolished) slotBg = 0x44FF44FF; // 品红色：两套都已废除
+            else if (abolished) slotBg = 0x44FF4444;                 // 红色：运行时废除
+            else if (startupAbolished) slotBg = 0x444444FF;           // 蓝色：启动黑名单
+            else if (hover) slotBg = 0x44FFFFFF;
+            else slotBg = 0x33000000;
             g.fill(ix, iy, ix + ITEM_SIZE, iy + ITEM_SIZE, slotBg);
 
             // 物品图标（渲染在格子中间）
             var stack = new ItemStack(entry.item());
             g.renderFakeItem(stack, ix + 2, iy + 2);
 
-            // 废除标记（右上角红点）
+            // 废除标记（右上角红点 = 运行时废除）
             if (abolished) {
                 g.fill(ix + ITEM_SIZE - 5, iy, ix + ITEM_SIZE, iy + 5, 0xFFFF0000);
+            }
+            // 启动黑名单标记（左下角蓝点 = 下次重启生效）
+            if (startupAbolished) {
+                g.fill(ix, iy + ITEM_SIZE - 5, ix + 5, iy + ITEM_SIZE, 0xFF4488FF);
             }
 
             idx++;
@@ -253,8 +264,10 @@ public class AbolishPanelScreen extends Screen {
         int botY = height - MARGIN - BOTTOM_BAR;
         g.fill(MARGIN, botY, width - MARGIN, botY + BOTTOM_BAR, 0xCC222222);
         int cnt = AbolitionStateManager.getAbolishedItems().size();
+        int scnt = StartupAbolishConfig.size();
         String armorS = AbolitionStateManager.isArmorAbolished() ? "§c护甲已废除" : "§a护甲正常";
-        g.drawString(font, "§7已废除 " + cnt + " 个物品  |  " + armorS,
+        String startupS = scnt > 0 ? "  |  §b启动黑名单: " + scnt + " §7(重启生效)" : "";
+        g.drawString(font, "§7运行时废除 " + cnt + " 个物品  |  " + armorS + startupS,
                 MARGIN + 6, botY + 5, 0xAAAAAA);
 
         // ── 按钮 ──
@@ -267,6 +280,10 @@ public class AbolishPanelScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mx, double my, int btn) {
+        // 右键 = 切换启动黑名单
+        if (btn == GLFW.GLFW_MOUSE_BUTTON_2) {
+            return rightClickItem(mx, my);
+        }
         if (btn != GLFW.GLFW_MOUSE_BUTTON_1) return super.mouseClicked(mx, my, btn);
 
         // 模组标签页点击
@@ -314,6 +331,42 @@ public class AbolishPanelScreen extends Screen {
             ItemAbolitionHelper.abolishItemById(entry.id());
             if (mc.player != null)
                 mc.player.displayClientMessage(Component.literal("§c已废除: " + entry.displayName()), true);
+        }
+    }
+
+    /** 右键 — 切换启动黑名单（写文件，重启生效） */
+    private boolean rightClickItem(double mx, double my) {
+        int cx = contentLeft + 4;
+        int cy = contentTop - scrollOffset;
+        int cols = Math.max(1, (contentW - 8) / ITEM_STEP);
+        int idx = 0;
+
+        for (ItemEntry entry : currentItems) {
+            int col = idx % cols;
+            int row = idx / cols;
+            int ix = cx + col * ITEM_STEP;
+            int iy = cy + row * ROW_HEIGHT;
+            if (mx >= ix && mx <= ix + ITEM_SIZE && my >= iy && my <= iy + ITEM_SIZE) {
+                toggleStartupAbolish(entry);
+                return true;
+            }
+            idx++;
+        }
+        return false;
+    }
+
+    private void toggleStartupAbolish(ItemEntry entry) {
+        var mc = Minecraft.getInstance();
+        String idStr = entry.id().toString();
+        if (StartupAbolishConfig.isAbolished(idStr)) {
+            StartupAbolishConfig.remove(idStr);
+            if (mc.player != null)
+                mc.player.displayClientMessage(Component.literal("§7已从启动黑名单移除: §f" + entry.displayName()), true);
+        } else {
+            StartupAbolishConfig.add(idStr);
+            if (mc.player != null)
+                mc.player.displayClientMessage(Component.literal("§b已加入启动黑名单: §f" + entry.displayName()
+                        + "  §7(重启生效)"), true);
         }
     }
 
