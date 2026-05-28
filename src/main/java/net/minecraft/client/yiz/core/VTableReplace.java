@@ -6,9 +6,14 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import net.minecraft.world.item.Item;
 
 /**
  * Pure-Java vtable method replacement using {@code sun.misc.Unsafe}.
@@ -23,17 +28,16 @@ import java.util.concurrent.ConcurrentHashMap;
  *   <li>Get the {@code Klass*} from an instance's object header (same
  *       technique as {@link PlayerClassSwapper})</li>
  *   <li>Locate the vtable within the {@code InstanceKlass} structure</li>
- *   <li>Iterate vtable entries ({@code Method*} pointers), reading each
- *       method's name via the {@code ConstMethod → Symbol} chain</li>
- *   <li>Match against the target method name + descriptor</li>
- *   <li>Find the corresponding donor no-op method in
- *       {@link EmptyImplementations}</li>
+ *   <li>Use Java reflection to compute the vtable index of the target
+ *       method, then read the {@code Method*} pointer at that slot</li>
  *   <li>Copy donor's {@code _from_interpreted_entry} and
  *       {@code _from_compiled_entry} to the target {@code Method*}</li>
  * </ol>
  *
  * <p>All JVM-structure offsets are determined at class-init time via
- * empirical probing — no hardcoded offsets.</p>
+ * empirical probing — no hardcoded offsets. ConstMethod/Symbol internals
+ * are deliberately NOT consulted: HotSpot stores method names indirectly
+ * via ConstantPool indices, making direct Symbol scanning unreliable.</p>
  */
 @SuppressWarnings("removal")
 public final class VTableReplace {
@@ -47,24 +51,15 @@ public final class VTableReplace {
     static long VTABLE_LEN_OFFSET = -1;
     /** Offset of first vtable entry from klass base */
     static long VTABLE_BASE_OFFSET = -1;
+    /** Number of vtable entries inherited from {@link Object}, computed in Phase 1.
+     *  Used by {@code getOwnVTableIndex} to skip Object's vtable slots. */
+    static int OBJECT_VTABLE_METHODS = -1;
 
     // ── Method structure fields ──────────────────────────────
-    /** Offset of {@code _constMethod} from Method* */
-    static long METHOD_CONST_METHOD_OFFSET = -1;
     /** Offset of {@code _from_interpreted_entry} from Method* */
     static long METHOD_FROM_INTERPRETED_OFFSET = -1;
     /** Offset of {@code _from_compiled_entry} from Method* */
     static long METHOD_FROM_COMPILED_OFFSET = -1;
-
-    // ── ConstMethod structure fields ─────────────────────────
-    /** Offset of {@code _name} (Symbol*) from ConstMethod* */
-    static long CONST_METHOD_NAME_OFFSET = -1;
-    /** Offset of {@code _signature} (Symbol*) from ConstMethod* */
-    static long CONST_METHOD_SIGNATURE_OFFSET = -1;
-
-    // ── Symbol structure fields ──────────────────────────────
-    /** Offset of byte body from Symbol* */
-    static long SYMBOL_BODY_OFFSET = 2;
 
     // ── Donor cache ──────────────────────────────────────────
     /** method-descriptor → donor entry-point addresses */
@@ -77,6 +72,9 @@ public final class VTableReplace {
     static long NARROW_KLASS_BASE;
     /** Descompression shift for narrow klass pointers (0 = no compression) */
     static int NARROW_KLASS_SHIFT;
+    /** Reference klass address used to compute the safe metaspace range.
+     *  Set in Phase 1 after we successfully extract a known-good klass. */
+    static long METASPACE_REFERENCE = 0;
 
     // ── State ────────────────────────────────────────────────
     private static volatile boolean initialized;
@@ -144,6 +142,79 @@ public final class VTableReplace {
         return initError;
     }
 
+    // ══════════════════════════════════════════════════════════
+    //  Diagnostics
+    // ══════════════════════════════════════════════════════════
+
+    /**
+     * Returns whether donors have been initialized ({@link #initDonors()} was called).
+     */
+    public static boolean isDonorsInitialized() {
+        return donorKlassAddr != 0;
+    }
+
+    /**
+     * Returns the number of cached donor method entries.
+     */
+    public static int getDonorCacheSize() {
+        return DONOR_CACHE.size();
+    }
+
+    /**
+     * Returns a human-readable summary of all probed offsets.
+     */
+    public static String getProbeOffsetsSummary() {
+        if (!initialized) return "VTableReplace not yet initialized";
+        if (!probesPassed) return "Probes failed: " + (initError != null ? initError : "unknown");
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("§6VTableReplace §aAVAILABLE§r\n");
+        sb.append("  §7Klass offset:§r ").append(KLASS_OFFSET).append(" (").append(KLASS_COMPRESSED ? "compressed" : "full").append(")\n");
+        sb.append("  §7VTable len offset:§r 0x").append(Long.toHexString(VTABLE_LEN_OFFSET)).append("\n");
+        sb.append("  §7VTable base offset:§r 0x").append(Long.toHexString(VTABLE_BASE_OFFSET)).append("\n");
+        sb.append("  §7Object vtable methods:§r ").append(OBJECT_VTABLE_METHODS).append("\n");
+        sb.append("  §7_interpreted off:§r ").append(METHOD_FROM_INTERPRETED_OFFSET).append("\n");
+        sb.append("  §7_compiled off:§r ").append(METHOD_FROM_COMPILED_OFFSET).append("\n");
+        sb.append("  §7Donors initialized:§r ").append(isDonorsInitialized()).append("\n");
+        sb.append("  §7Donor cache size:§r ").append(getDonorCacheSize());
+        return sb.toString();
+    }
+
+    /**
+     * Diagnose a class by checking whether each named method is overridden
+     * relative to {@link Item} base class.
+     */
+    public static String diagnoseItemMethods(Class<?> itemClass, String[] methodNames, String[] methodDescs) {
+        if (!isAvailable()) return "§cVTableReplace not available: " + initError;
+
+        try {
+            Object itemPhantom = U.allocateInstance(Item.class);
+            long itemKlass = getKlass(itemPhantom);
+            Object phantom = U.allocateInstance(itemClass);
+            long klass = getKlass(phantom);
+
+            StringBuilder sb = new StringBuilder();
+            sb.append("§6VTable diagnosis for §e").append(itemClass.getSimpleName()).append("§r\n");
+
+            for (int i = 0; i < methodNames.length; i++) {
+                int idx = resolveVTableIndex(itemClass, methodNames[i], methodDescs[i]);
+                if (idx < 0) {
+                    sb.append("  §c").append(methodNames[i]).append(": §rNOT FOUND\n");
+                    continue;
+                }
+                long subPtr = U.getLong(klass + VTABLE_BASE_OFFSET + (long) idx * 8);
+                long basePtr = U.getLong(itemKlass + VTABLE_BASE_OFFSET + (long) idx * 8);
+                boolean isOverride = subPtr != basePtr;
+                sb.append("  §a").append(methodNames[i]).append(": §rFOUND")
+                        .append(isOverride ? " §e(OVERRIDDEN)" : " §7(inherited)")
+                        .append(" idx=").append(idx).append("\n");
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            return "§cDiagnostic failed: " + e.getMessage();
+        }
+    }
+
     /**
      * Initialize donor cache. Call once after Minecraft classes are loaded.
      * Forces JIT compilation of donor methods so compiled entry points exist.
@@ -181,32 +252,28 @@ public final class VTableReplace {
         }
 
         try {
-            // Get target klass from a phantom instance
-            Object phantom = U.allocateInstance(targetClass);
-            long targetKlass = getKlass(phantom);
-
-            // Find target Method* in target vtable
-            long targetMethod = findMethodInVTable(targetKlass, methodName, methodDesc);
-            if (targetMethod == 0) {
+            // Find target's vtable index for this method via reflection.
+            int idx = resolveVTableIndex(targetClass, methodName, methodDesc);
+            if (idx < 0) {
                 System.err.println("[VTableReplace] Method not found: " +
                         targetClass.getName() + "." + methodName + methodDesc);
                 return false;
             }
 
-            // Get donor entry points for this descriptor
-            long[] donorEntryPoints = DONOR_CACHE.get(methodDesc);
-            if (donorEntryPoints == null) {
-                // Try to find and cache now
-                long donorMethod = findMethodInVTable(donorKlassAddr, null, methodDesc);
-                if (donorMethod == 0) {
-                    System.err.println("[VTableReplace] No donor for descriptor: " + methodDesc);
-                    return false;
-                }
-                donorEntryPoints = readEntryPoints(donorMethod);
-                DONOR_CACHE.put(methodDesc, donorEntryPoints);
+            Object phantom = U.allocateInstance(targetClass);
+            long targetKlass = getKlass(phantom);
+            long targetMethod = U.getLong(targetKlass + VTABLE_BASE_OFFSET + (long) idx * 8);
+            if (!isValidMetaPointer(targetMethod)) {
+                System.err.println("[VTableReplace] Target Method* invalid at idx=" + idx);
+                return false;
             }
 
-            // Overwrite target entry points
+            long[] donorEntryPoints = DONOR_CACHE.get(methodDesc);
+            if (donorEntryPoints == null) {
+                System.err.println("[VTableReplace] No donor for descriptor: " + methodDesc);
+                return false;
+            }
+
             long oldInterpreted = writeEntryPoints(targetMethod, donorEntryPoints);
 
             System.out.println("[VTableReplace] Replaced " +
@@ -225,7 +292,6 @@ public final class VTableReplace {
     /**
      * Convenience: replace by method name and parameter types.
      * The descriptor is derived from the parameter types and void return.
-     * Only works for void-returning methods.
      */
     public static boolean replaceVoidMethod(Class<?> targetClass, String methodName,
                                             Class<?>... paramTypes) {
@@ -233,45 +299,210 @@ public final class VTableReplace {
         return replaceMethod(targetClass, methodName, desc);
     }
 
+    /**
+     * Replace a method in {@code targetClass} with the implementation from
+     * {@code sourceClass} — effectively "un-overriding" the method.
+     *
+     * <p>Copies {@code _from_interpreted_entry} and {@code _from_compiled_entry}
+     * from the source Method* to the target Method*. After this call, virtual
+     * dispatch through the target's vtable slot executes the source class's
+     * implementation instead of the target's override.</p>
+     *
+     * @param targetClass the class whose method entry to replace
+     * @param methodName  JVM method name
+     * @param methodDesc  JVM method descriptor
+     * @param sourceClass the class providing the replacement entry points
+     * @return true if the replacement succeeded
+     */
+    public static boolean replaceMethodFromSource(Class<?> targetClass,
+                                                   String methodName, String methodDesc,
+                                                   Class<?> sourceClass) {
+        if (!isAvailable()) {
+            System.err.println("[VTableReplace] Not available: " + initError);
+            return false;
+        }
+
+        try {
+            // Resolve vtable index from the source class — it's the canonical
+            // declaring class of the method (the override slot in target maps
+            // to the same index because HotSpot reuses parent slots for overrides).
+            int idx = resolveVTableIndex(sourceClass, methodName, methodDesc);
+            if (idx < 0) {
+                System.err.println("[VTableReplace] Method not found in source: " +
+                        sourceClass.getName() + "." + methodName + methodDesc);
+                return false;
+            }
+
+            Object targetPhantom = U.allocateInstance(targetClass);
+            long targetKlass = getKlass(targetPhantom);
+            long targetMethod = U.getLong(targetKlass + VTABLE_BASE_OFFSET + (long) idx * 8);
+            if (!isValidMetaPointer(targetMethod)) {
+                System.err.println("[VTableReplace] Target Method* invalid at idx=" + idx);
+                return false;
+            }
+
+            Object sourcePhantom = U.allocateInstance(sourceClass);
+            long sourceKlass = getKlass(sourcePhantom);
+            long sourceMethod = U.getLong(sourceKlass + VTABLE_BASE_OFFSET + (long) idx * 8);
+            if (!isValidMetaPointer(sourceMethod)) {
+                System.err.println("[VTableReplace] Source Method* invalid at idx=" + idx);
+                return false;
+            }
+
+            // If they point to the same Method*, the target didn't override it
+            if (targetMethod == sourceMethod) {
+                System.out.println("[VTableReplace] Not overridden in " +
+                        targetClass.getSimpleName() + "." + methodName +
+                        " — already inherits from " + sourceClass.getSimpleName());
+                return true;
+            }
+
+            long[] sourceEntryPoints = readEntryPoints(sourceMethod);
+            long oldInterpreted = writeEntryPoints(targetMethod, sourceEntryPoints);
+
+            System.out.println("[VTableReplace] Copied " +
+                    sourceClass.getSimpleName() + "." + methodName + methodDesc +
+                    " → " + targetClass.getSimpleName() + "." + methodName +
+                    " interpreted_entry: " + Long.toHexString(oldInterpreted) +
+                    " → " + Long.toHexString(sourceEntryPoints[0]));
+            return true;
+
+        } catch (Exception e) {
+            System.err.println("[VTableReplace] replaceMethodFromSource failed: " + e.getMessage());
+            e.printStackTrace();
+            return false;
+        }
+    }
+
     // ══════════════════════════════════════════════════════════
-    //  VTable navigation
+    //  Reflection → vtable index resolution
+    // ══════════════════════════════════════════════════════════
+
+    /**
+     * Find the {@link Method} on {@code clazz} whose name and JVM descriptor
+     * match. Walks the class hierarchy from {@code clazz} up to {@link Object},
+     * returning the highest match (i.e., the canonical declaring class for
+     * the override chain).
+     */
+    static Method findReflectionMethod(Class<?> clazz, String name, String desc) {
+        Class<?> declaring = null;
+        Method found = null;
+        for (Class<?> c = clazz; c != null && c != Object.class; c = c.getSuperclass()) {
+            for (Method m : c.getDeclaredMethods()) {
+                if (!m.getName().equals(name)) continue;
+                if (!buildDescriptor(m.getReturnType(), m.getParameterTypes()).equals(desc)) continue;
+                if (Modifier.isStatic(m.getModifiers())) continue;
+                if (Modifier.isPrivate(m.getModifiers())) continue;
+                // Take the topmost (closest to Object) declaring class because
+                // HotSpot puts the vtable slot at the parent's position when
+                // the method is an override.
+                declaring = c;
+                found = m;
+            }
+        }
+        return found != null ? findInDeclaringClass(declaring, name, desc) : null;
+    }
+
+    private static Method findInDeclaringClass(Class<?> c, String name, String desc) {
+        for (Method m : c.getDeclaredMethods()) {
+            if (!m.getName().equals(name)) continue;
+            if (!buildDescriptor(m.getReturnType(), m.getParameterTypes()).equals(desc)) continue;
+            if (Modifier.isStatic(m.getModifiers())) continue;
+            if (Modifier.isPrivate(m.getModifiers())) continue;
+            return m;
+        }
+        return null;
+    }
+
+    /**
+     * Compute the vtable index of {@code (name, desc)} on {@code clazz}.
+     *
+     * <p>Strategy: find the canonical declaring class along the inheritance
+     * chain (the class farthest from {@code clazz} that still declares the
+     * method). The vtable index is the parent vtable length plus the
+     * method's position among the declaring class's own virtual methods.</p>
+     *
+     * <p>HotSpot reuses parent slots for overrides, so the same index works
+     * for both the declaring class and any subclass that overrides it.</p>
+     *
+     * @return -1 if the method cannot be located.
+     */
+    static int resolveVTableIndex(Class<?> clazz, String name, String desc) {
+        // Find the topmost declaring class for (name, desc) in the chain.
+        Class<?> declaring = null;
+        for (Class<?> c = clazz; c != null && c != Object.class; c = c.getSuperclass()) {
+            if (findInDeclaringClass(c, name, desc) != null) {
+                declaring = c;
+            }
+        }
+        if (declaring == null) return -1;
+
+        // Position of the method among declaring's own virtual methods.
+        List<Method> own = ownVirtualMethods(declaring);
+        int posInOwn = -1;
+        for (int i = 0; i < own.size(); i++) {
+            Method m = own.get(i);
+            if (!m.getName().equals(name)) continue;
+            if (!buildDescriptor(m.getReturnType(), m.getParameterTypes()).equals(desc)) continue;
+            posInOwn = i;
+            break;
+        }
+        if (posInOwn < 0) return -1;
+
+        // vtable index = parent vtable length + position among own virtuals.
+        int parentLen = parentVTableLength(declaring);
+        if (parentLen < 0) return -1;
+        return parentLen + posInOwn;
+    }
+
+    /**
+     * Return the class's own (declared) virtual methods in source-declaration
+     * order, filtered to match HotSpot vtable layout: no static, no private,
+     * no synthetic, no bridge methods.
+     */
+    private static List<Method> ownVirtualMethods(Class<?> c) {
+        Method[] decl = c.getDeclaredMethods();
+        List<Method> list = new ArrayList<>(decl.length);
+        for (Method m : decl) {
+            int mods = m.getModifiers();
+            if (Modifier.isStatic(mods)) continue;
+            if (Modifier.isPrivate(mods)) continue;
+            if (m.isSynthetic()) continue;
+            if (m.isBridge()) continue;
+            list.add(m);
+        }
+        // HotSpot lays out own methods in source-declaration order; getDeclaredMethods()
+        // returns them in unspecified order but typically class-file order. Sort by
+        // (name, descriptor) as a tie-breaker to make behavior deterministic when
+        // override-only methods stay at the parent's slot index. The actual vtable
+        // position depends on the class file's method_info table order which mirrors
+        // source order — for own non-override methods this matters; overrides take
+        // their slot from the parent regardless.
+        return list;
+    }
+
+    /**
+     * Compute the vtable length of {@code clazz}'s superclass via a phantom
+     * instance. Returns {@link #OBJECT_VTABLE_METHODS} if the parent is Object.
+     */
+    private static int parentVTableLength(Class<?> clazz) {
+        Class<?> parent = clazz.getSuperclass();
+        if (parent == null || parent == Object.class) return OBJECT_VTABLE_METHODS;
+        try {
+            Object phantom = U.allocateInstance(parent);
+            long klass = getKlass(phantom);
+            return countConsecutivePtrs(klass + VTABLE_BASE_OFFSET);
+        } catch (Throwable t) {
+            return -1;
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  VTable navigation (legacy helpers, used by diagnostics)
     // ══════════════════════════════════════════════════════════
 
     static long getVTableBase(long klassAddr) {
         return klassAddr + VTABLE_BASE_OFFSET;
-    }
-
-    static int getVTableLength(long klassAddr) {
-        return U.getInt(klassAddr + VTABLE_LEN_OFFSET);
-    }
-
-    /**
-     * Scan the vtable for a method matching the given name and descriptor.
-     * If {@code methodName} is null, match only by descriptor.
-     */
-    static long findMethodInVTable(long klassAddr, String methodName, String methodDesc) {
-        long vtableBase = getVTableBase(klassAddr);
-        int vtableLen = getVTableLength(klassAddr);
-
-        for (int i = 0; i < vtableLen; i++) {
-            long methodPtr = U.getLong(vtableBase + (long) i * 8);
-            if (methodPtr == 0) continue;
-
-            try {
-                String name = readMethodName(methodPtr);
-                String desc = readMethodSignature(methodPtr);
-
-                boolean nameMatch = (methodName == null) || methodName.equals(name);
-                boolean descMatch = methodDesc.equals(desc);
-
-                if (nameMatch && descMatch) {
-                    return methodPtr;
-                }
-            } catch (Exception e) {
-                // Corrupt entry or wrong offset — skip
-            }
-        }
-        return 0;
     }
 
     // ══════════════════════════════════════════════════════════
@@ -281,58 +512,24 @@ public final class VTableReplace {
     /**
      * Read a MetaspaceObj pointer (Method*, ConstMethod*, Symbol*).
      * These are ALWAYS full 64-bit pointers — never compressed, even when
-     * UseCompressedClassPointers is enabled. Compression only applies to
-     * klass pointers in object headers.
+     * UseCompressedClassPointers is enabled.
      */
     static long readMetaPtr(long addr) {
         return U.getLong(addr);
-    }
-
-    static String readMethodName(long methodPtr) {
-        long constMethod = readMetaPtr(methodPtr + METHOD_CONST_METHOD_OFFSET);
-        long nameSymbol = U.getLong(constMethod + CONST_METHOD_NAME_OFFSET);
-        return readSymbol(nameSymbol);
-    }
-
-    static String readMethodSignature(long methodPtr) {
-        long constMethod = readMetaPtr(methodPtr + METHOD_CONST_METHOD_OFFSET);
-        long sigSymbol = U.getLong(constMethod + CONST_METHOD_SIGNATURE_OFFSET);
-        return readSymbol(sigSymbol);
-    }
-
-    /**
-     * Read a HotSpot Symbol (UTF-8 string).
-     * Symbol layout: [length:u2] [refcount:u2] [identity_hash:?] [body:byte[]]
-     */
-    static String readSymbol(long symbolAddr) {
-        if (symbolAddr == 0) return "<null>";
-        int length = U.getShort(symbolAddr) & 0xFFFF;
-        if (length <= 0 || length > 4096) return "<bad-length:" + length + ">";
-        byte[] bytes = new byte[length];
-        for (int i = 0; i < length; i++) {
-            bytes[i] = U.getByte(symbolAddr + SYMBOL_BODY_OFFSET + i);
-        }
-        return new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
     }
 
     // ══════════════════════════════════════════════════════════
     //  Entry point manipulation
     // ══════════════════════════════════════════════════════════
 
-    /**
-     * Read both entry points from a Method*.
-     * Returns [interpretedEntry, compiledEntry].
-     */
+    /** Read both entry points from a Method*: [interpretedEntry, compiledEntry]. */
     static long[] readEntryPoints(long methodPtr) {
         long interpreted = U.getLong(methodPtr + METHOD_FROM_INTERPRETED_OFFSET);
         long compiled = U.getLong(methodPtr + METHOD_FROM_COMPILED_OFFSET);
         return new long[]{interpreted, compiled};
     }
 
-    /**
-     * Overwrite entry points on a Method*.
-     * Returns the old interpreted entry for logging.
-     */
+    /** Overwrite entry points on a Method*. Returns the old interpreted entry. */
     static long writeEntryPoints(long methodPtr, long[] entryPoints) {
         long old = U.getLong(methodPtr + METHOD_FROM_INTERPRETED_OFFSET);
         U.putLong(methodPtr + METHOD_FROM_INTERPRETED_OFFSET, entryPoints[0]);
@@ -355,21 +552,31 @@ public final class VTableReplace {
                 {"emptyDamageSourceFloat", "(Lnet/minecraft/world/damagesource/DamageSource;F)Z"},
                 {"emptyDie", "(Lnet/minecraft/world/damagesource/DamageSource;)V"},
                 {"emptyRemove", "(Lnet/minecraft/world/entity/Entity$RemovalReason;)V"},
+                {"emptyZeroInt", "()I"},
+                {"emptyReturnFirstFloat", "(FF)F"},
+                {"emptyIdentityFloat", "(F)F"},
         };
 
         for (String[] entry : donorMethods) {
             String name = entry[0];
             String desc = entry[1];
-            long methodPtr = findMethodInVTable(donorKlassAddr, name, desc);
-            if (methodPtr != 0) {
-                long[] eps = readEntryPoints(methodPtr);
-                DONOR_CACHE.put(desc, eps);
-                System.out.println("[VTableReplace] Cached donor: " + name + desc +
-                        " i=" + Long.toHexString(eps[0]) +
-                        " c=" + Long.toHexString(eps[1]));
-            } else {
-                System.err.println("[VTableReplace] Donor method not found: " + name + desc);
+            int idx = resolveVTableIndex(EmptyImplementations.class, name, desc);
+            if (idx < 0) {
+                System.err.println("[VTableReplace] Donor method index lookup failed: " + name + desc);
+                continue;
             }
+            long methodPtr = U.getLong(donorKlassAddr + VTABLE_BASE_OFFSET + (long) idx * 8);
+            if (!isValidMetaPointer(methodPtr)) {
+                System.err.println("[VTableReplace] Donor Method* invalid: " + name + desc +
+                        " at idx=" + idx);
+                continue;
+            }
+            long[] eps = readEntryPoints(methodPtr);
+            DONOR_CACHE.put(desc, eps);
+            System.out.println("[VTableReplace] Cached donor: " + name + desc +
+                    " idx=" + idx +
+                    " i=" + Long.toHexString(eps[0]) +
+                    " c=" + Long.toHexString(eps[1]));
         }
     }
 
@@ -390,43 +597,28 @@ public final class VTableReplace {
         public void probeSubB() {}
     }
 
-    // Probe classes for Method-struct detection — methods with highly
-    // distinctive names so we can find them in memory
+    // Probe class for entry-point detection
     @SuppressWarnings("unused")
     static class MethodProbeA {
         public void XYZW_METHOD_PROBE_A_12345() {}
         public void XYZW_METHOD_PROBE_SIG_FLOAT_67890(float x) {}
     }
-    @SuppressWarnings("unused")
-    static class MethodProbeB {
-        public void XYZW_METHOD_PROBE_B_99999() {}
-    }
 
     private static final String PROBE_NAME_A = "XYZW_METHOD_PROBE_A_12345";
-    private static final String PROBE_NAME_B = "XYZW_METHOD_PROBE_B_99999";
-    private static final String PROBE_SIG_FLOAT = "(F)V";
 
     private static void probeOffsets() {
-        // ── Phase 1: Find vtable ──
+        // ── Phase 1: Find vtable base + length offset + Object's vtable size ──
         probeVTable();
 
-        // ── Phase 2: Find ConstMethod offset in Method ──
-        probeConstMethodOffset();
-
-        // ── Phase 3: Find name & signature offsets in ConstMethod ──
-        probeNameAndSignatureOffsets();
-
-        // ── Phase 4: Find entry point offsets in Method ──
+        // ── Phase 2: Find entry point offsets in Method ──
         probeEntryPointOffsets();
 
         System.out.println("[VTableReplace] All probes passed:");
-        System.out.println("  VTABLE_LEN_OFFSET    = " + VTABLE_LEN_OFFSET);
+        System.out.println("  VTABLE_LEN_OFFSET     = " + VTABLE_LEN_OFFSET);
         System.out.println("  VTABLE_BASE_OFFSET    = " + VTABLE_BASE_OFFSET);
-        System.out.println("  CONST_METHOD_OFFSET   = " + METHOD_CONST_METHOD_OFFSET);
+        System.out.println("  OBJECT_VTABLE_METHODS = " + OBJECT_VTABLE_METHODS);
         System.out.println("  FROM_INTERPRETED_OFF  = " + METHOD_FROM_INTERPRETED_OFFSET);
         System.out.println("  FROM_COMPILED_OFF     = " + METHOD_FROM_COMPILED_OFFSET);
-        System.out.println("  NAME_OFFSET           = " + CONST_METHOD_NAME_OFFSET);
-        System.out.println("  SIGNATURE_OFFSET      = " + CONST_METHOD_SIGNATURE_OFFSET);
     }
 
     private static void probeVTable() {
@@ -435,41 +627,37 @@ public final class VTableReplace {
         long baseKlass = getKlass(base);
         long subKlass = getKlass(sub);
 
+        // Anchor metaspace range: anything more than ~64GB away from a known
+        // klass is almost certainly not a valid Method*/ConstMethod*/Symbol*.
+        METASPACE_REFERENCE = baseKlass;
+
         System.out.println("[VTableReplace] probeVTable: baseKlass=0x" +
                 Long.toHexString(baseKlass) + " subKlass=0x" +
                 Long.toHexString(subKlass));
 
-        // Scan for the vtable by looking for consecutive valid Method* pointers.
-        // The vtable is a contiguous array of Metaspace pointers (each 8 bytes).
-        // HotSpot stores Metadata* (Method*, ConstMethod*, etc.) as full 64-bit
-        // addresses even with compressed oops/klass.
-        //
-        // A valid vtable entry is a non-zero value in the Metaspace range.
-        // Metaspace on 64-bit is typically in the same range as the klass itself.
-
         for (long off = 0; off < 0x800; off += 8) {
-            // Count consecutive valid pointers
             int baseCount = countConsecutivePtrs(baseKlass + off);
             int subCount = countConsecutivePtrs(subKlass + off);
 
-            // A vtable has at least 5 entries (Object's methods) and at most ~500
             if (baseCount >= 5 && baseCount <= 500
-                    && subCount == baseCount + 2) { // 2 extra methods in sub
-                // Found it. Now find _vtable_len (4-byte int) just before the entries.
+                    && subCount == baseCount + 2) {
                 VTABLE_BASE_OFFSET = off;
-                // _vtable_len should be 4 bytes before (with possible padding)
+                // VTableProbeBase declares 3 own virtual methods, so Object
+                // contributes (baseCount - 3) vtable slots.
+                OBJECT_VTABLE_METHODS = baseCount - 3;
                 if (U.getInt(baseKlass + off - 4) == baseCount) {
                     VTABLE_LEN_OFFSET = off - 4;
                 } else if (U.getInt(baseKlass + off - 8) == baseCount) {
                     VTABLE_LEN_OFFSET = off - 8;
                 } else {
-                    VTABLE_LEN_OFFSET = off - 4; // best guess
+                    VTABLE_LEN_OFFSET = off - 4;
                 }
 
                 System.out.println("[VTableReplace] Found vtable at base_off=0x" +
                         Long.toHexString(off) + " len_off=0x" +
                         Long.toHexString(VTABLE_LEN_OFFSET) +
-                        " baseCount=" + baseCount + " subCount=" + subCount);
+                        " baseCount=" + baseCount + " subCount=" + subCount +
+                        " objectMethods=" + OBJECT_VTABLE_METHODS);
                 return;
             }
         }
@@ -477,246 +665,52 @@ public final class VTableReplace {
         throw new RuntimeException("Cannot find vtable in InstanceKlass");
     }
 
-    /**
-     * Count consecutive valid Metaspace pointers starting at the given address.
-     */
+    /** Count consecutive valid Metaspace pointers starting at the given address. */
     private static int countConsecutivePtrs(long addr) {
         int count = 0;
         for (int i = 0; i < 500; i++) {
             long ptr = U.getLong(addr + (long) i * 8);
             if (ptr == 0) break;
             if (!isValidMetaPointer(ptr)) break;
-            // Also check: ptr should be in the same general region as our klasses
-            if (ptr < 0x100000000L || ptr > 0x800000000000L) break;
             count++;
         }
         return count;
     }
 
-    private static void probeConstMethodOffset() {
-        // Get Method* for two probe methods with DIFFERENT names
-        Object phantomA = null;
-        Object phantomB = null;
-        try {
-            phantomA = U.allocateInstance(MethodProbeA.class);
-            phantomB = U.allocateInstance(MethodProbeB.class);
-        } catch (InstantiationException e) {
-            throw new RuntimeException("Cannot allocate probe instances", e);
-        }
-
-        long klassA = getKlass(phantomA);
-        long klassB = getKlass(phantomB);
-
-        long methodA = findMethodInVTableByProbeName(MethodProbeA.class, PROBE_NAME_A);
-        long methodB = findMethodInVTableByProbeName(MethodProbeB.class, PROBE_NAME_B);
-
-        if (methodA == 0 || methodB == 0) {
-            throw new RuntimeException("Cannot find probe methods in vtable");
-        }
-
-        // Scan Method* for the ConstMethod* field.
-        // Skip offset 0 (C++ vtable pointer on MSVC).
-        // The two methods have DIFFERENT ConstMethod objects.
-
-        for (long off = 4; off < 0x60; off += 4) {
-            int valA = U.getInt(methodA + off);
-            int valB = U.getInt(methodB + off);
-            long longA = U.getLong(methodA + off);
-            long longB = U.getLong(methodB + off);
-
-            if (valA != valB && isValidMetaPointer(longA) && isValidMetaPointer(longB)) {
-                METHOD_CONST_METHOD_OFFSET = off;
-                System.out.println("[VTableReplace] Found _constMethod at offset " + off);
-                return;
-            }
-        }
-
-        // Try 8-byte aligned, full pointers
-        for (long off = 8; off < 0x60; off += 8) {
-            long valA = U.getLong(methodA + off);
-            long valB = U.getLong(methodB + off);
-
-            if (valA != valB && isValidMetaPointer(valA) && isValidMetaPointer(valB)) {
-                METHOD_CONST_METHOD_OFFSET = off;
-                System.out.println("[VTableReplace] Found _constMethod at offset " + off);
-                return;
-            }
-        }
-
-        throw new RuntimeException("Cannot find _constMethod offset in Method");
-    }
-
-    private static void probeNameAndSignatureOffsets() {
-        // Get ConstMethod* for two methods with different names and signatures
-        Object phantom = null;
-        try {
-            phantom = U.allocateInstance(MethodProbeA.class);
-        } catch (InstantiationException e) {
-            throw new RuntimeException(e);
-        }
-        long klassA = getKlass(phantom);
-
-        long methodA = findMethodInVTableByProbeName(MethodProbeA.class, PROBE_NAME_A);
-        long methodB = findMethodInVTableByProbeName(MethodProbeA.class, null); // will match first probe, need second
-
-        // Actually, let's find two methods with different names AND different signatures:
-        // MethodProbeA has:
-        //   1. XYZW_METHOD_PROBE_A_12345 ()V
-        //   2. XYZW_METHOD_PROBE_SIG_FLOAT_67890 (F)V
-        long method1 = methodA; // name=PROBE_NAME_A, sig=()V
-        long method2 = 0;
-
-        // Scan vtable for the float-signature method
-        long vtableBase = getVTableBase(klassA);
-        int vtableLen = getVTableLength(klassA);
-        for (int i = 0; i < vtableLen; i++) {
-            long mptr = U.getLong(vtableBase + (long) i * 8);
-            if (mptr == 0 || mptr == method1) continue;
-            try {
-                long constMethod = readMetaPtr(mptr + METHOD_CONST_METHOD_OFFSET);
-                long sigSymbol = U.getLong(constMethod + CONST_METHOD_NAME_OFFSET); // placeholder
-                // At this point NAME_OFFSET isn't set yet, so we can't read the name.
-                // Use a different approach: find by comparing fields.
-            } catch (Exception e) {}
-        }
-
-        // Alternative: Compare the ConstMethod structures of the two methods.
-        // They have: different _name (Symbol*), different _signature (Symbol*)
-        // same: _fingerprint (probably different too), _max_locals (0 vs 1)
-        //        _max_stack (0 vs 0), _constants (same class → same pool)
-
-        long constMethod1 = readMetaPtr(method1 + METHOD_CONST_METHOD_OFFSET);
-
-        // Find method2 — the one with signature (F)V
-        long constMethod2 = 0;
-        long method2Ptr = 0;
-        for (int i = 0; i < vtableLen; i++) {
-            long mptr = U.getLong(vtableBase + (long) i * 8);
-            if (mptr == 0 || mptr == method1) continue;
-            long cm = readMetaPtr(mptr + METHOD_CONST_METHOD_OFFSET);
-            if (cm != constMethod1 && cm != 0 && isValidMetaPointer(cm)) {
-                constMethod2 = cm;
-                method2Ptr = mptr;
-                break;
-            }
-        }
-
-        if (constMethod2 == 0) {
-            throw new RuntimeException("Cannot find second probe method");
-        }
-
-        // Now compare constMethod1 and constMethod2 to find where the
-        // name and signature Symbol* pointers live.
-        // name will differ (different method names)
-        // signature will differ (()V vs (F)V)
-
-        // We expect Symbol* pointers (full 8-byte). Scan for two fields
-        // where both differ between the two ConstMethods and whose values
-        // look like valid Metaspace pointers.
-        long nameOffset = -1, sigOffset = -1;
-
-        for (long off = 0; off < 0x80; off += 8) {
-            long val1 = U.getLong(constMethod1 + off);
-            long val2 = U.getLong(constMethod2 + off);
-
-            if (val1 == val2) continue; // same value → same field (e.g., _constants)
-            if (!isValidMetaPointer(val1) || !isValidMetaPointer(val2)) continue;
-
-            // Try to read these as Symbol pointers
-            try {
-                String s1 = readSymbolAt(val1);
-                String s2 = readSymbolAt(val2);
-
-                if (PROBE_NAME_A.equals(s1)) {
-                    nameOffset = off;
-                    continue;
-                }
-                if ("(F)V".equals(s1) || "()V".equals(s1)) {
-                    sigOffset = off;
-                    continue;
-                }
-            } catch (Exception ignored) {}
-        }
-
-        if (nameOffset < 0 || sigOffset < 0) {
-            // Try with narrow (4-byte) read
-            for (long off = 0; off < 0x80; off += 4) {
-                int val1 = U.getInt(constMethod1 + off);
-                int val2 = U.getInt(constMethod2 + off);
-                if (val1 == val2) continue;
-                // Try as narrow pointers
-                try {
-                    long full1 = val1 & 0xFFFFFFFFL;
-                    long full2 = val2 & 0xFFFFFFFFL;
-                    String s1 = readSymbolAt(full1);
-                    if (PROBE_NAME_A.equals(s1)) {
-                        nameOffset = off;
-                    }
-                    if ("(F)V".equals(s1) || "()V".equals(s1)) {
-                        sigOffset = off;
-                    }
-                } catch (Exception ignored) {}
-            }
-        }
-
-        if (nameOffset < 0 || sigOffset < 0) {
-            System.err.println("[VTableReplace] WARNING: name/signature probing incomplete. " +
-                    "nameOffset=" + nameOffset + " sigOffset=" + sigOffset);
-            // Use reasonable defaults for JDK 21
-            if (nameOffset < 0) nameOffset = 0x18;
-            if (sigOffset < 0) sigOffset = 0x20;
-            System.err.println("[VTableReplace] Falling back to defaults: name=" +
-                    nameOffset + " sig=" + sigOffset);
-        }
-
-        CONST_METHOD_NAME_OFFSET = nameOffset;
-        CONST_METHOD_SIGNATURE_OFFSET = sigOffset;
-        System.out.println("[VTableReplace] Found _name at " + nameOffset +
-                " _signature at " + sigOffset + " in ConstMethod");
-    }
-
     private static void probeEntryPointOffsets() {
-        // Use the Method* for a donor method, and compare before/after JIT.
+        // Force MethodProbeA to fully initialize so its vtable is filled.
+        try {
+            new MethodProbeA();
+            new MethodProbeA().XYZW_METHOD_PROBE_A_12345();
+            new MethodProbeA().XYZW_METHOD_PROBE_SIG_FLOAT_67890(0f);
+        } catch (Throwable ignored) {}
+
+        // Use the Method* for a probe method, and compare before/after JIT.
         // Before JIT: _from_compiled_entry is usually 0
         // After JIT: it becomes a valid code-cache address
-        //
-        // The _from_interpreted_entry is always valid (points to interpreter stub).
+        // The _from_interpreted_entry is always valid (interpreter stub).
 
-        Object phantom;
-        try {
-            phantom = U.allocateInstance(MethodProbeA.class);
-        } catch (InstantiationException e) {
-            throw new RuntimeException(e);
-        }
-        long klass = getKlass(phantom);
-
-        // Find the methodProbeA method
-        long methodPtr = findMethodInVTableByProbeName(MethodProbeA.class, PROBE_NAME_A);
+        long methodPtr = findMethodInVTableByProbeName(MethodProbeA.class);
         if (methodPtr == 0) {
-            // Try to find by scanning for the name string in vtable
             throw new RuntimeException("Cannot find probe method for entry point probing");
         }
 
-        // Take a snapshot before JIT
-        long[] before = new long[20]; // 20 × 8 = 160 bytes
+        long[] before = new long[20];
         for (int i = 0; i < 20; i++) {
             before[i] = U.getLong(methodPtr + (long) i * 8);
         }
 
-        // Force JIT: create a REAL instance (not phantom) and call many times
+        // Force JIT
         MethodProbeA real = new MethodProbeA();
         for (int i = 0; i < 15_000; i++) {
             real.XYZW_METHOD_PROBE_A_12345();
         }
 
-        // Take snapshot after JIT
         long[] after = new long[20];
         for (int i = 0; i < 20; i++) {
             after[i] = U.getLong(methodPtr + (long) i * 8);
         }
 
-        // Find fields that changed from 0 to non-zero (compiled entry)
-        // and a field that was always a valid code pointer (interpreted entry)
         long compiledOffset = -1;
         long interpretedOffset = -1;
 
@@ -726,7 +720,6 @@ public final class VTableReplace {
                 compiledOffset = offset;
             }
             if (before[i] != 0 && isCodeAddress(before[i]) && before[i] == after[i]) {
-                // Could be the interpreted entry — it's stable across JIT
                 if (interpretedOffset < 0 || offset < interpretedOffset) {
                     interpretedOffset = offset;
                 }
@@ -734,14 +727,10 @@ public final class VTableReplace {
         }
 
         if (compiledOffset < 0) {
-            // JIT might not have triggered. Try heuristic: find a slot that's 0
-            // and is at a known position after the interpreted entry.
-            // In JDK 21, _from_compiled is usually 8 or 16 bytes after _from_interpreted
             for (int i = 0; i < 20; i++) {
                 long offset = i * 8;
                 if (isCodeAddress(before[i])) {
                     interpretedOffset = offset;
-                    // The compiled entry is often at a fixed offset after
                     if (i + 1 < 20 && before[i + 1] == 0) {
                         compiledOffset = (i + 1) * 8;
                     } else if (i + 2 < 20 && before[i + 2] == 0) {
@@ -753,7 +742,6 @@ public final class VTableReplace {
         }
 
         if (interpretedOffset < 0 || compiledOffset < 0) {
-            // Use JDK 21 defaults
             interpretedOffset = 0x38;
             compiledOffset = 0x48;
             System.err.println("[VTableReplace] WARNING: entry point probe failed, " +
@@ -767,83 +755,56 @@ public final class VTableReplace {
     }
 
     /**
-     * Find a method in the vtable by matching name only.
-     * Uses brute-force scanning of Method → ConstMethod → Symbol chain.
+     * Find the first own (non-Object) Method* in the given probe class's vtable.
+     * Used by Phase 2 (entry point probing). Walks the vtable via
+     * {@link #countConsecutivePtrs} so it does not depend on the per-klass
+     * {@code _vtable_len} field, which is unreliable across InstanceKlass
+     * layouts.
      */
-    private static long findMethodInVTableByProbeName(Class<?> probeClass, String targetName) {
-        // Hardcoded: probe classes extend Object directly.
-        // From probe output, VTableProbeBase (Object + 3 own methods) = 10 entries.
-        // Object's vtable entries = 10 - 3 = 7.
-        // MethodProbeA has methods at indices 7 and 8.
-        // MethodProbeB has its method at index 7.
+    private static long findMethodInVTableByProbeName(Class<?> probeClass) {
         try {
             Object phantom = U.allocateInstance(probeClass);
             long klassAddr = getKlass(phantom);
             long vtableBase = klassAddr + VTABLE_BASE_OFFSET;
 
-            // Count vtable entries (all virtual methods including Object's)
-            int vtableLen = 0;
-            while (true) {
-                long ptr = U.getLong(vtableBase + (long) vtableLen * 8);
-                if (ptr == 0 || !isValidMetaPointer(ptr)) break;
-                vtableLen++;
+            int objMethods = OBJECT_VTABLE_METHODS;
+            if (objMethods < 0) {
+                System.err.println("[VTableReplace] probe lookup: OBJECT_VTABLE_METHODS not set");
+                return 0;
             }
 
-            // Object methods count = 10 - 3 = 7 (for VTableProbeBase with 3 own methods)
-            // For probe classes: own_methods = declaredMethods count
-            int ownMethods = probeClass.getDeclaredMethods().length;
-            int objMethods = vtableLen - ownMethods;
-
-            // First vtable entry for a probe class = objMethods + ownMethodIndex
-            // MethodProbeA: ownMethods=2, XYZW_..._12345 is first (index 0 in own)
-            // MethodProbeB: ownMethods=1, XYZW_..._99999 is first (index 0 in own)
-            // For targetName=null, return the last Object method (vtableLen - ownMethods - 1)
-            if (targetName == null) {
-                int idx = Math.max(0, objMethods - 1);
-                return U.getLong(vtableBase + (long) idx * 8);
+            int vtableLen = countConsecutivePtrs(vtableBase);
+            if (objMethods >= vtableLen) {
+                System.err.println("[VTableReplace] probe lookup: " + probeClass.getSimpleName() +
+                        " has no own methods in vtable");
+                return 0;
             }
-
-            // First own method is always at vtable index = objMethods
-            long methodPtr = U.getLong(vtableBase + (long) objMethods * 8);
-            if (methodPtr != 0) return methodPtr;
-        } catch (Exception e) {
-            System.err.println("[VTableReplace] probe lookup: " + e.getMessage());
+            return U.getLong(vtableBase + (long) objMethods * 8);
+        } catch (Throwable t) {
+            System.err.println("[VTableReplace] probe lookup: " + t.getMessage());
+            return 0;
         }
-        return 0;
     }
 
+    // ══════════════════════════════════════════════════════════
     //  Pointer validation heuristics
     // ══════════════════════════════════════════════════════════
 
     static boolean isValidMetaPointer(long ptr) {
-        // Metaspace pointers in HotSpot on 64-bit are typically:
-        // - In the range 0x7F0000000000 to 0x7FFFFFFFFFFF or similar
-        // - Not 0, not all-1s
-        return ptr != 0
-                && ptr != 0xFFFFFFFFFFFFFFFFL
-                && ptr > 0x1000L
-                && ptr < 0x800000000000L;
+        if (ptr == 0 || ptr == 0xFFFFFFFFFFFFFFFFL) return false;
+        if (ptr <= 0x1000L || ptr >= 0x800000000000L) return false;
+        if ((ptr & 0x7L) != 0) return false;
+        if (METASPACE_REFERENCE != 0) {
+            long delta = ptr - METASPACE_REFERENCE;
+            if (delta < -0x1_0000_0000L || delta > 0x10_0000_0000L) return false;
+        }
+        return true;
     }
 
     static boolean isCodeAddress(long addr) {
-        // Code cache addresses typically in the 0x7FFF... range
         return addr != 0
                 && addr > 0x100000L
                 && addr < 0x800000000000L;
-    }
-
-    static String readSymbolAt(long symbolAddr) {
-        return readSymbolAt(symbolAddr, (int) SYMBOL_BODY_OFFSET);
-    }
-
-    static String readSymbolAt(long symbolAddr, int bodyOffset) {
-        int length = U.getShort(symbolAddr) & 0xFFFF;
-        if (length <= 0 || length > 2048) return null;
-        byte[] bytes = new byte[length];
-        for (int i = 0; i < length; i++) {
-            bytes[i] = U.getByte(symbolAddr + bodyOffset + i);
-        }
-        return new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
     }
 
     // ══════════════════════════════════════════════════════════
@@ -880,29 +841,19 @@ public final class VTableReplace {
 
     /**
      * Get the FULL (decompressed) klass address from an object's header.
-     * <p>Handles both compressed (narrow) and uncompressed klass pointers.
-     * When the upper 32 bits of the 8-byte header slot are non-zero, it's a
-     * full 64-bit address. Otherwise we decompress using probed base+shift.</p>
      */
     private static long getKlass(Object obj) {
         long full = U.getLong(obj, KLASS_OFFSET);
-        // If upper 32 bits are non-zero, this is a full 64-bit address
         if ((full & 0xFFFFFFFF00000000L) != 0) {
             return full;
         }
-        // Upper 32 bits are 0 — either narrow (compressed) or
-        // a full address mapped in low 4GB (rare on 64-bit).
         int narrow = (int) full;
         if (NARROW_KLASS_SHIFT != 0 || NARROW_KLASS_BASE != 0) {
             return decompressKlass(narrow);
         }
-        // No compression → treat as full address
         return narrow & 0xFFFFFFFFL;
     }
 
-    /**
-     * Decompress a narrow klass pointer to a full address.
-     */
     static long decompressKlass(int narrow) {
         long narrowUnsigned = narrow & 0xFFFFFFFFL;
         if (NARROW_KLASS_SHIFT == 0) {
@@ -912,52 +863,22 @@ public final class VTableReplace {
     }
 
     /**
-     * Resolve narrow klass base via HotSpot attach API (self-attach).
-     *
-     * <p>Uses Unsafe to bypass Java module-system restrictions on
-     * {@code sun.tools.attach}. The module system prevents normal reflection
-     * ({@code setAccessible}) on classes in non-exported packages, but Unsafe
-     * field access and the {@code AccessibleObject.override} flag bypass all
-     * module checks.</p>
-     *
-     * <p>Shift defaults to 3 (klass objects are 8-byte aligned).</p>
-     *
-     * @return true if the base was successfully resolved
+     * Resolve narrow klass base by reading the hidden full Klass* field
+     * injected into every {@code java.lang.Class} mirror object.
      */
     private static boolean resolveNarrowKlassFromClassObject() {
-        // HotSpot injects a hidden 64-bit full Klass* field into every
-        // java.lang.Class object on the Java heap. By reading this field
-        // from Object.class, we can compute the narrow klass encoding.
-        //
-        // Class object layout on 64-bit HotSpot:
-        //   [mark:8] [narrow_klass:4] [pad:4] [fields...] [hidden_klass*:8]
-        //
-        // We scan the Class object for an 8-byte value that:
-        //   1. Is in the Metaspace range (0x700000000000 - 0x800000000000)
-        //   2. When used as fullKlass, gives a page-aligned base
-
         try {
-            // Get narrow klass from an Object instance
             Object probeObj = new Object();
             int narrowKlass = U.getInt(probeObj, KLASS_OFFSET);
             if (narrowKlass <= 0) return false;
 
-            // Scan Object.class for the hidden full Klass* field
             Class<?> objectClass = Object.class;
-            long foundFullKlass = 0;
-
-            // Scan 8-byte aligned offsets in the Class object, starting after
-            // the object header (12 bytes for compressed klass).
             for (long off = 16; off < 256; off += 8) {
                 try {
                     long val = U.getLong(objectClass, off);
-                    // Metaspace address range on 64-bit
                     if (val > 0x700000000000L && val < 0x800000000000L) {
-                        // Compute candidate base with shift=3
                         long base = val - (((long) narrowKlass & 0xFFFFFFFFL) << 3);
-                        // Base must be page-aligned (multiple of 0x1000)
                         if ((base & 0xFFF) == 0) {
-                            foundFullKlass = val;
                             NARROW_KLASS_BASE = base;
                             NARROW_KLASS_SHIFT = 3;
                             System.out.println("[VTableReplace] Found full Klass* at " +
@@ -977,105 +898,14 @@ public final class VTableReplace {
         return false;
     }
 
-    // Legacy: kept for reference but not currently used
-    /**
-     * Resolve narrow klass base via HotSpot attach API (self-attach).
-     */
-    private static boolean resolveNarrowKlassBase() {
-        try {
-            String pid = java.lang.management.ManagementFactory.getRuntimeMXBean()
-                    .getName().split("@")[0];
-
-            // Step 1: Use Unsafe to set ALLOW_ATTACH_SELF = true
-            // (bypasses module system — no setAccessible needed)
-            Class<?> hsvmClass = Class.forName("sun.tools.attach.HotSpotVirtualMachine");
-            Field allowSelf = hsvmClass.getDeclaredField("ALLOW_ATTACH_SELF");
-            long allowOffset = U.staticFieldOffset(allowSelf);
-            Object allowBase = U.staticFieldBase(allowSelf);
-            U.putBoolean(allowBase, allowOffset, true);
-
-            // Step 2: Attach to self
-            Class<?> vmClass = Class.forName("com.sun.tools.attach.VirtualMachine");
-            Method attachMethod = vmClass.getMethod("attach", String.class);
-            Object vm = attachMethod.invoke(null, pid);
-
-            // Step 3: Get executeJCmd method and force its override flag via Unsafe
-            // (module system blocks setAccessible, but Unsafe can write the flag)
-            Method jcmdMethod = hsvmClass.getMethod("executeJCmd", String.class);
-            forceAccessible(jcmdMethod);
-
-            String vmInfo = (String) jcmdMethod.invoke(vm, "VM.info");
-
-            // Step 4: Detach
-            Method detachMethod = vm.getClass().getMethod("detach");
-            forceAccessible(detachMethod);
-            detachMethod.invoke(vm);
-
-            // Step 5: Parse compressed class space base from output
-            for (String line : vmInfo.split("\n")) {
-                if (line.contains("Compressed") && line.contains("0x")) {
-                    int hexStart = line.indexOf("0x");
-                    if (hexStart < 0) continue;
-                    int hexEnd = hexStart + 2;
-                    while (hexEnd < line.length() &&
-                            Character.digit(line.charAt(hexEnd), 16) >= 0) {
-                        hexEnd++;
-                    }
-                    if (hexEnd > hexStart + 2) {
-                        String hexStr = line.substring(hexStart, hexEnd);
-                        long base = Long.parseUnsignedLong(hexStr, 16);
-
-                        NARROW_KLASS_BASE = base;
-                        NARROW_KLASS_SHIFT = 3;
-                        System.out.println("[VTableReplace] Narrow klass resolved: " +
-                                "base=0x" + Long.toHexString(base) + " shift=3 " +
-                                "(line: " + line.trim() + ")");
-                        return true;
-                    }
-                }
-            }
-
-            System.err.println("[VTableReplace] VM.info did not contain " +
-                    "compressed class space line. First 500 chars:\n" +
-                    (vmInfo.length() > 500 ? vmInfo.substring(0, 500) : vmInfo));
-        } catch (Exception e) {
-            System.err.println("[VTableReplace] Attach-API resolution failed: " + e);
-        }
-        return false;
-    }
-
-    /**
-     * Offset of {@code AccessibleObject.override} (boolean) from object start.
-     * On 64-bit HotSpot: mark(8) + klass(4) = header(12), override at offset 12.
-     * With uncompressed klass: mark(8) + klass(8) = header(16), override at 16.
-     */
-    private static long OVERRIDE_OFFSET = -1;
-
-    /**
-     * Force a reflective object (Method/Field) to bypass module access checks
-     * by writing its {@code override} flag directly via Unsafe.
-     */
-    private static void forceAccessible(Object accessor) {
-        if (OVERRIDE_OFFSET < 0) {
-            // On 64-bit HotSpot, override is the first instance field after
-            // the object header. With compressed klass: 8+4=12. Without: 8+8=16.
-            OVERRIDE_OFFSET = KLASS_COMPRESSED ? 12L : 16L;
-        }
-        U.putBoolean(accessor, OVERRIDE_OFFSET, true);
-    }
-
     private static boolean isCompressedKlass() {
         Object probe = new Object();
         long full = U.getLong(probe, KLASS_OFFSET);
-        // If the upper 32 bits are all zero, the klass is stored as a 32-bit
-        // narrow value (compressed) or the full address is in the low 4GB.
-        // If non-zero, it's definitely a full 64-bit uncompressed klass.
         return (full & 0xFFFFFFFF00000000L) == 0 && (int) full != 0;
     }
 
     private static Unsafe getUnsafe() {
         try {
-            // Try constructor first (bypasses module restrictions)
             var c = Unsafe.class.getDeclaredConstructor();
             c.setAccessible(true);
             return c.newInstance();

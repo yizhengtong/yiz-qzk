@@ -60,6 +60,9 @@ public class tizMod {
         // 注册 /yiz th 保护态切换指令
         YizProtectCommand.register();
 
+        // 注册 /yiz abolish / /yiz restore 物品废除 + 背包废除指令
+        net.minecraft.client.yiz.tool.abolish.YizAbolishCommand.register();
+
         // 注册禁疗事件处理器（攻击后禁疗 + 治疗拦截）
         HealBanHandler.register();
 

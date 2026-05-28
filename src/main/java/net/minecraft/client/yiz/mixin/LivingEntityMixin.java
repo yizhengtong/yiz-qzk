@@ -2,6 +2,7 @@ package net.minecraft.client.yiz.mixin;
 
 import net.minecraft.client.yiz.api.CounterAttackRegistry;
 import net.minecraft.client.yiz.api.DamageReductionRegistry;
+import net.minecraft.client.yiz.api.DamageValueModifierRegistry;
 import net.minecraft.client.yiz.api.KnockbackImmunityRegistry;
 import net.minecraft.client.yiz.api.ProjectileImmunityRegistry;
 import net.minecraft.client.yiz.api.UndyingRegistry;
@@ -206,6 +207,10 @@ public abstract class LivingEntityMixin implements HealthDataBridge {
     private float yizmodqzk$modifyHurtAmount(float amount, DamageSource source) {
         if (amount <= 0) return amount;
         LivingEntity self = (LivingEntity) (Object) this;
+
+        // === DamageValueModifierRegistry — 自定义伤害数值修改（前置处理） ===
+        amount = DamageValueModifierRegistry.apply(self, source, amount);
+        if (amount <= 0) return 0;
 
         // %伤害增幅 — 攻击者物品
         if (source.getEntity() instanceof LivingEntity attacker) {

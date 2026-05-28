@@ -34,6 +34,12 @@ public final class UIConfig {
         "key.categories.yizmodqzk"
     );
 
+    private static final KeyMapping TOGGLE_ABOLISH_PANEL_KEY = new KeyMapping(
+        "key.yizmodqzk.toggle_abolish_panel",
+        GLFW.GLFW_KEY_F7,
+        "key.categories.yizmodqzk"
+    );
+
     // UI 开关状态
     private static boolean customItemUIEnabled = false;
     private static boolean playerTalentUIEnabled = false;
@@ -85,6 +91,14 @@ public final class UIConfig {
     public static boolean isPanelKeyboardKey(int keyCode, int action) {
         return action == GLFW.GLFW_PRESS
             && keyCode == TOGGLE_PANEL_KEYBOARD_KEY.getKey().getValue();
+    }
+
+    /**
+     * 检测物品废除面板开关键（默认 B）按下。
+     */
+    public static boolean isAbolishPanelKey(int keyCode, int action) {
+        return action == GLFW.GLFW_PRESS
+            && keyCode == TOGGLE_ABOLISH_PANEL_KEY.getKey().getValue();
     }
 
     public static int getPanelKeyboardKeyCode() {
@@ -192,6 +206,10 @@ public final class UIConfig {
 
     public static KeyMapping getTogglePanelKeyboardKey() {
         return TOGGLE_PANEL_KEYBOARD_KEY;
+    }
+
+    public static KeyMapping getToggleAbolishPanelKey() {
+        return TOGGLE_ABOLISH_PANEL_KEY;
     }
 
 }

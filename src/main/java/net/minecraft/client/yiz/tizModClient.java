@@ -103,6 +103,7 @@ public class tizModClient {
         event.register(UIConfig.getToggleTalentUIKey());
         event.register(UIConfig.getTogglePanelFixKey());
         event.register(UIConfig.getTogglePanelKeyboardKey());
+        event.register(UIConfig.getToggleAbolishPanelKey());
     }
 
     /**
@@ -130,6 +131,11 @@ public class tizModClient {
         // CTRL + C: 切换面板固定/跟随
         if (ctrlHeld && UIConfig.isPanelFixKey(event.getKey(), event.getAction())) {
             net.minecraft.client.yiz.client.render.HandheldPanelRenderer.toggleFixCurrent();
+        }
+
+        // F7: 打开物品废除面板（单独键，不需要 CTRL，避免与复述功能 CTRL+B 冲突）
+        if (UIConfig.isAbolishPanelKey(event.getKey(), event.getAction())) {
+            mc.setScreen(new net.minecraft.client.yiz.ui.AbolishPanelScreen());
         }
     }
 

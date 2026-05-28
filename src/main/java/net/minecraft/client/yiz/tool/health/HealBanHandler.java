@@ -8,6 +8,7 @@ import net.neoforged.neoforge.event.entity.living.LivingHealEvent;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.world.entity.LivingEntity;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;

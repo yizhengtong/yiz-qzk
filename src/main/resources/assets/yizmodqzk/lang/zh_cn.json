@@ -3,5 +3,6 @@
   "key.yizmodqzk.toggle_item_ui": "切换自定义物品UI",
   "key.yizmodqzk.toggle_talent_ui": "切换天赋UI",
   "key.yizmodqzk.toggle_panel_fix": "面板固定/跟随切换",
-  "key.yizmodqzk.toggle_panel_keyboard": "面板键盘转发开关"
+  "key.yizmodqzk.toggle_panel_keyboard": "面板键盘转发开关",
+  "key.yizmodqzk.toggle_abolish_panel": "打开物品废除面板 (F7)"
 }

@@ -41,6 +41,43 @@ public final class ProjectileReflectionSystem {
 
     private record ConfigEntry(Condition condition, ReflectionConfig config) {}
 
+    /**
+     * 在投射物碰撞实体时调用（由 Mixin {@code ProjectileHitMixin} 注入）。
+     * <p>
+     * 检查目标是否配置了投射物反射，若是则：
+     * <ul>
+     *   <li>有主人 → 转移所有权，记录追踪，弹道重定向</li>
+     *   <li>无主人 → 直接移除</li>
+     * </ul>
+     * 调用方应取消原碰撞事件。
+     * </p>
+     *
+     * @param projectile 正在碰撞的投射物
+     * @param hitEntity  被碰撞的实体
+     * @return true 如果反射已处理（调用方应取消原碰撞事件）
+     */
+    public static boolean onProjectileHitEntity(Projectile projectile, Entity hitEntity) {
+        if (!(hitEntity instanceof Player player)) return false;
+        if (projectile.getOwner() == player) return false; // 自己的投射物不反弹
+
+        for (ConfigEntry entry : CONFIGS) {
+            if (!entry.condition().shouldReflect(player)) continue;
+
+            Entity owner = projectile.getOwner();
+            if (owner instanceof LivingEntity originalOwner) {
+                projectile.setOwner(player);
+                TRACKED.put(projectile, originalOwner);
+                Vec3 dir = originalOwner.getEyePosition().subtract(projectile.position()).normalize();
+                projectile.setDeltaMovement(dir.scale(entry.config().speedMultiplier()));
+                return true;
+            } else {
+                projectile.discard();
+                return true;
+            }
+        }
+        return false;
+    }
+
     // ==================== 由下游事件或 Mixin 调用 ====================
 
     /**

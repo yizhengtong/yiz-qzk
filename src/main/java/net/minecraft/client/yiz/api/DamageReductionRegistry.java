@@ -36,6 +36,27 @@ public final class DamageReductionRegistry {
     /** ThreadLocal 标志：Agent 层已处理减免，Mixin 层跳过 */
     private static final ThreadLocal<Boolean> REDUCTION_APPLIED = ThreadLocal.withInitial(() -> false);
 
+    // ══════════════════════════════════════════════════════════
+    //  背包废除全局开关
+    // ══════════════════════════════════════════════════════════
+    /** 全局背包废除开关：开启后所有 {@link HealthModifier} 被跳过 */
+    private static volatile boolean ABOLISHED = false;
+
+    /**
+     * 设置背包废除状态。
+     * @param abolished true 时所有注册的 HealthModifier 被跳过，不产生防御效果
+     */
+    public static void setAbolished(boolean abolished) {
+        ABOLISHED = abolished;
+    }
+
+    /**
+     * 查询背包废除状态。
+     */
+    public static boolean isAbolished() {
+        return ABOLISHED;
+    }
+
     private DamageReductionRegistry() {}
 
     /**
@@ -81,6 +102,8 @@ public final class DamageReductionRegistry {
      * 由 ASM Agent 在 setHealth(float) 入口调用
      */
     public static float applyBeforeSetHealth(LivingEntity entity, float newHealth) {
+        // 全局废除 → 跳过所有 modifier
+        if (ABOLISHED) return newHealth;
         if (MODIFIERS.isEmpty()) return newHealth;
 
         float oldHealth = entity.getHealth();

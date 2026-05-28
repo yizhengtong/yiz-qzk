@@ -6,9 +6,12 @@
   "mixins": [
     "AttackInterceptorMixin",
     "FlightOptimizationMixin",
+    "ItemAbolitionMixin",
+    "LivingEntityArmorAbolitionMixin",
     "LivingEntityMixin",
     "NoCollisionMixin",
-    "PlayerMixin"
+    "PlayerMixin",
+    "ProjectileHitMixin"
   ],
   "client": [
     "ItemRendererStarMixin",

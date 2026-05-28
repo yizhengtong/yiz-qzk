@@ -59,6 +59,21 @@ public class EmptyImplementations {
     @SuppressWarnings("unused")
     public void emptyRemove(Entity.RemovalReason reason) {}
 
+    // ── int ()I ─────────────────────────────────────────────
+    /** Descriptor ()I — returns 0; replaces getArmorValue(), getUseDuration() */
+    @SuppressWarnings("unused")
+    public int emptyZeroInt() { return 0; }
+
+    // ── float (FF)F ─────────────────────────────────────────
+    /** Descriptor (FF)F — returns first arg (damage unchanged); replaces getDamageAfterMagicAbsorb() */
+    @SuppressWarnings("unused")
+    public float emptyReturnFirstFloat(float damage, float protection) { return damage; }
+
+    // ── float (F)F ──────────────────────────────────────────
+    /** Descriptor (F)F — returns the arg unchanged; identity for float transformers */
+    @SuppressWarnings("unused")
+    public float emptyIdentityFloat(float value) { return value; }
+
     // ── Force-JIT helpers ────────────────────────────────────
     /**
      * Call each method many times to trigger JIT compilation, ensuring
@@ -77,6 +92,9 @@ public class EmptyImplementations {
                 donor.emptyDamageSourceFloat(null, i);
                 donor.emptyDie(null);
                 donor.emptyRemove(null);
+                donor.emptyZeroInt();
+                donor.emptyReturnFirstFloat((float) i, (float) i);
+                donor.emptyIdentityFloat((float) i);
             }
         }
     }

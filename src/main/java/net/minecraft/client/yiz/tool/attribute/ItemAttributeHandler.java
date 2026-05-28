@@ -208,6 +208,10 @@ public final class ItemAttributeHandler {
 
     /** 合并物品 + 实体级的伤害减免总值 */
     public static double getTotalDamageReduction(LivingEntity entity) {
+        // 背包防御已废除 → 所有物品减免归零
+        if (DEFENSE_ABOLISHED_PLAYERS.contains(entity.getUUID())) {
+            return 0.0;
+        }
         double total = 0;
         total += getDamageReduction(entity.getMainHandItem());
         total += getDamageReduction(entity.getOffhandItem());
@@ -223,6 +227,38 @@ public final class ItemAttributeHandler {
     private static final Map<UUID, Double> entityAmplification = new ConcurrentHashMap<>();
     /** 实体伤害减免内存存储 */
     private static final Map<UUID, Double> entityReduction = new ConcurrentHashMap<>();
+
+    // ══════════════════════════════════════════════════════════════
+    //  背包废除系统
+    // ══════════════════════════════════════════════════════════════
+
+    /** 标记为"背包防御已废除"的玩家 UUID 集合 */
+    private static final java.util.Set<UUID> DEFENSE_ABOLISHED_PLAYERS = ConcurrentHashMap.newKeySet();
+
+    /**
+     * 设置/取消玩家的背包防御废除状态。
+     * <p>
+     * 废除后该玩家身上所有物品的 % 伤害减免（damage_reduction）
+     * 在 {@link #getTotalDamageReduction} 中会被忽略。
+     * </p>
+     *
+     * @param playerUuid 玩家 UUID
+     * @param abolished  true = 废除防御，false = 恢复
+     */
+    public static void setDefenseAbolished(UUID playerUuid, boolean abolished) {
+        if (abolished) {
+            DEFENSE_ABOLISHED_PLAYERS.add(playerUuid);
+        } else {
+            DEFENSE_ABOLISHED_PLAYERS.remove(playerUuid);
+        }
+    }
+
+    /**
+     * 查询玩家的背包防御是否已被废除。
+     */
+    public static boolean isDefenseAbolished(UUID playerUuid) {
+        return DEFENSE_ABOLISHED_PLAYERS.contains(playerUuid);
+    }
 
     /**
      * 通用：给实体挂载/更新原版属性修饰器。
