@@ -3,7 +3,12 @@ package net.minecraft.client.yiz.tool.health;
 import net.minecraft.client.yiz.bridge.HealthDataBridge;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.sounds.SoundEvents;
+import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.LivingEntity;
+
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 
 /**
  * 实体 ASM 工具
@@ -20,6 +25,23 @@ import net.minecraft.world.entity.LivingEntity;
 public final class EntityASMUtil {
 
     private EntityASMUtil() {}
+
+    // ==================== 死亡触发器开关 ====================
+
+    /**
+     * 当 DELTA 伤害导致有效血量 ≤ 0 时，是否通过反射调用
+     * {@link LivingEntity#die(DamageSource)} 触发原版死亡事件。
+     * 默认开启。关闭后回退到旧行为（DELTA 扣血但不触发 die()）。
+     */
+    private static volatile boolean deathTriggerEnabled = true;
+
+    public static boolean isDeathTriggerEnabled() {
+        return deathTriggerEnabled;
+    }
+
+    public static void setDeathTriggerEnabled(boolean enabled) {
+        deathTriggerEnabled = enabled;
+    }
 
     // ==================== 伤害效果开关（粒子 + 音效） ====================
 
@@ -39,6 +61,42 @@ public final class EntityASMUtil {
      */
     public static void setDamageEffectsEnabled(boolean enabled) {
         damageEffectsEnabled = enabled;
+    }
+
+    // ==================== die() 方法句柄（反射缓存） ====================
+
+    private static volatile MethodHandle dieMethodHandle;
+    private static volatile boolean dieMethodLookupFailed;
+
+    private static MethodHandle getDieMethodHandle() {
+        if (dieMethodHandle != null || dieMethodLookupFailed) return dieMethodHandle;
+        try {
+            MethodHandles.Lookup lookup = MethodHandles.lookup();
+            MethodType mt = MethodType.methodType(void.class, DamageSource.class);
+            dieMethodHandle = lookup.findVirtual(LivingEntity.class, "die", mt);
+        } catch (NoSuchMethodException | IllegalAccessException e) {
+            dieMethodLookupFailed = true;
+        }
+        return dieMethodHandle;
+    }
+
+    /**
+     * 当 DELTA 伤害导致实体有效血量 ≤ 0 时，通过反射调用 die()。
+     * 这是解决 Cataclysm 等模组 Boss 重写 hurt() 返回 false 导致
+     * DELTA 击杀无掉落物的根本方案。
+     */
+    private static void triggerDeathIfDead(LivingEntity entity) {
+        if (!deathTriggerEnabled) return;
+        if (entity.getHealth() > 0.0F) return;
+
+        MethodHandle mh = getDieMethodHandle();
+        if (mh == null) return;
+
+        try {
+            mh.invoke(entity, entity.damageSources().generic());
+        } catch (Throwable ignored) {
+            // die() 调用失败时静默降级（不掉落但也不崩服）
+        }
     }
 
     // ==================== Delta 管理 ====================
@@ -110,6 +168,10 @@ public final class EntityASMUtil {
 
         // 更新禁疗跟踪基线，使 tick 级强制基于最新血量判断
         HealBanHandler.updateBaseline(entity);
+
+        // 4. 死亡触发：若有效血量 ≤ 0，通过反射调用 die() 触发原版死亡事件
+        //    解决 Cataclysm 等模组 Boss 重写 hurt() 返回 false 导致无掉落物的问题
+        triggerDeathIfDead(entity);
     }
 
     /**
