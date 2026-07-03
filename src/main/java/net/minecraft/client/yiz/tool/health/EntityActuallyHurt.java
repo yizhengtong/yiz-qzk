@@ -73,7 +73,10 @@ public final class EntityActuallyHurt {
      * @param special true 时在 setHealth 后额外用 catchSetTrueHealth 写底层数据
      */
     private static void actuallyHurt0(LivingEntity entity, DamageSource source, float amount, boolean special) {
-        float finalHealth = Math.min(entity.getHealth() - amount, entity.getMaxHealth());
+        float currentHealth = entity.getHealth();
+        if (Float.isNaN(currentHealth)) currentHealth = 20F;
+        if (Float.isNaN(amount)) return;
+        float finalHealth = Math.min(currentHealth - amount, entity.getMaxHealth());
         entity.setHealth(finalHealth);
         if (special) {
             catchSetTrueHealth(entity, finalHealth);
@@ -91,8 +94,11 @@ public final class EntityActuallyHurt {
     }
 
     private static void actuallyHurt0ForDelta(LivingEntity entity, DamageSource source, float amount, boolean special) {
-        float currentHealth = Math.min(entity.getHealth() - amount, entity.getMaxHealth());
-        EntityASMUtil.addDelta(entity, -(entity.getHealth() - currentHealth));
+        float rawHealth = entity.getHealth();
+        if (Float.isNaN(rawHealth)) rawHealth = 20F;
+        if (Float.isNaN(amount)) return;
+        float currentHealth = Math.min(rawHealth - amount, entity.getMaxHealth());
+        EntityASMUtil.addDelta(entity, -(rawHealth - currentHealth));
         if (special) {
             catchSetTrueHealth(entity, currentHealth);
         }

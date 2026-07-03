@@ -137,7 +137,7 @@ public final class CreativeTabAutoRegistry {
     }
 
     private static Item findIconItem(List<Item> items) {
-        if (items.isEmpty()) return items.get(0);
+        if (items.isEmpty()) return null;
         Item first = items.get(0);
         if (first instanceof ITalentItem t) return t.getTabIcon();
         if (first instanceof ISkillItem s) return s.getTabIcon();

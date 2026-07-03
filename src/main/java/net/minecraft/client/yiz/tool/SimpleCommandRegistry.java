@@ -8,8 +8,8 @@ import net.minecraft.commands.Commands;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 
-import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * 简易指令注册器。
@@ -30,7 +30,7 @@ import java.util.List;
  */
 public final class SimpleCommandRegistry {
 
-    private static final List<LiteralArgumentBuilder<CommandSourceStack>> pending = new ArrayList<>();
+    private static final List<LiteralArgumentBuilder<CommandSourceStack>> pending = new CopyOnWriteArrayList<>();
     private static boolean registered = false;
 
     private SimpleCommandRegistry() {}
@@ -52,6 +52,9 @@ public final class SimpleCommandRegistry {
      * @param builder 指令构建器
      */
     public static void register(LiteralArgumentBuilder<CommandSourceStack> builder) {
+        if (builder == null) {
+            throw new IllegalArgumentException("builder must not be null");
+        }
         pending.add(builder);
     }
 
@@ -59,6 +62,12 @@ public final class SimpleCommandRegistry {
      * 快捷注册：无参数的字面指令。
      */
     public static void register(String name, Command<CommandSourceStack> action) {
+        if (name == null) {
+            throw new IllegalArgumentException("name must not be null");
+        }
+        if (action == null) {
+            throw new IllegalArgumentException("action must not be null");
+        }
         register(Commands.literal(name).executes(action));
     }
 

@@ -13,6 +13,7 @@ import net.minecraft.client.yiz.tool.damage.DamageTag;
 import net.minecraft.client.yiz.tool.damage.DirectAttackExecutor;
 import net.minecraft.client.yiz.tool.health.DirectHealthModExecutor;
 import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
@@ -83,10 +84,15 @@ public abstract class AttackInterceptorMixin {
             // 创建效果上下文
             EffectContext effectContext = EffectContext.create(attacker, target);
 
-            // 创建伤害结果
+            // 读取武器实际攻击力（含物品属性修饰符、药水效果等）
+            // 真伤/破甲以武器自身伤害为基础，不设默认附加值。
+            // 如需额外附加伤害，由 DamageTagProvider 效果在 execute() 中
+            // 通过 DamageResult.multiply() / .add() 显式叠加。
+            float weaponDamage = (float) attacker.getAttributeValue(Attributes.ATTACK_DAMAGE);
+
             DamageResult damage = new DamageResult(
-                10.0, // 默认伤害值，应由具体效果提供
-                10.0,
+                weaponDamage,
+                weaponDamage,
                 attacker.damageSources().playerAttack(attacker).typeHolder().unwrapKey().map(ResourceKey::location).orElse(null)
             );
 

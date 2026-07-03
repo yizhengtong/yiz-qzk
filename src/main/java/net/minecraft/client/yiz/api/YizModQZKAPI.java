@@ -2,6 +2,7 @@ package net.minecraft.client.yiz.api;
 
 import net.minecraft.client.yiz.core.event.EffectEventBus;
 import net.minecraft.client.yiz.core.registry.ModRegistries;
+import net.minecraft.client.yiz.tizMod;
 import net.minecraft.client.yiz.effect.AbstractEffect;
 import net.minecraft.client.yiz.effect.EffectContext;
 import net.minecraft.client.yiz.effect.unlock.UnlockManager;
@@ -19,8 +20,11 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.damagesource.DamageSource;
 import net.neoforged.neoforge.common.NeoForge;
 
+import java.lang.annotation.Annotation;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * YizMod QZK 公开 API
@@ -554,7 +558,7 @@ public final class YizModQZKAPI {
     /**
      * 按稀有度统计实体已解锁天赋数量。
      * <p>
-     * 返回 Map 包含以下键：{@code total}（总数）、{@code mythic}（神话）、
+     * 返回 Map 包含以下键：{@code total}（总数）、
      * {@code legendary}（传说）、{@code epic}（史诗）。
      * </p>
      *
@@ -564,7 +568,6 @@ public final class YizModQZKAPI {
     public static java.util.Map<String, Integer> countTalentsByRarity(LivingEntity entity) {
         java.util.Map<String, Integer> counts = new java.util.HashMap<>();
         counts.put("total", 0);
-        counts.put("mythic", 0);
         counts.put("legendary", 0);
         counts.put("epic", 0);
 
@@ -573,7 +576,6 @@ public final class YizModQZKAPI {
             if (effect.isPresent()) {
                 counts.merge("total", 1, Integer::sum);
                 switch (effect.get().getRarity()) {
-                    case MYTHIC    -> counts.merge("mythic", 1, Integer::sum);
                     case LEGENDARY -> counts.merge("legendary", 1, Integer::sum);
                     case EPIC      -> counts.merge("epic", 1, Integer::sum);
                 }
@@ -783,6 +785,86 @@ public final class YizModQZKAPI {
     // ==================== VTable 方法替换 ====================
 
     /**
+     * 允许调用 vtable 方法替换的下游模组白名单。
+     * 只有在此白名单中的 modid 才能调用 {@link #replaceKillMethods} 等方法。
+     * 使用 {@link #allowVTableModId(String)} 注册受信任的下游模组。
+     */
+    private static final Set<String> ALLOWED_VTABLE_MODIDS = ConcurrentHashMap.newKeySet();
+
+    static {
+        // 已知受信任的下游模组 — 在此添加新的下游模组 modid
+        ALLOWED_VTABLE_MODIDS.add("yizxgmod");    // YizXG 模组模板
+        ALLOWED_VTABLE_MODIDS.add("yizxianmod");   // 泰拉棱镜 (yizxian)
+    }
+
+    /**
+     * 将指定 modid 加入 vtable 方法替换白名单。
+     * 应在模组构造器中尽早调用（在调用 {@link #replaceKillMethods} 之前）。
+     *
+     * @param modid 要加入白名单的模组 ID
+     */
+    public static void allowVTableModId(String modid) {
+        ALLOWED_VTABLE_MODIDS.add(modid);
+        tizMod.LOGGER.info("[YizModQZKAPI] VTable whitelist updated: added {}", modid);
+    }
+
+    /**
+     * 通过 StackWalker 检测调用方的 modid。
+     * 遍历调用栈，找到第一个标注了 {@code @Mod} 注解的调用者类，
+     * 取其注解 value 作为 modid。
+     *
+     * @return 调用方 modid，无法检测时返回 "unknown"
+     */
+    private static String detectCallerModId() {
+        try {
+            Class<?> callerClass = StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE)
+                    .walk(frames -> frames
+                            .skip(2)  // 跳过 detectCallerModId 和调用它的 API 方法
+                            .filter(f -> {
+                                Class<?> c = f.getDeclaringClass();
+                                // 跳过本库自身的类
+                                return !c.getPackageName().startsWith("net.minecraft.client.yiz");
+                            })
+                            .findFirst()
+                            .map(StackWalker.StackFrame::getDeclaringClass)
+                            .orElse(null));
+            if (callerClass == null) return "unknown";
+
+            // 检查 @Mod 注解以确定 modid
+            for (Annotation ann : callerClass.getAnnotations()) {
+                if (ann.annotationType().getName().equals("net.neoforged.fml.common.Mod")) {
+                    try {
+                        return (String) ann.annotationType().getMethod("value").invoke(ann);
+                    } catch (Exception ignored) {}
+                }
+            }
+
+            // 回退：使用调用方包名推断
+            String pkg = callerClass.getPackageName();
+            // 取包名的第一个非公共段作为候选
+            // 例如 "net.minecraft.client.yiz.xian" → "yizxianmod" 不太可靠，返回 unknown
+            return "unknown";
+
+        } catch (Exception e) {
+            return "unknown";
+        }
+    }
+
+    /**
+     * 校验调用方 modid 是否在 vtable 替换白名单中。
+     */
+    private static boolean isCallerModidAllowed() {
+        String modid = detectCallerModId();
+        boolean allowed = ALLOWED_VTABLE_MODIDS.contains(modid);
+        if (!allowed) {
+            tizMod.LOGGER.warn("[YizModQZKAPI] VTable replaceKillMethods blocked: " +
+                    "caller modid '{}' is not in the whitelist. " +
+                    "Call YizModQZKAPI.allowVTableModId(\"{}\") to register.", modid, modid);
+        }
+        return allowed;
+    }
+
+    /**
      * 查询 vtable 方法替换系统是否可用。
      * 在调用 {@link #replaceMethod} / {@link #replaceKillMethods} 之前应先检查。
      */
@@ -809,6 +891,10 @@ public final class YizModQZKAPI {
      */
     public static boolean replaceMethod(Class<?> targetClass, String methodName,
                                         Class<?>... paramTypes) {
+        // 安全校验：只有白名单中的下游模组才能使用 vtable 方法替换
+        if (!isCallerModidAllowed()) {
+            return false;
+        }
         return net.minecraft.client.yiz.core.VTableReplace.replaceVoidMethod(
                 targetClass, methodName, paramTypes);
     }
@@ -826,6 +912,11 @@ public final class YizModQZKAPI {
      */
     public static int replaceKillMethods(Class<? extends LivingEntity> entityClass) {
         if (!isVTableReplaceAvailable()) return 0;
+
+        // 安全校验：只有白名单中的下游模组才能使用 vtable 方法替换
+        if (!isCallerModidAllowed()) {
+            return 0;
+        }
 
         int count = 0;
 
@@ -916,5 +1007,53 @@ public final class YizModQZKAPI {
      */
     public static List<AbstractEffect> getItemEffects(ItemStack stack) {
         return net.minecraft.client.yiz.core.data.EffectNBTHandler.getItemEffects(stack);
+    }
+
+    // ==================== 技能施法槽位查询 ====================
+
+    /**
+     * 获取玩家技能施法槽位的所有条目（含空槽位）。
+     * <p>
+     * 技能施法槽位位于快捷栏下方，共 9 格（与快捷栏一一对应）。
+     * 只有实现了 {@link ISkillWeapon} 接口的物品才能放入槽位。
+     * 此方法在客户端调用，从本地面板容器读取数据。
+     * </p>
+     *
+     * @return 按槽位索引排序的条目列表（索引 0-8）
+     * @see ISkillWeapon
+     * @see SkillSlotEntry
+     */
+    public static List<SkillSlotEntry> getSkillSlotEntries() {
+        var panel = net.minecraft.client.yiz.ui.InventoryPanel.getInstance();
+        return panel != null ? panel.getSkillSlotEntries() : java.util.List.of();
+    }
+
+    /**
+     * 获取玩家技能施法槽位中所有非空条目（仅已放置物品的槽位）。
+     */
+    public static List<SkillSlotEntry> getOccupiedSkillSlots() {
+        var panel = net.minecraft.client.yiz.ui.InventoryPanel.getInstance();
+        return panel != null ? panel.getOccupiedSkillSlots() : java.util.List.of();
+    }
+
+    /**
+     * 获取指定技能类型的槽位占用数量。
+     *
+     * @param skillType 要统计的技能类型
+     * @return 该类型物品在技能槽位中的数量
+     */
+    public static int countSkillSlotsByType(ISkillWeapon.SkillType skillType) {
+        var panel = net.minecraft.client.yiz.ui.InventoryPanel.getInstance();
+        return panel != null ? panel.countBySkillType(skillType) : 0;
+    }
+
+    /**
+     * 判定一个 ItemStack 是否可放入技能施法槽位。
+     *
+     * @param stack 要检查的物品
+     * @return true 表示此物品实现了 {@link ISkillWeapon}
+     */
+    public static boolean isSkillItem(ItemStack stack) {
+        return net.minecraft.client.yiz.ui.PanelMouseHandler.isSkillItem(stack);
     }
 }

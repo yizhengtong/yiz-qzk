@@ -1,7 +1,7 @@
 {
   "required": true,
   "package": "net.minecraft.client.yiz.mixin",
-  "plugin": "net.minecraft.client.yiz.core.FantasyEndingPlugin",
+  "refmap": "yizmodqzk.refmap.json",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
     "AttackInterceptorMixin",
@@ -16,8 +16,8 @@
   ],
   "client": [
     "CreativeTabIconSafetyMixin",
-    "ItemRendererStarMixin",
     "HumanoidArmorLayerStarMixin",
+    "ItemRendererStarMixin",
     "KeyboardInterceptMixin"
   ],
   "injectors": {

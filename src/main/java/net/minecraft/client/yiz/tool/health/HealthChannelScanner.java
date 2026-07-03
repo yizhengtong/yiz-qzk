@@ -15,12 +15,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * 实体健康通道扫描器
  * <p>
  * 扫描实体类层级上的所有静态 {@link EntityDataAccessor}&lt;Float&gt; 字段，
- * 用于在伤害时覆盖所有可能的血量 DataParameter（包括其他模组自定义的）。
- * </p>
- * <p>
- * 之所以能覆盖几乎所有模组的血量系统，是因为 Minecraft 模组通常使用
- * {@link net.minecraft.network.syncher.SynchedEntityData#defineId} 注册自定义血量，
- * 且血量类型必然是 Float。扫描 Float 通道即可无差别覆盖。
+ * 用于在伤害时覆盖所有可能的血量 DataParameter。
  * </p>
  */
 public final class HealthChannelScanner {
@@ -100,7 +95,6 @@ public final class HealthChannelScanner {
 
     /**
      * 递归扫描接口层级，查找定义在接口中的 EntityDataAccessor 静态字段。
-     * 例如 IEntityAnimatedHealth.TITAN_HEALTH
      */
     private static void scanInterfaces(Class<?> clazz, List<EntityDataAccessor<Float>> result) {
         for (Class<?> iface : clazz.getInterfaces()) {

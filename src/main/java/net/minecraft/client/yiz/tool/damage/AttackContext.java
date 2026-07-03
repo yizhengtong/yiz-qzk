@@ -39,6 +39,9 @@ public class AttackContext {
     }
 
     public static AttackContext create(LivingEntity attacker, Entity target) {
+        if (attacker == null) {
+            throw new IllegalArgumentException("attacker must not be null");
+        }
         return new AttackContext(attacker, target);
     }
 

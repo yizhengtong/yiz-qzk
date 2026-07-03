@@ -4,7 +4,7 @@ import net.minecraft.core.Holder;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.Attribute;
 
-import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.Map;
 import java.util.Set;
 
@@ -22,7 +22,7 @@ import java.util.Set;
 // 大白话: 改血方法
 public final class DamageAttributeRegistry {
 
-    private static final Map<Holder<Attribute>, Float> DAMAGE_ATTRIBUTES = new HashMap<>();
+    private static final Map<Holder<Attribute>, Float> DAMAGE_ATTRIBUTES = new ConcurrentHashMap<>();
 
     private DamageAttributeRegistry() {}
 

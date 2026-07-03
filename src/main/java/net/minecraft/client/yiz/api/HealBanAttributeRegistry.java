@@ -4,7 +4,7 @@ import net.minecraft.core.Holder;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.Attribute;
 
-import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.Map;
 
 /**
@@ -26,12 +26,12 @@ public final class HealBanAttributeRegistry {
     /**
      * 百分比禁疗属性条目：属性 + 缩放系数。
      */
-    private static final Map<Holder<Attribute>, Float> PERCENT_ENTRIES = new HashMap<>();
+    private static final Map<Holder<Attribute>, Float> PERCENT_ENTRIES = new ConcurrentHashMap<>();
 
     /**
      * 固定值禁疗属性条目：属性 + 缩放系数。
      */
-    private static final Map<Holder<Attribute>, Float> FIXED_ENTRIES = new HashMap<>();
+    private static final Map<Holder<Attribute>, Float> FIXED_ENTRIES = new ConcurrentHashMap<>();
 
     private HealBanAttributeRegistry() {}
 

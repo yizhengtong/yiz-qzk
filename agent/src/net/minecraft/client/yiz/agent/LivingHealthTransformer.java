@@ -31,6 +31,13 @@ public class LivingHealthTransformer implements ClassFileTransformer {
     /** 是否至少转换过一个类 */
     public static volatile boolean transformed = false;
 
+    /** 已转换的类名集合（去重用） */
+    private static final java.util.Set<String> transformedClasses =
+            java.util.Collections.synchronizedSet(new java.util.HashSet<>());
+
+    /** 已记录的模组类计数 */
+    private static volatile int modClassCount = 0;
+
     private volatile boolean asmUtilAvailable = false;
 
     @Override
@@ -49,6 +56,17 @@ public class LivingHealthTransformer implements ClassFileTransformer {
 
         boolean isModClass = isModClass(className, classfileBuffer);
         transformed = true;
+
+        // 记录被改写的类（去重）
+        if (!transformedClasses.contains(className)) {
+            transformedClasses.add(className);
+            if (isModClass) {
+                modClassCount++;
+                System.out.println("[YizModQZK Agent] Rewriting mod class #" +
+                        modClassCount + ": " + className.replace('/', '.') +
+                        (isEntity ? " (Entity)" : ""));
+            }
+        }
         try {
             Class<?> bridgeClass = Class.forName("net.minecraft.client.yiz.core.asm.AgentBridge");
             bridgeClass.getMethod("markTransformed").invoke(null);
@@ -74,6 +92,48 @@ public class LivingHealthTransformer implements ClassFileTransformer {
         if (className.startsWith("net/minecraft/client/player")) return true; // LocalPlayer 特殊处理
         if (className.contains("$$")) return true; // Mixin 生成的内部类
         return false;
+    }
+
+    /**
+     * 获取所有被 Agent 改写的类名列表（只读快照）。
+     * 供主模组在启动完成后输出完整改写报告。
+     */
+    public static java.util.List<String> getTransformedClassNames() {
+        synchronized (transformedClasses) {
+            return new java.util.ArrayList<>(transformedClasses);
+        }
+    }
+
+    /**
+     * 获取被改写的第三方模组类数量。
+     */
+    public static int getModClassCount() {
+        return modClassCount;
+    }
+
+    /**
+     * 输出改写汇总报告到标准输出。
+     */
+    public static void printTransformationSummary() {
+        java.util.List<String> all = getTransformedClassNames();
+        System.out.println("[YizModQZK Agent] ========== Transformation Summary ==========");
+        System.out.println("[YizModQZK Agent] Total classes rewritten: " + all.size());
+        System.out.println("[YizModQZK Agent] Third-party mod classes: " + modClassCount);
+
+        if (modClassCount > 0) {
+            System.out.println("[YizModQZK Agent] --- Mod classes affected ---");
+            synchronized (transformedClasses) {
+                transformedClasses.stream()
+                        .filter(name -> !name.startsWith("net/minecraft/"))
+                        .filter(name -> !name.startsWith("java/"))
+                        .filter(name -> !name.startsWith("jdk/"))
+                        .filter(name -> !name.startsWith("sun/"))
+                        .sorted()
+                        .forEach(name -> System.out.println(
+                                "[YizModQZK Agent]   " + name.replace('/', '.')));
+            }
+        }
+        System.out.println("[YizModQZK Agent] ===========================================");
     }
 
     // ==================== 类检测 ====================

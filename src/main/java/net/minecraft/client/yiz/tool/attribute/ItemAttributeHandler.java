@@ -14,6 +14,8 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.item.component.ItemAttributeModifiers;
 
+import net.minecraft.client.yiz.attribute.YizAttributes;
+
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -146,7 +148,15 @@ public final class ItemAttributeHandler {
     }
 
     public static void addMaxDurability(ItemStack stack, int delta) {
-        setMaxDurability(stack, stack.getMaxDamage() + delta);
+        int current = stack.getMaxDamage();
+        // 防护整数溢出：Math.addExact 在溢出时抛 ArithmeticException
+        int newValue;
+        try {
+            newValue = Math.addExact(current, delta);
+        } catch (ArithmeticException e) {
+            newValue = delta > 0 ? Integer.MAX_VALUE : 1;
+        }
+        setMaxDurability(stack, Math.max(1, newValue));
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -383,5 +393,45 @@ public final class ItemAttributeHandler {
                 EquipmentSlotGroup.ANY);
 
         stack.set(DataComponents.ATTRIBUTE_MODIFIERS, builder.build());
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  自定义属性快捷方法
+    // ═══════════════════════════════════════════════════════════
+
+    /** 给 ItemStack 添加暴击率修饰符（值域 0~100）。 */
+    public static void addCritRate(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.CRIT_RATE,
+            "item_crit_rate", value);
+    }
+
+    /** 给 ItemStack 添加暴伤修饰符（增量百分比 0~N）。 */
+    public static void addCritDamage(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.CRIT_DAMAGE,
+            "item_crit_damage", value);
+    }
+
+    /** 给 ItemStack 添加吸血修饰符（值域 0~100，百分比）。 */
+    public static void addLifeSteal(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.LIFE_STEAL,
+            "item_life_steal", value);
+    }
+
+    /** 给 ItemStack 添加伤害范围半径修饰符（值域 0~64，格）。 */
+    public static void addSplashRadius(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.SPLASH_RADIUS,
+            "item_splash_radius", value);
+    }
+
+    /** 给 ItemStack 添加伤害范围百分比修饰符（值域 0~100）。 */
+    public static void addSplashDamage(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.SPLASH_DAMAGE,
+            "item_splash_damage", value);
+    }
+
+    /** 给 ItemStack 添加伤害范围衰减修饰符（值域 0~100）。 */
+    public static void addSplashFalloff(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.SPLASH_FALLOFF,
+            "item_splash_falloff", value);
     }
 }

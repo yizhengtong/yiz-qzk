@@ -71,9 +71,11 @@ public final class EntityASMUtil {
     private static MethodHandle getDieMethodHandle() {
         if (dieMethodHandle != null || dieMethodLookupFailed) return dieMethodHandle;
         try {
-            MethodHandles.Lookup lookup = MethodHandles.lookup();
-            MethodType mt = MethodType.methodType(void.class, DamageSource.class);
-            dieMethodHandle = lookup.findVirtual(LivingEntity.class, "die", mt);
+            // 使用 setAccessible(true) 反射 + unreflect 获取 protected die() 的 MethodHandle，
+            // 而非 MethodHandles.lookup().findVirtual()（公共 Lookup 无法访问 protected 方法）。
+            java.lang.reflect.Method dieMethod = LivingEntity.class.getDeclaredMethod("die", DamageSource.class);
+            dieMethod.setAccessible(true);
+            dieMethodHandle = MethodHandles.lookup().unreflect(dieMethod);
         } catch (NoSuchMethodException | IllegalAccessException e) {
             dieMethodLookupFailed = true;
         }
@@ -82,8 +84,6 @@ public final class EntityASMUtil {
 
     /**
      * 当 DELTA 伤害导致实体有效血量 ≤ 0 时，通过反射调用 die()。
-     * 这是解决 Cataclysm 等模组 Boss 重写 hurt() 返回 false 导致
-     * DELTA 击杀无掉落物的根本方案。
      */
     private static void triggerDeathIfDead(LivingEntity entity) {
         if (!deathTriggerEnabled) return;
@@ -294,6 +294,12 @@ public final class EntityASMUtil {
         // 注：玩家无敌检查由 PlayerMixin 在 Mixin 层处理。
         // 当 ASM Agent 加载时，PlayerMixin 的 @Inject 仍生效，
         // 因此无需在此处重复检查。
+        //
+        // 设计意图：当 delta 负值超过 maxHealth 时（如 delta=-50, maxHealth=20），
+        // Math.min(health, maxHealth + delta) 可能返回负值。这是有意为之——
+        // 极端负 delta 代表"强制致死"语义（如 /kill 等效操作），
+        // 负值会被下游 setHealth() 的 Agent 层保护态 clamp 到 ≥1，
+        // 死亡由 die()/remove() 拦截链统一处理，不依赖 getHealth() 返回值。
         float delta = getHealthDelta(living);
         if (delta != 0) {
             return Math.min(health, living.getMaxHealth() + delta);

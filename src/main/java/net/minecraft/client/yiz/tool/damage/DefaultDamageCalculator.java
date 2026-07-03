@@ -28,6 +28,9 @@ public final class DefaultDamageCalculator {
      * @return 伤害结果
      */
     public static DamageResult calculateDamage(EffectContext context, double baseDamage) {
+        if (context == null) {
+            throw new IllegalArgumentException("context must not be null");
+        }
         // 1. 收集修正器
         List<AttributeModifier> additive = new ArrayList<>();
         List<AttributeModifier> multiplicative = new ArrayList<>();
@@ -70,6 +73,9 @@ public final class DefaultDamageCalculator {
      * 应用伤害到目标。
      */
     public static void applyDamage(EffectContext context, DamageResult damage) {
+        if (context == null) {
+            throw new IllegalArgumentException("context must not be null");
+        }
         if (!(context.target() instanceof LivingEntity livingTarget)) return;
 
         DamageSource source = createDamageSource(context);

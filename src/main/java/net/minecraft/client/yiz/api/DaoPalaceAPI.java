@@ -165,6 +165,7 @@ public final class DaoPalaceAPI {
         for (DaoPalace palace : getPalacesInternal(player)) {
             double distance = Math.sqrt(playerPos.distSqr(palace.centerPos()));
             double maxRange = palace.influenceRange();
+            if (maxRange <= 0) continue; // 防护除零：无效范围的道宫跳过
             double decay = Math.max(0.1, 1.0 - distance / maxRange);
             double sideBonus = 1.0 + palace.sideLength() * 0.02;
 
@@ -186,6 +187,7 @@ public final class DaoPalaceAPI {
     public static double getStatGain(DaoPalace palace, BlockPos playerPos, double baseStat) {
         double distance = Math.sqrt(playerPos.distSqr(palace.centerPos()));
         double maxRange = palace.influenceRange();
+        if (maxRange <= 0) return baseStat * 0.1; // 防护除零
         double decay = Math.max(0.1, 1.0 - distance / maxRange);
         return baseStat * decay;
     }

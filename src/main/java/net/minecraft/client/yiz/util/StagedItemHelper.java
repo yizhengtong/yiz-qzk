@@ -90,7 +90,12 @@ public final class StagedItemHelper {
     //  分级发光色 — 所有分级物品通用
     // ═══════════════════════════════════════════════════════════
 
-    /** level=1..5 → 对应等级的描边色 (R,G,B,A)。level=5 传说返回 null 表示用默认动画色板。 */
+    /**
+     * level=1..5 → 对应等级的描边色 (R,G,B,A)。level=5 传说返回 null 表示用默认动画色板。
+     * @deprecated 使用 {@link net.minecraft.client.yiz.weapon.QualityTier#DEFAULT_5} 和
+     *             {@link net.minecraft.client.yiz.weapon.QualityTier#glowColorForLevel} 替代。
+     */
+    @Deprecated
     public static Vector4f glowColorForLevel(int level) {
         return switch (level) {
             case 1  -> new Vector4f(0.80f, 0.80f, 0.80f, 0.4f);  // 平凡 灰白

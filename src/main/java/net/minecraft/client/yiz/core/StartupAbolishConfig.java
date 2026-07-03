@@ -4,6 +4,8 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 import net.neoforged.fml.loading.FMLPaths;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.FileReader;
 import java.io.FileWriter;
@@ -39,6 +41,7 @@ import java.util.TreeSet;
  * }</pre>
  */
 public final class StartupAbolishConfig {
+    private static final Logger LOGGER = LoggerFactory.getLogger("StartupAbolishConfig");
 
     private static final String FILE_NAME = "yizmodqzk-startup-abolish.json";
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
@@ -65,7 +68,7 @@ public final class StartupAbolishConfig {
             if (!Files.exists(file)) {
                 // 不存在：写个空模板提示用户怎么用
                 writeTemplate(file);
-                System.out.println("[StartupAbolish] No config found; wrote empty template at " + file);
+                LOGGER.info("[StartupAbolish] No config found; wrote empty template at {}", file);
                 return;
             }
 
@@ -82,12 +85,12 @@ public final class StartupAbolishConfig {
                         }
                     }
                 }
-                System.out.println("[StartupAbolish] Loaded " + STARTUP_ABOLISHED.size() +
+                LOGGER.info("[StartupAbolish] Loaded {} startup-abolished items: {}", STARTUP_ABOLISHED.size(),
                         " items from " + file);
             }
         } catch (Throwable t) {
             // 启动期任何异常都不能阻塞 mod 加载
-            System.err.println("[StartupAbolish] Load failed: " + t.getMessage());
+            LOGGER.error("[StartupAbolish] Load failed: {}", t.getMessage(), t);
         }
     }
 
@@ -169,7 +172,7 @@ public final class StartupAbolishConfig {
                 GSON.toJson(data, writer);
             }
         } catch (Throwable t) {
-            System.err.println("[StartupAbolish] Save failed: " + t.getMessage());
+            LOGGER.error("[StartupAbolish] Save failed: {}", t.getMessage(), t);
         }
     }
 }

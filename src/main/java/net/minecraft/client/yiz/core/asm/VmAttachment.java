@@ -32,9 +32,16 @@ public final class VmAttachment {
     /**
      * 尝试绕过 JVM 自 attach 禁令。
      * JDK 9+ 默认禁止进程 attach 自身，需要通过 Unsafe 修改内部标志位。
-     * JDK 21+ 机制可能变化，允许失败。
+     * JDK 21+ 不再支持直接修改内部字段，应走子进程路径。
      */
     public static boolean allowAttachSelf() {
+        // JDK 21+ 不再尝试直接修改 JVM 内部字段，统一走子进程路径
+        int javaVersion = Runtime.version().feature();
+        if (javaVersion >= 21) {
+            LOGGER.info("[VmAttachment] JDK {} detected — skipping Unsafe field modification, use subprocess path", javaVersion);
+            return false;
+        }
+
         try {
             // 方式 1: 修改 jdk.internal.module.AllowAllPermission
             try {
@@ -226,8 +233,14 @@ public final class VmAttachment {
             for (Field field : hotSpotVmClass.getDeclaredFields()) {
                 if (field.getType() == boolean.class
                         && java.lang.reflect.Modifier.isStatic(field.getModifiers())) {
-                    setFieldWithUnsafe(field, null, true);
-                    return;
+                    // 安全检查：只修改名称中包含 "allow" 或 "attach" 的字段，
+                    // 避免盲目修改所有 static boolean 字段导致 JVM 内部状态损坏
+                    String fieldName = field.getName().toLowerCase();
+                    if (fieldName.contains("allow") || fieldName.contains("attach")) {
+                        LOGGER.info("[VmAttachment] Found candidate field '{}', setting to true", field.getName());
+                        setFieldWithUnsafe(field, null, true);
+                        return;
+                    }
                 }
             }
         } catch (Exception ignored) {}

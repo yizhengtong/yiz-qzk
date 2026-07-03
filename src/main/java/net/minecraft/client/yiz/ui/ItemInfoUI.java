@@ -40,7 +40,6 @@ public final class ItemInfoUI {
 
         if (!lines.isEmpty()) {
             Font font = Minecraft.getInstance().font;
-            // 使用 renderTooltip 渲染，其 RenderType 在所有 GUI 元素最上层
             graphics.renderTooltip(font, lines, Optional.empty(), x, y);
         }
     }

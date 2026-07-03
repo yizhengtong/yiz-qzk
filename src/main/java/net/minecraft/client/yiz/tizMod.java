@@ -1,9 +1,11 @@
 package net.minecraft.client.yiz;
 
 import net.minecraft.client.yiz.api.AttributeBalanceRegistry;
+import net.minecraft.client.yiz.api.CritTracker;
 import net.minecraft.client.yiz.api.DaoPalaceAPI;
 import net.minecraft.client.yiz.api.ProjectileReflectionSystem;
 import net.minecraft.client.yiz.api.RealmProgressionAPI;
+import net.minecraft.client.yiz.attribute.YizAttributes;
 import net.minecraft.client.yiz.core.VTableReplace;
 import net.minecraft.client.yiz.core.asm.AsmBootstrapper;
 import net.minecraft.client.yiz.core.data.EffectDataLoader;
@@ -26,6 +28,7 @@ import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.neoforged.neoforge.event.AddReloadListenerEvent;
+import net.neoforged.neoforge.event.entity.player.CriticalHitEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.tick.PlayerTickEvent;
 import net.neoforged.neoforge.event.level.LevelEvent;
@@ -69,11 +72,33 @@ public class tizMod {
         // 注册玩家数据附件
         ModAttachments.register(modEventBus);
 
+        // 注册自定义属性（暴击率、暴伤等）
+        YizAttributes.ATTRIBUTES.register(modEventBus);
+
         // 初始化创造标签页自动注册（扫描实现 ITalentItem/ISkillItem/IGeneralItem/IWeaponItem 的物品）
         CreativeTabAutoRegistry.init(modEventBus);
 
         // Register data reload listener (NeoForge event bus, not mod bus)
         NeoForge.EVENT_BUS.addListener(this::onAddReloadListener);
+
+        // 将自定义属性挂载到玩家实体（否则 getAttributeValue 抛异常）
+        modEventBus.addListener(
+            net.neoforged.neoforge.event.entity.EntityAttributeModificationEvent.class,
+            e -> {
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.CRIT_RATE);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.CRIT_DAMAGE);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.LIFE_STEAL);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.SPLASH_RADIUS);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.SPLASH_DAMAGE);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.SPLASH_FALLOFF);
+            });
+
+        // 原版暴击标记 → 桥接 CriticalHitEvent → LivingDamageEvent
+        NeoForge.EVENT_BUS.addListener((CriticalHitEvent event) -> {
+            if (event.getEntity() instanceof net.minecraft.world.entity.player.Player player) {
+                CritTracker.mark(player, event.isCriticalHit());
+            }
+        });
 
         // Register Forge event handlers
         NeoForge.EVENT_BUS.addListener(this::onPlayerLogin);

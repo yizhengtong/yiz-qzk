@@ -89,7 +89,7 @@ public final class PlayerClassSwapper {
      * 查询玩家是否处于保护状态。
      */
     public static boolean isProtected(Player player) {
-        return player.getClass().getName().contains("ProtectedServerPlayer");
+        return player.getClass() == ProtectedServerPlayer.class;
     }
 
     // ══════════════════════════════════════════════════════════════

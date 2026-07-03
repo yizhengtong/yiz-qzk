@@ -315,3 +315,20 @@ GC 工作线程（G1 Conc）扫堆时按对象头里的 klass 推断该对象占
 `PlayerClassSwapper` 能用是因为 `ProtectedServerPlayer` 是为此专门设计的同结构子类（继承 ServerPlayer 但不加字段）。
 
 **禁用 mod 物品的右键效果**：正确路径是事件层拦截（监听 `PlayerInteractEvent.RightClickItem` 等，按 AbolitionStateManager 状态 cancel），不是改 klass。VTableReplace 反射+vtable index 那条路对走 Item.use 的子类 override 有效，对走事件回调或 Mixin 的 mod 无效。
+
+---
+
+## 饰品/技能槽系统：新旧两套，只留新系统
+
+背包快捷栏下方的 9 格饰品槽曾有**两套并行实现**，冲突导致「物品图标出现但实际没存入/取出无反应/一个物品能填满所有槽位」：
+
+- **旧系统（本库 yizmodqzk，已拆除）**：`InventoryPanel`（自有 `SimpleContainer`）+ `PanelMouseHandler`（纯客户端本地复刻 slot 交互，**不经服务端**）+ `InventoryScreenMixin`（`mouseClicked` HEAD 拦截 + `cir.setReturnValue(true)` 取消原版处理）+ `PanelItemStorage`（自有持久化）+ 背包渲染。
+- **新系统（yizxian1.21.1，保留）**：`AccessoryContainer` 单例（按 UUID 缓存，`get`/`discard`）注入为**真 menu slot**（各 `Mixin*Menu` 在 `<init>` TAIL `addSlot`）→ 走原版 `AbstractContainerMenu.doClick` + ContainerMenu 协议 → 服务器权威；持久化走 `AccessorySlots` → `PlayerDataAPI`（`yizxianmod:accessory_slots` SNBT，`{Slots:[...]}`）。
+
+**根因**：旧 `InventoryScreenMixin` 在 `mouseClicked` HEAD 抢先命中同区域并取消原版处理 → 新 menu slot 永远收不到点击 → `doClick` 不执行 → 物品不转移、不持久化、背包物品不变；旧 `PanelMouseHandler` 把 `carried.copy()` 塞进自有 container，由旧 `InventoryPanel.renderItems` 画出图标 → 视觉假象。
+
+**修复（2026-07）**：从 `yizmodqzk.mixins.json` 的 `client` 数组移除 `InventoryScreenMixin` 并删除该类；`InventoryPanel` 改造为纯查询适配器（数据源改为从 `PlayerDataAPI` 读 `yizxianmod:accessory_slots` SNBT 解析，不持有容器、不渲染、不持久化，`getInstance()` 始终非 null）；删除 `PanelItemStorage`；`PanelMouseHandler` 仅保留 `isSkillItem`（`YizModQZKAPI.isSkillItem` 依赖）。
+
+**易混点**：`HandheldPanelRenderer` / `PanelInteractionManager` / `PanelLifecycle` / `PanelRaycast` 是**独立的「手持 HUD 面板」系统**（屏幕上浮动的可交互面板，鼠标键盘转发），与背包饰品槽**无关**，名字里有 Panel 但不要误删。
+
+**已知遗留（非本次 bug 范围）**：yizxian1.21.1 的 `YizxianModClient.setSyncCallback` 注册的 `AccessoryContainer.refreshFromSync()` 实际是死代码——服务器同步包 `SyncPlayerDataPayload.handle` 用 `player.setData(...)` 直写 Attachment，**不触发 `PlayerDataAPI.onDataSet`**，故不会 refresh。打开容器的实时同步靠原版 `sendInitialData`/`ContainerSetSlotPacket` 已够；但「容器外变更（命令改饰品）实时刷新客户端」这个目标尚未实现，需在 `SyncPlayerDataPayload.handle` 里额外触发饰品刷新才能达成。

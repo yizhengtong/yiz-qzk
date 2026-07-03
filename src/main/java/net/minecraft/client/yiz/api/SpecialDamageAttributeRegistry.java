@@ -4,7 +4,7 @@ import net.minecraft.core.Holder;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.Attribute;
 
-import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.Map;
 
 /**
@@ -24,9 +24,9 @@ import java.util.Map;
 // 大白话: 真伤/破甲/破无敌方法
 public final class SpecialDamageAttributeRegistry {
 
-    private static final Map<Holder<Attribute>, Float> TRUE_DAMAGE = new HashMap<>();
-    private static final Map<Holder<Attribute>, Float> ARMOR_PIERCING = new HashMap<>();
-    private static final Map<Holder<Attribute>, Float> PIERCE_INVULNERABILITY = new HashMap<>();
+    private static final Map<Holder<Attribute>, Float> TRUE_DAMAGE = new ConcurrentHashMap<>();
+    private static final Map<Holder<Attribute>, Float> ARMOR_PIERCING = new ConcurrentHashMap<>();
+    private static final Map<Holder<Attribute>, Float> PIERCE_INVULNERABILITY = new ConcurrentHashMap<>();
 
     private SpecialDamageAttributeRegistry() {}
 

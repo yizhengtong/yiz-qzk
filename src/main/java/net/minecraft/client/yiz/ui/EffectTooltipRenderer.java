@@ -27,11 +27,11 @@ public final class EffectTooltipRenderer {
     private EffectTooltipRenderer() {}
 
     // 稀有度颜色映射
-    public static final int MYTHIC_COLOR = 0xFFFF5555;
+    public static final int COMMON_COLOR    = 0xFFAAAAAA;
+    public static final int UNCOMMON_COLOR  = 0xFF55FF55;
+    public static final int RARE_COLOR      = 0xFF5555FF;
+    public static final int EPIC_COLOR      = 0xFFAA55FF;
     public static final int LEGENDARY_COLOR = 0xFFFFAA00;
-    public static final int EPIC_COLOR = 0xFFAA00AA;
-    public static final int RARE_COLOR = 0xFF5555FF;
-    public static final int COMMON_COLOR = 0xFFFFFFFF;
 
     /**
      * 根据稀有度获取颜色。
@@ -39,11 +39,11 @@ public final class EffectTooltipRenderer {
     public static int getRarityColor(Rarity rarity) {
         if (rarity == null) return COMMON_COLOR;
         return switch (rarity) {
-            case MYTHIC -> MYTHIC_COLOR;
+            case COMMON    -> COMMON_COLOR;
+            case UNCOMMON  -> UNCOMMON_COLOR;
+            case RARE      -> RARE_COLOR;
+            case EPIC      -> EPIC_COLOR;
             case LEGENDARY -> LEGENDARY_COLOR;
-            case EPIC -> EPIC_COLOR;
-            case RARE -> RARE_COLOR;
-            case COMMON -> COMMON_COLOR;
         };
     }
 

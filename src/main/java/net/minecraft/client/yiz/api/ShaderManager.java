@@ -159,43 +159,38 @@ public final class ShaderManager extends RenderType {
     //  RenderType 获取
     // ──────────────────────────────────────────────────────────────────
 
-    /** 获取当前激活预设的物品 RenderType */
+    /** 获取当前激活预设的物品 RenderType。无激活预设时返回 null，调用方应回退到原版渲染。 */
     public static RenderType getItemRenderType() {
         ShaderPreset preset = getActivePreset();
-        if (preset == null || preset.starGlint == null)
-            throw new IllegalStateException("No active shader preset");
+        if (preset == null || preset.starGlint == null) return null;
         return preset.starGlint;
     }
 
-    /** 获取当前激活预设的 GUI RenderType */
+    /** 获取当前激活预设的 GUI RenderType。无激活预设时返回 null。 */
     public static RenderType getItemGuiRenderType() {
         ShaderPreset preset = getActivePreset();
-        if (preset == null || preset.starGlint == null)
-            throw new IllegalStateException("No active shader preset");
+        if (preset == null || preset.starGlint == null) return null;
         return preset.starGlint;
     }
 
-    /** 获取当前激活预设的第一人称 RenderType */
+    /** 获取当前激活预设的第一人称 RenderType。无激活预设时返回 null。 */
     public static RenderType getItemDirectRenderType() {
         ShaderPreset preset = getActivePreset();
-        if (preset == null || preset.starGlintDirect == null)
-            throw new IllegalStateException("No active shader preset");
+        if (preset == null || preset.starGlintDirect == null) return null;
         return preset.starGlintDirect;
     }
 
-    /** 获取当前激活预设的实体 RenderType */
+    /** 获取当前激活预设的实体 RenderType。无激活预设时返回 null。 */
     public static RenderType getItemEntityRenderType() {
         ShaderPreset preset = getActivePreset();
-        if (preset == null || preset.starEntityGlint == null)
-            throw new IllegalStateException("No active shader preset");
+        if (preset == null || preset.starEntityGlint == null) return null;
         return preset.starEntityGlint;
     }
 
-    /** 获取当前激活预设的盔甲 RenderType */
+    /** 获取当前激活预设的盔甲 RenderType。无激活预设时返回 null。 */
     public static RenderType getArmorRenderType() {
         ShaderPreset preset = getActivePreset();
-        if (preset == null || preset.starArmorGlint == null)
-            throw new IllegalStateException("No active shader preset");
+        if (preset == null || preset.starArmorGlint == null) return null;
         return preset.starArmorGlint;
     }
 

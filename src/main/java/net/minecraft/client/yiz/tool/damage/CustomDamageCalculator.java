@@ -22,6 +22,9 @@ public final class CustomDamageCalculator {
      * @param damage  伤害结果
      */
     public static void applyDamage(EffectContext context, DamageResult damage) {
+        if (context == null) {
+            throw new IllegalArgumentException("context must not be null");
+        }
         if (!(context.target() instanceof LivingEntity livingTarget)) return;
 
         boolean isTrueDamage = damage.hasTag(DamageTag.TRUE_DAMAGE);
@@ -46,7 +49,10 @@ public final class CustomDamageCalculator {
      */
     private static void applyTrueDamage(EffectContext context, LivingEntity target, DamageResult damage) {
         float currentHealth = target.getHealth();
-        float newHealth = Math.max(0, currentHealth - (float) damage.finalDamage());
+        float damageAmount = (float) damage.finalDamage();
+        if (Float.isNaN(currentHealth)) currentHealth = 20F;
+        if (Float.isNaN(damageAmount)) return;
+        float newHealth = Math.max(0, currentHealth - damageAmount);
         target.setHealth(newHealth);
 
         // 触发受伤动画

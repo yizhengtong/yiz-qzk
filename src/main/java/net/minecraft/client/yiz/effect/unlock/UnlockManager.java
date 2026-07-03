@@ -6,6 +6,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.StringTag;
 import net.minecraft.nbt.Tag;
+import net.minecraft.client.yiz.tizMod;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -114,7 +115,13 @@ public final class UnlockManager {
 
         CompoundTag root = nbt.getCompound(NBT_KEY);
         for (String uuidStr : root.getAllKeys()) {
-            UUID uuid = UUID.fromString(uuidStr);
+            UUID uuid;
+            try {
+                uuid = UUID.fromString(uuidStr);
+            } catch (IllegalArgumentException e) {
+                tizMod.LOGGER.warn("[UnlockManager] Skipping invalid UUID in save data: {}", uuidStr);
+                continue;
+            }
             ListTag list = root.getList(uuidStr, Tag.TAG_STRING);
             Set<ResourceLocation> effects = ConcurrentHashMap.newKeySet();
             for (int i = 0; i < list.size(); i++) {

@@ -34,7 +34,13 @@ public final class DirectAttackExecutor {
         if (isTrueDamage) {
             // 真实伤害：直接扣除 Health，无视无敌帧、护甲、闪避
             float currentHealth = livingTarget.getHealth();
-            livingTarget.setHealth(Math.max(0, currentHealth - (float) damage.finalDamage()));
+            float damageAmount = (float) damage.finalDamage();
+            // 防护 NaN：getHealth() 或 finalDamage() 可能携带 NaN，
+            // NaN 传入 setHealth() 会永久污染实体生命值系统。
+            // NaN 时回退为默认满血值 20（原版玩家标准血量）。
+            if (Float.isNaN(currentHealth)) currentHealth = 20F;
+            if (Float.isNaN(damageAmount)) return;
+            livingTarget.setHealth(Math.max(0, currentHealth - damageAmount));
 
             // 触发受伤动画
             if (livingTarget.level() != null) {
@@ -79,7 +85,10 @@ public final class DirectAttackExecutor {
 
         if (isTrueDamage) {
             float currentHealth = livingTarget.getHealth();
-            livingTarget.setHealth(Math.max(0, currentHealth - (float) damage.finalDamage()));
+            float damageAmount = (float) damage.finalDamage();
+            if (Float.isNaN(currentHealth)) currentHealth = 20F;
+            if (Float.isNaN(damageAmount)) return;
+            livingTarget.setHealth(Math.max(0, currentHealth - damageAmount));
             livingTarget.hurtMarked = true;
             if (livingTarget.level() != null) {
                 livingTarget.level().broadcastEntityEvent(livingTarget, (byte) 2);
