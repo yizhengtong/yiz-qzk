@@ -3,8 +3,6 @@ package net.minecraft.client.yiz.ui;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.yiz.core.data.EffectNBTHandler;
-import net.minecraft.client.yiz.effect.AbstractEffect;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.world.item.ItemStack;
@@ -62,20 +60,6 @@ public final class ItemInfoUI {
                           attr.color() == 0xFFFF5555 ? "§c" : "§f";
             line.append(Component.literal(color + attr.value()));
             lines.add(line);
-        }
-
-        // 3. 效果信息
-        List<AbstractEffect> effects = EffectNBTHandler.getItemEffects(stack);
-        if (!effects.isEmpty()) {
-            for (AbstractEffect effect : effects) {
-                int lvl = EffectNBTHandler.getEffectLevel(stack, effect.getId());
-                String effectLine = String.format(" §7[§f%s§7] §f%s §7(Lv.%d)",
-                    effect.getParentType().getChineseName(),
-                    effect.getDisplayName(),
-                    lvl > 0 ? lvl : effect.getLevel()
-                );
-                lines.add(Component.literal(effectLine));
-            }
         }
 
         return lines;

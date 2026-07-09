@@ -1,11 +1,10 @@
 package net.minecraft.client.yiz.mixin;
 
-import net.minecraft.client.yiz.api.CounterAttackRegistry;
 import net.minecraft.client.yiz.api.DamageReductionRegistry;
 import net.minecraft.client.yiz.api.DamageValueModifierRegistry;
+import net.minecraft.client.yiz.attribute.YizAttributes;
 import net.minecraft.client.yiz.api.KnockbackImmunityRegistry;
 import net.minecraft.client.yiz.api.ProjectileImmunityRegistry;
-import net.minecraft.client.yiz.api.UndyingRegistry;
 import net.minecraft.client.yiz.bridge.HealthDataBridge;
 import net.minecraft.client.yiz.bridge.InvulnerableDataBridge;
 import net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler;
@@ -21,7 +20,6 @@ import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.client.yiz.tizMod;
 import net.minecraft.world.entity.player.Player;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
@@ -194,14 +192,12 @@ public abstract class LivingEntityMixin implements HealthDataBridge {
         }
     }
 
-    // ==================== hurt() 物品属性伤害修正 ====================
+    // ==================== hurt() 伤害修正 ====================
 
     /**
-     * 在 hurt() 入口修改原始伤害值，应用物品的 %伤害增幅 和 %伤害减免。
-     *
-     * <p>%伤害增幅：来自攻击者（damage source entity）主手+副手物品汇总，乘法放大原始伤害。</p>
-     * <p>%伤害减免：来自目标（this）主手+副手物品汇总，乘法削减原始伤害。</p>
-     * <p>两者在护甲/附魔减伤之前应用，确保与原版减伤体系自然叠加。</p>
+     * 在 hurt() 入口修改原始伤害值。
+     * <p>伤害增幅/减免已迁移至 NeoForge 属性系统（generic_damage / damage_reduction），
+     * 由 Phase C 属性注册后通过实体属性值驱动。</p>
      */
     @ModifyVariable(method = "hurt", at = @At("HEAD"), argsOnly = true)
     private float yizmodqzk$modifyHurtAmount(float amount, DamageSource source) {
@@ -212,18 +208,14 @@ public abstract class LivingEntityMixin implements HealthDataBridge {
         amount = DamageValueModifierRegistry.apply(self, source, amount);
         if (amount <= 0) return 0;
 
-        // %伤害增幅 — 攻击者物品
+        // === 全伤害 — 攻击者属性 ===
         if (source.getEntity() instanceof LivingEntity attacker) {
-            double amp = ItemAttributeHandler.getTotalDamageAmplification(attacker);
-            if (amp != 0) {
-                amount *= (1.0F + (float) amp);
+            var inst = attacker.getAttribute(
+                net.minecraft.client.yiz.attribute.YizAttributes.GENERIC_DAMAGE);
+            if (inst != null) {
+                double amp = inst.getValue();
+                if (amp > 0) amount *= (1.0F + (float) amp);
             }
-        }
-
-        // %伤害减免 — 目标物品
-        double red = ItemAttributeHandler.getTotalDamageReduction(self);
-        if (red != 0) {
-            amount *= (1.0F - (float) red);
         }
 
         return Math.max(0, amount);
@@ -257,13 +249,34 @@ public abstract class LivingEntityMixin implements HealthDataBridge {
 
         float current = self.getHealth();
 
-        // === 伤害减免（Agent 优先，Mixin 兜底） ===
+        // 减伤 / 格挡（扣血方向）
         if (newHealth < current) {
-            // Agent 已处理则跳过，避免重复减免
-            if (DamageReductionRegistry.consumeReductionApplied()) {
-                return newHealth;
+            // 原生减伤 先处理完整伤害量（避免注册表 clamp 破坏致死信号）
+            var reductionInst = self.getAttribute(
+                net.minecraft.client.yiz.attribute.YizAttributes.DAMAGE_REDUCTION);
+            if (reductionInst != null) {
+                double reduction = reductionInst.getValue();
+                if (reduction > 0) {
+                    float damage = current - newHealth;
+                    damage *= (float) (1.0 - Math.min(1.0, reduction / 100.0));
+                    newHealth = current - damage;
+                }
             }
-            return DamageReductionRegistry.applyBeforeSetHealth(self, newHealth);
+            // 注册表减伤（饰品 EffectTag，yizxian 注册）
+            if (!DamageReductionRegistry.consumeReductionApplied()) {
+                newHealth = DamageReductionRegistry.applyBeforeSetHealth(self, newHealth);
+            }
+            var blockInst = self.getAttribute(
+                net.minecraft.client.yiz.attribute.YizAttributes.DAMAGE_BLOCK);
+            if (blockInst != null) {
+                double block = blockInst.getValue();
+                if (block > 0) {
+                    float damage = current - newHealth;
+                    damage = Math.max(0, damage - (float) block);
+                    newHealth = current - damage;
+                }
+            }
+            return newHealth;
         }
 
         if (newHealth <= current) return newHealth;
@@ -305,25 +318,33 @@ public abstract class LivingEntityMixin implements HealthDataBridge {
     private void yizmodqzk$onHurtProjectileImmune(DamageSource source, float amount, CallbackInfoReturnable<Boolean> cir) {
         if (source.is(net.minecraft.tags.DamageTypeTags.IS_PROJECTILE)) {
             LivingEntity self = (LivingEntity) (Object) this;
-            if (ProjectileImmunityRegistry.isImmune(self)) {
+            var inst = self.getAttribute(YizAttributes.PROJECTILE_IMMUNITY);
+            if (inst != null && inst.getValue() > 0) {
                 cir.setReturnValue(false);
             }
         }
     }
 
-    // ==================== 复活系统 ====================
+    // ==================== 复活系统（属性驱动） ====================
 
     @Inject(method = "checkTotemDeathProtection", at = @At("RETURN"), cancellable = true)
     private void yizmodqzk$onCheckTotemDeathProtection(DamageSource source, CallbackInfoReturnable<Boolean> cir) {
         if (cir.getReturnValue()) return; // 图腾已复活
         LivingEntity self = (LivingEntity) (Object) this;
-        float targetHealth = UndyingRegistry.tryRevive(self, source);
-        if (targetHealth > 0) {
-            cir.setReturnValue(true); // 阻止死亡
-        }
+
+        var undyingInst = self.getAttribute(YizAttributes.UNDYING);
+        if (undyingInst == null) return;
+        double undying = undyingInst.getValue();
+        if (undying <= 0) return;
+
+        // 消耗 1 次复活
+        undyingInst.setBaseValue(undying - 1.0);
+
+        self.setHealth(self.getMaxHealth());
+        cir.setReturnValue(true);
     }
 
-    // ==================== 回击系统 ====================
+    // ==================== 反击系统（属性驱动） ====================
 
     @Inject(method = "hurt", at = @At("RETURN"))
     private void yizmodqzk$onHurtReturn(DamageSource source, float amount, CallbackInfoReturnable<Boolean> cir) {
@@ -333,24 +354,41 @@ public abstract class LivingEntityMixin implements HealthDataBridge {
         if (!(self instanceof Player player)) return;
 
         Entity srcEntity = source.getEntity();
-        tizMod.LOGGER.debug("[CounterAttack] DBG: player={} sourceEntity={} amount={}",
-                player.getName().getString(),
-                srcEntity != null ? srcEntity.getName().getString() : "null",
-                amount);
-
         if (!(srcEntity instanceof LivingEntity attacker)) return;
         if (attacker == player) return;
 
-        tizMod.LOGGER.debug("[CounterAttack] FIRE: {} -> {}", player.getName().getString(), attacker.getName().getString());
-        CounterAttackRegistry.tryCounterAttack(player, attacker);
+        // === 受击触发器 ===
+        double onHurt = player.getAttributeValue(YizAttributes.ON_HURT);
+        if (onHurt <= 0) return;
+
+        // === 反击：受击 → 反击率判定 → 反击值×反击数 ===
+        double rate = player.getAttributeValue(YizAttributes.COUNTER_RATE);
+        if (rate <= 0) return;
+
+        if (Math.random() >= rate / 100.0) return;
+
+        double value = player.getAttributeValue(YizAttributes.COUNTER_VALUE);
+        if (value <= 0) value = 50.0; // 默认 50%
+        double count = player.getAttributeValue(YizAttributes.COUNTER_COUNT);
+        if (count < 1) count = 1;
+
+        double playerAtk = player.getAttributeValue(net.minecraft.world.entity.ai.attributes.Attributes.ATTACK_DAMAGE);
+        float counterDmg = (float) (playerAtk * value / 100.0);
+
+        for (int i = 0; i < (int) count; i++) {
+            attacker.hurt(player.damageSources().mobAttack(player), counterDmg);
+        }
     }
 
     // ==================== 击退免疫 ====================
 
+    // ==================== 击退免疫（属性驱动） ====================
+
     @Inject(method = "knockback", at = @At("HEAD"), cancellable = true)
     private void yizmodqzk$onKnockback(double d0, double d1, double d2, CallbackInfo ci) {
         LivingEntity self = (LivingEntity) (Object) this;
-        if (KnockbackImmunityRegistry.isImmune(self)) {
+        var inst = self.getAttribute(YizAttributes.KNOCKBACK_IMMUNITY);
+        if (inst != null && inst.getValue() > 0) {
             ci.cancel();
         }
     }

@@ -58,24 +58,28 @@ public final class ProjectileReflectionSystem {
      */
     public static boolean onProjectileHitEntity(Projectile projectile, Entity hitEntity) {
         if (!(hitEntity instanceof Player player)) return false;
-        if (projectile.getOwner() == player) return false; // 自己的投射物不反弹
+        if (projectile.getOwner() == player) return false;
 
-        for (ConfigEntry entry : CONFIGS) {
-            if (!entry.condition().shouldReflect(player)) continue;
+        double radius = player.getAttributeValue(
+            net.minecraft.client.yiz.attribute.YizAttributes.PROJECTILE_REFLECTION);
+        if (radius <= 0) return false;
 
-            Entity owner = projectile.getOwner();
-            if (owner instanceof LivingEntity originalOwner) {
-                projectile.setOwner(player);
-                TRACKED.put(projectile, originalOwner);
-                Vec3 dir = originalOwner.getEyePosition().subtract(projectile.position()).normalize();
-                projectile.setDeltaMovement(dir.scale(entry.config().speedMultiplier()));
-                return true;
-            } else {
-                projectile.discard();
-                return true;
-            }
+        return doReflect(projectile, player, 1.0F);
+    }
+
+    /** 执行反射逻辑（转移所有权 + 弹道重定向） */
+    private static boolean doReflect(Projectile projectile, Player player, float speedMult) {
+        Entity owner = projectile.getOwner();
+        if (owner instanceof LivingEntity originalOwner) {
+            projectile.setOwner(player);
+            TRACKED.put(projectile, originalOwner);
+            Vec3 dir = originalOwner.getEyePosition().subtract(projectile.position()).normalize();
+            projectile.setDeltaMovement(dir.scale(speedMult));
+            return true;
+        } else {
+            projectile.discard();
+            return true;
         }
-        return false;
     }
 
     // ==================== 由下游事件或 Mixin 调用 ====================
@@ -88,13 +92,10 @@ public final class ProjectileReflectionSystem {
     public static void tick(Player player) {
         if (player.level().isClientSide()) return;
 
-        for (ConfigEntry entry : CONFIGS) {
-            if (!entry.condition().shouldReflect(player)) continue;
-            ReflectionConfig cfg = entry.config();
-
-            if (player.tickCount % cfg.tickInterval() == 0) {
-                scanAndReflect(player, cfg.range(), cfg.speedMultiplier());
-            }
+        double radius = player.getAttributeValue(
+            net.minecraft.client.yiz.attribute.YizAttributes.PROJECTILE_REFLECTION);
+        if (radius > 0) {
+            scanAndReflect(player, radius, 1.0F);
         }
 
         updateTracked(player);

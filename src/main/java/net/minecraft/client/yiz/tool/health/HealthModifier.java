@@ -1,6 +1,5 @@
 package net.minecraft.client.yiz.tool.health;
 
-import net.minecraft.client.yiz.effect.EffectContext;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.LivingEntity;
 
@@ -19,10 +18,9 @@ public interface HealthModifier {
      * 获取健康值修改量。
      *
      * @param entity  目标实体
-     * @param context 效果上下文
      * @return 修改量（正数 = 治疗，负数 = 伤害）
      */
-    double getModificationAmount(LivingEntity entity, EffectContext context);
+    double getModificationAmount(LivingEntity entity);
 
     /**
      * 获取修正器优先级，优先级高的先计算。

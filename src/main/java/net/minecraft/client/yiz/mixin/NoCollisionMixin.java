@@ -1,9 +1,8 @@
 package net.minecraft.client.yiz.mixin;
 
+import net.minecraft.client.yiz.attribute.YizAttributes;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
-
-import net.minecraft.client.yiz.api.NoCollisionRegistry;
 
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -12,19 +11,14 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
- * 碰撞免疫：参考旁观者模式 isSpectator → 跳过 push
+ * 碰撞免疫 — 属性驱动（no_collision > 0 = 穿过实体）
  */
 @Mixin(Entity.class)
 public class NoCollisionMixin {
 
     @Inject(method = "push(Lnet/minecraft/world/entity/Entity;)V", at = @At("HEAD"), cancellable = true)
     private void yizmodqzk$onPush(Entity other, CallbackInfo ci) {
-        Entity self = (Entity) (Object) this;
-        if (self instanceof LivingEntity le && NoCollisionRegistry.isImmune(le)) {
-            ci.cancel();
-            return;
-        }
-        if (other instanceof LivingEntity le && NoCollisionRegistry.isImmune(le)) {
+        if (isNoCollision((Entity) (Object) this) || isNoCollision(other)) {
             ci.cancel();
         }
     }
@@ -32,14 +26,15 @@ public class NoCollisionMixin {
     @Inject(method = "canCollideWith", at = @At("RETURN"), cancellable = true)
     private void yizmodqzk$onCanCollideWith(Entity other, CallbackInfoReturnable<Boolean> cir) {
         if (cir.getReturnValue()) {
-            Entity self = (Entity) (Object) this;
-            if (self instanceof LivingEntity le && NoCollisionRegistry.isImmune(le)) {
-                cir.setReturnValue(false);
-                return;
-            }
-            if (other instanceof LivingEntity le && NoCollisionRegistry.isImmune(le)) {
+            if (isNoCollision((Entity) (Object) this) || isNoCollision(other)) {
                 cir.setReturnValue(false);
             }
         }
+    }
+
+    private static boolean isNoCollision(Entity entity) {
+        if (!(entity instanceof LivingEntity le)) return false;
+        var inst = le.getAttribute(YizAttributes.NO_COLLISION);
+        return inst != null && inst.getValue() > 0;
     }
 }

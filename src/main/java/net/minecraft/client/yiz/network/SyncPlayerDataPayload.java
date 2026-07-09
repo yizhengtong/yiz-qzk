@@ -39,7 +39,15 @@ public record SyncPlayerDataPayload(
         return TYPE;
     }
 
-    /** 客户端处理：将数据写入本地玩家的 Attachment */
+    // ── 同步完成回调：下游模组监听，在 attachment 更新后做本地缓存清理 ──
+
+    private static final java.util.List<Runnable> onSyncCallbacks = new java.util.ArrayList<>();
+
+    public static void addSyncCallback(Runnable callback) {
+        onSyncCallbacks.add(callback);
+    }
+
+    /** 客户端处理：将数据写入本地玩家的 Attachment，然后通知下游刷新缓存。 */
     public void handle(IPayloadContext context) {
         context.enqueueWork(() -> {
             var player = Minecraft.getInstance().player;
@@ -49,6 +57,10 @@ public record SyncPlayerDataPayload(
                 player.setData(ModAttachments.PLAYER_DATA_ATTACHMENT.get(), dataJson);
             } catch (Exception e) {
                 // parse error, skip
+            }
+            // 通知下游（如 yizxian1.21.1 的 AccessoryContainer）数据已刷新
+            for (Runnable cb : onSyncCallbacks) {
+                try { cb.run(); } catch (Exception ex) { /* 不阻断后续回调 */ }
             }
         });
     }

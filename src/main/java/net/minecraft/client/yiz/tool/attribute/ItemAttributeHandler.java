@@ -3,7 +3,6 @@ package net.minecraft.client.yiz.tool.attribute;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EquipmentSlotGroup;
 import net.minecraft.world.entity.LivingEntity;
@@ -11,7 +10,6 @@ import net.minecraft.world.entity.ai.attributes.Attribute;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.item.component.ItemAttributeModifiers;
 
 import net.minecraft.client.yiz.attribute.YizAttributes;
@@ -19,24 +17,20 @@ import net.minecraft.client.yiz.attribute.YizAttributes;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Consumer;
 
 /**
  * 物品 + 实体 属性读写工具。
  *
- * <p>支持 7 种属性的 set/add/get。原版属性通过 {@link DataComponents#ATTRIBUTE_MODIFIERS} 读写，
- * 自定义属性通过 {@link DataComponents#CUSTOM_DATA} NBT 读写。</p>
+ * <p>原版属性（攻击力/攻击速度/交互距离/横扫/耐久）通过 {@link DataComponents#ATTRIBUTE_MODIFIERS}
+ * 读写；库模组自定义原生属性（generic_damage / damage_block / counter_* 等）通过
+ * {@link YizAttributes} 的 Holder 写入物品修饰符。</p>
  *
- * <p>实体级方法直接操作 {@link LivingEntity#getAttribute(Holder)}，
- * 自定义属性（伤害增幅/减免）通过内存 Map 存储，{@link #getTotalDamageAmplification(LivingEntity)}
- * 和 {@link #getTotalDamageReduction(LivingEntity)} 自动合并物品 + 实体两边的值。</p>
+ * <p>实体级方法直接操作 {@link LivingEntity#getAttribute(Holder)}。</p>
+ *
+ * <p>历史遗留的 item_stats NBT 路径（damage_amplification / damage_reduction / sweep_decay）
+ * 已在 1.21.1 重构中迁移至原生属性系统并删除，不再支持。</p>
  */
 public final class ItemAttributeHandler {
-
-    private static final String STATS_KEY = "yizmodqzk:item_stats";
-    private static final String AMPLIFICATION_KEY = "damage_amplification";
-    private static final String REDUCTION_KEY = "damage_reduction";
-    private static final String SWEEP_DECAY_KEY = "sweep_decay";
 
     private ItemAttributeHandler() {}
 
@@ -115,24 +109,6 @@ public final class ItemAttributeHandler {
     }
 
     // ══════════════════════════════════════════════════════════════
-    //  4b. 横扫衰减开关 (NBT via CustomData)
-    // ══════════════════════════════════════════════════════════════
-
-    public static boolean isSweepDecayEnabled(ItemStack stack) {
-        CompoundTag tag = getCustomData(stack);
-        CompoundTag stats = tag.getCompound(STATS_KEY);
-        return !stats.contains(SWEEP_DECAY_KEY) || stats.getBoolean(SWEEP_DECAY_KEY);
-    }
-
-    public static void setSweepDecay(ItemStack stack, boolean enabled) {
-        updateCustomData(stack, tag -> {
-            CompoundTag stats = tag.getCompound(STATS_KEY);
-            stats.putBoolean(SWEEP_DECAY_KEY, enabled);
-            tag.put(STATS_KEY, stats);
-        });
-    }
-
-    // ══════════════════════════════════════════════════════════════
     //  5. 耐久值
     // ══════════════════════════════════════════════════════════════
 
@@ -160,115 +136,8 @@ public final class ItemAttributeHandler {
     }
 
     // ══════════════════════════════════════════════════════════════
-    //  6. %伤害增幅 (NBT via CustomData)
-    // ══════════════════════════════════════════════════════════════
-
-    public static double getDamageAmplification(ItemStack stack) {
-        CompoundTag tag = getCustomData(stack);
-        CompoundTag stats = tag.getCompound(STATS_KEY);
-        return stats.getDouble(AMPLIFICATION_KEY);
-    }
-
-    public static void setDamageAmplification(ItemStack stack, double percent) {
-        updateCustomData(stack, tag -> {
-            CompoundTag stats = tag.getCompound(STATS_KEY);
-            stats.putDouble(AMPLIFICATION_KEY, percent);
-            tag.put(STATS_KEY, stats);
-        });
-    }
-
-    public static void addDamageAmplification(ItemStack stack, double delta) {
-        setDamageAmplification(stack, getDamageAmplification(stack) + delta);
-    }
-
-    // ══════════════════════════════════════════════════════════════
-    //  7. %伤害减免 (NBT via CustomData)
-    // ══════════════════════════════════════════════════════════════
-
-    public static double getDamageReduction(ItemStack stack) {
-        CompoundTag tag = getCustomData(stack);
-        CompoundTag stats = tag.getCompound(STATS_KEY);
-        return stats.getDouble(REDUCTION_KEY);
-    }
-
-    public static void setDamageReduction(ItemStack stack, double percent) {
-        updateCustomData(stack, tag -> {
-            CompoundTag stats = tag.getCompound(STATS_KEY);
-            stats.putDouble(REDUCTION_KEY, percent);
-            tag.put(STATS_KEY, stats);
-        });
-    }
-
-    public static void addDamageReduction(ItemStack stack, double delta) {
-        setDamageReduction(stack, getDamageReduction(stack) + delta);
-    }
-
-    // ══════════════════════════════════════════════════════════════
-    //  批量查询（物品 + 实体合并）
-    // ══════════════════════════════════════════════════════════════
-
-    /** 合并物品 + 实体级的伤害增幅总值 */
-    public static double getTotalDamageAmplification(LivingEntity entity) {
-        double total = 0;
-        total += getDamageAmplification(entity.getMainHandItem());
-        total += getDamageAmplification(entity.getOffhandItem());
-        total += entityAmplification.getOrDefault(entity.getUUID(), 0.0);
-        return total;
-    }
-
-    /** 合并物品 + 实体级的伤害减免总值 */
-    public static double getTotalDamageReduction(LivingEntity entity) {
-        // 背包防御已废除 → 所有物品减免归零
-        if (DEFENSE_ABOLISHED_PLAYERS.contains(entity.getUUID())) {
-            return 0.0;
-        }
-        double total = 0;
-        total += getDamageReduction(entity.getMainHandItem());
-        total += getDamageReduction(entity.getOffhandItem());
-        total += entityReduction.getOrDefault(entity.getUUID(), 0.0);
-        return total;
-    }
-
-    // ══════════════════════════════════════════════════════════════
     //  实体级属性（直接挂载到 LivingEntity，不需要物品）
     // ══════════════════════════════════════════════════════════════
-
-    /** 实体伤害增幅内存存储（非物品、非 NBT，纯服务端计算用） */
-    private static final Map<UUID, Double> entityAmplification = new ConcurrentHashMap<>();
-    /** 实体伤害减免内存存储 */
-    private static final Map<UUID, Double> entityReduction = new ConcurrentHashMap<>();
-
-    // ══════════════════════════════════════════════════════════════
-    //  背包废除系统
-    // ══════════════════════════════════════════════════════════════
-
-    /** 标记为"背包防御已废除"的玩家 UUID 集合 */
-    private static final java.util.Set<UUID> DEFENSE_ABOLISHED_PLAYERS = ConcurrentHashMap.newKeySet();
-
-    /**
-     * 设置/取消玩家的背包防御废除状态。
-     * <p>
-     * 废除后该玩家身上所有物品的 % 伤害减免（damage_reduction）
-     * 在 {@link #getTotalDamageReduction} 中会被忽略。
-     * </p>
-     *
-     * @param playerUuid 玩家 UUID
-     * @param abolished  true = 废除防御，false = 恢复
-     */
-    public static void setDefenseAbolished(UUID playerUuid, boolean abolished) {
-        if (abolished) {
-            DEFENSE_ABOLISHED_PLAYERS.add(playerUuid);
-        } else {
-            DEFENSE_ABOLISHED_PLAYERS.remove(playerUuid);
-        }
-    }
-
-    /**
-     * 查询玩家的背包防御是否已被废除。
-     */
-    public static boolean isDefenseAbolished(UUID playerUuid) {
-        return DEFENSE_ABOLISHED_PLAYERS.contains(playerUuid);
-    }
 
     /**
      * 通用：给实体挂载/更新原版属性修饰器。
@@ -306,30 +175,8 @@ public final class ItemAttributeHandler {
                 bonus, AttributeModifier.Operation.ADD_VALUE);
     }
 
-    /** 实体伤害增幅（存入内存，{@link #getTotalDamageAmplification} 自动合并） */
-    public static void setEntityDamageAmplification(LivingEntity entity, double value) {
-        if (value == 0) entityAmplification.remove(entity.getUUID());
-        else entityAmplification.put(entity.getUUID(), value);
-    }
-
-    public static double getEntityDamageAmplification(LivingEntity entity) {
-        return entityAmplification.getOrDefault(entity.getUUID(), 0.0);
-    }
-
-    /** 实体伤害减免（存入内存，{@link #getTotalDamageReduction} 自动合并） */
-    public static void setEntityDamageReduction(LivingEntity entity, double value) {
-        if (value == 0) entityReduction.remove(entity.getUUID());
-        else entityReduction.put(entity.getUUID(), value);
-    }
-
-    public static double getEntityDamageReduction(LivingEntity entity) {
-        return entityReduction.getOrDefault(entity.getUUID(), 0.0);
-    }
-
     /** 清除实体上所有 yizmodqzk 修饰器（死亡/退出时调用） */
     public static void clearEntityAttributes(LivingEntity entity) {
-        entityAmplification.remove(entity.getUUID());
-        entityReduction.remove(entity.getUUID());
         removeModifierById(entity, Attributes.ATTACK_DAMAGE, "attack_damage");
         removeModifierById(entity, Attributes.ATTACK_SPEED, "attack_speed");
         removeModifierById(entity, Attributes.MAX_HEALTH, "max_health");
@@ -342,24 +189,13 @@ public final class ItemAttributeHandler {
     }
 
     // ══════════════════════════════════════════════════════════════
-    //  CustomData helpers (replaces removed getOrCreateTag)
-    // ══════════════════════════════════════════════════════════════
-
-    private static CompoundTag getCustomData(ItemStack stack) {
-        return stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag();
-    }
-
-    private static void updateCustomData(ItemStack stack, Consumer<CompoundTag> mutator) {
-        stack.update(DataComponents.CUSTOM_DATA, CustomData.EMPTY, data -> {
-            CompoundTag tag = data.copyTag();
-            mutator.accept(tag);
-            return CustomData.of(tag);
-        });
-    }
-
-    // ══════════════════════════════════════════════════════════════
     //  Vanilla AttributeModifier helpers
     // ══════════════════════════════════════════════════════════════
+
+    /** 公开：读取物品上指定属性的修饰符总值。 */
+    public static double sumVanillaModifierPublic(ItemStack stack, Holder<Attribute> attribute) {
+        return sumVanillaModifier(stack, attribute);
+    }
 
     private static double sumVanillaModifier(ItemStack stack, Holder<Attribute> attribute) {
         if (attribute == null) return 0;
@@ -433,5 +269,90 @@ public final class ItemAttributeHandler {
     public static void addSplashFalloff(ItemStack stack, double value) {
         setVanillaModifier(stack, YizAttributes.SPLASH_FALLOFF,
             "item_splash_falloff", value);
+    }
+
+    /** 给 ItemStack 添加会心属性（值域 ≥0，格）。 */
+    public static void addHuixin(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.HUIXIN,
+            "item_huixin", value);
+    }
+
+    /** 给 ItemStack 添加渴攻属性（值域 ≥0，tick）。 */
+    public static void addKegong(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.KEGONG,
+            "item_kegong", value);
+    }
+
+    /** 给 ItemStack 添加格挡属性（值域 ≥0，点）。 */
+    public static void addDamageBlock(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.DAMAGE_BLOCK,
+            "item_damage_block", value);
+    }
+
+    /** 给 ItemStack 添加减伤率属性（值域 0~100，1 = 1% 最终减伤）。 */
+    public static void addDamageReduction(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.DAMAGE_REDUCTION,
+            "item_damage_reduction", value);
+    }
+
+    /** 给 ItemStack 添加全伤害属性（值域 ≥0，1.0 = +100%）。 */
+    public static void addGenericDamage(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.GENERIC_DAMAGE,
+            "item_generic_damage", value);
+    }
+
+    /** 给 ItemStack 添加受击触发器（值域 ≥0）。 */
+    public static void addOnHurt(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.ON_HURT, "item_on_hurt", value);
+    }
+
+    /** 给 ItemStack 添加攻击触发器（值域 ≥0）。 */
+    public static void addOnAttack(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.ON_ATTACK, "item_on_attack", value);
+    }
+
+    /** 给 ItemStack 添加时间触发器（值域 ≥0）。 */
+    public static void addOnTick(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.ON_TICK, "item_on_tick", value);
+    }
+
+    /** 给 ItemStack 添加反击率（值域 [0, 100]）。 */
+    public static void addCounterRate(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.COUNTER_RATE, "item_counter_rate", value);
+    }
+
+    /** 给 ItemStack 添加反击值（值域 ≥0，1 = 1%）。 */
+    public static void addCounterValue(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.COUNTER_VALUE, "item_counter_value", value);
+    }
+
+    /** 给 ItemStack 添加反击数（值域 ≥1）。 */
+    public static void addCounterCount(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.COUNTER_COUNT, "item_counter_count", value);
+    }
+
+    /** 给 ItemStack 添加复活次数（值域 ≥0）。 */
+    public static void addUndying(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.UNDYING, "item_undying", value);
+    }
+
+    /** 给 ItemStack 添加投射物反弹半径（值域 ≥0，格）。 */
+    public static void addProjectileReflection(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.PROJECTILE_REFLECTION, "item_projectile_reflection", value);
+    }
+
+    /** 给 ItemStack 添加穿过实体（值域 ≥0，1 = 穿过）。 */
+    public static void addNoCollision(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.NO_COLLISION, "item_no_collision", value);
+    }
+
+    /** 给 ItemStack 添加击退免疫（值域 ≥0，1 = 免疫）。 */
+    public static void addKnockbackImmunity(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.KNOCKBACK_IMMUNITY, "item_knockback_immunity", value);
+    }
+
+    /** 给 ItemStack 添加投射物免疫（值域 ≥0，1 = 免疫）。 */
+    public static void addProjectileImmunity(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.PROJECTILE_IMMUNITY, "item_projectile_immunity", value);
     }
 }

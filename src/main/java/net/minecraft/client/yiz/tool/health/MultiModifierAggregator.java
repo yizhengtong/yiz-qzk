@@ -1,6 +1,5 @@
 package net.minecraft.client.yiz.tool.health;
 
-import net.minecraft.client.yiz.effect.EffectContext;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.LivingEntity;
 
@@ -46,8 +45,7 @@ public final class MultiModifierAggregator {
      */
     public static AggregatedResult aggregate(
         List<HealthModifier> modifiers,
-        LivingEntity entity,
-        EffectContext context
+        LivingEntity entity
     ) {
         double additiveSum = 0;
         double multiplicativeProduct = 1.0;
@@ -57,7 +55,7 @@ public final class MultiModifierAggregator {
         List<Detail> details = new ArrayList<>();
 
         for (HealthModifier modifier : modifiers) {
-            double amount = modifier.getModificationAmount(entity, context);
+            double amount = modifier.getModificationAmount(entity);
             HealthModifier.ModificationMode mode = modifier.getMode();
 
             details.add(new Detail(

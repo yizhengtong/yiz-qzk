@@ -2,27 +2,17 @@ package net.minecraft.client.yiz;
 
 import net.minecraft.client.yiz.api.AttributeBalanceRegistry;
 import net.minecraft.client.yiz.api.CritTracker;
-import net.minecraft.client.yiz.api.DaoPalaceAPI;
 import net.minecraft.client.yiz.api.ProjectileReflectionSystem;
-import net.minecraft.client.yiz.api.RealmProgressionAPI;
 import net.minecraft.client.yiz.attribute.YizAttributes;
 import net.minecraft.client.yiz.core.VTableReplace;
 import net.minecraft.client.yiz.core.asm.AsmBootstrapper;
-import net.minecraft.client.yiz.core.data.EffectDataLoader;
-import net.minecraft.client.yiz.core.event.EffectEventBus;
 import net.minecraft.client.yiz.core.registry.CreativeTabAutoRegistry;
 import net.minecraft.client.yiz.core.registry.ModAttachments;
-import net.minecraft.client.yiz.core.registry.ModRegistries;
-import net.minecraft.client.yiz.effect.EffectContext;
-import net.minecraft.client.yiz.effect.unlock.UnlockManager;
-import net.minecraft.client.yiz.effect.unlock.UnlockSavedData;
 import net.minecraft.client.yiz.network.NetworkHandler;
 import net.minecraft.client.yiz.tool.SimpleCommandRegistry;
 import net.minecraft.client.yiz.tool.YizProtectCommand;
 import net.minecraft.client.yiz.tool.health.HealBanHandler;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.level.Level;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.ModContainer;
@@ -49,22 +39,20 @@ public class tizMod {
         // 注册 PlayerDataAPI 自动同步
         NetworkHandler.registerPlayerDataSync();
 
-        // 注册境界跨度数据 + 同步
-        RealmProgressionAPI.initDataKey();
-        NetworkHandler.registerRealmSync();
-
-        // 注册道宫数据 + 同步
-        DaoPalaceAPI.initDataKey();
-        NetworkHandler.registerDaoPalaceSync();
-
         // 初始化简易指令注册器（下游模组通过 API 提交指令，无需自行订阅事件）
         SimpleCommandRegistry.init();
 
         // 注册 /yiz th 保护态切换指令
         YizProtectCommand.register();
 
+        // 注册属性编辑台方块（阶段 A：方块+物品）
+        net.minecraft.client.yiz.editor.AttributeEditorRegistries.register(modEventBus);
+
         // 注册 /yiz abolish / /yiz restore 物品废除 + 背包废除指令
         net.minecraft.client.yiz.tool.abolish.YizAbolishCommand.register();
+
+        // 注册 /yiz setHealth <选择器> <数值> <类型1|2> 生命值修改指令
+        net.minecraft.client.yiz.tool.YizSetHealthCommand.register();
 
         // 注册禁疗事件处理器（攻击后禁疗 + 治疗拦截）
         HealBanHandler.register();
@@ -75,11 +63,8 @@ public class tizMod {
         // 注册自定义属性（暴击率、暴伤等）
         YizAttributes.ATTRIBUTES.register(modEventBus);
 
-        // 初始化创造标签页自动注册（扫描实现 ITalentItem/ISkillItem/IGeneralItem/IWeaponItem 的物品）
-        CreativeTabAutoRegistry.init(modEventBus);
-
-        // Register data reload listener (NeoForge event bus, not mod bus)
-        NeoForge.EVENT_BUS.addListener(this::onAddReloadListener);
+        // 创造标签页由下游模组手动注册，不再自动扫描
+        // CreativeTabAutoRegistry.init(modEventBus);
 
         // 将自定义属性挂载到玩家实体（否则 getAttributeValue 抛异常）
         modEventBus.addListener(
@@ -91,7 +76,61 @@ public class tizMod {
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.SPLASH_RADIUS);
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.SPLASH_DAMAGE);
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.SPLASH_FALLOFF);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.HUIXIN);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.KEGONG);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.DAMAGE_BLOCK);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.GENERIC_DAMAGE);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.DAMAGE_REDUCTION);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.ON_HURT);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.ON_ATTACK);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.ON_TICK);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.COUNTER_RATE);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.COUNTER_VALUE);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.COUNTER_COUNT);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.UNDYING);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.ARMOR);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.PROJECTILE_REFLECTION);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.NO_COLLISION);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.KNOCKBACK_IMMUNITY);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.PROJECTILE_IMMUNITY);
+                // 迁自 EffectTag 的新属性
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.MOVE_SPEED);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.MAX_RUN_SPEED);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.JUMP_STRENGTH);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.AIR_SPEED);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.JUMP_COUNT);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.JUMP_HEIGHT);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.FALL_SAFE);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.FALL_REDUCE);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.DODGE_CHANCE);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.INVINCIBILITY_MULT);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.LAVA_IMMUNE_TIME);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.LAVA_DAMAGE_REDUCTION);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.LIFE_REGEN_RATE);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.LIFE_REGEN_PCT);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.MELEE_DAMAGE);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.RANGED_DAMAGE);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.MAGIC_DAMAGE);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.SUMMON_DAMAGE);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.ARMOR_PENETRATION);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.ATTACK_RANGE);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.FLIGHT_TIME);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.JUMP_SPEED);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.MAX_FALL_SAFE);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.MAX_MINIONS);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.MAX_SENTRIES);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.WATER_BREATH_TIME);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.ARROW_DAMAGE);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.ARROW_SPEED);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.ARROW_SAVE_CHANCE);
             });
+
+        // 声明走全槽位汇总的 yizmodqzk 自定义属性（主手/副手/盔甲/饰品槽全部生效）
+        // 注：未在此注册的 yizmodqzk 属性仍会被汇总生效，只是卸装时不会被主动清理 modifier
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.DAMAGE_REDUCTION);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.DAMAGE_BLOCK);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.ARMOR);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.GENERIC_DAMAGE);
 
         // 原版暴击标记 → 桥接 CriticalHitEvent → LivingDamageEvent
         NeoForge.EVENT_BUS.addListener((CriticalHitEvent event) -> {
@@ -104,8 +143,7 @@ public class tizMod {
         NeoForge.EVENT_BUS.addListener(this::onPlayerLogin);
         NeoForge.EVENT_BUS.addListener(this::onPlayerClone);
         NeoForge.EVENT_BUS.addListener(this::onPlayerTick);
-        NeoForge.EVENT_BUS.addListener(this::onLevelLoad);
-        NeoForge.EVENT_BUS.addListener(this::onLevelSave);
+        // onLevelLoad/onLevelSave removed (UnlockSavedData deleted)
 
         // 延迟加载 ASM Agent（此时 Mixin 已完成，不会与 geckolib 等模组冲突）
         try {
@@ -132,22 +170,11 @@ public class tizMod {
     }
 
     /**
-     * Register JSON data reload listener.
-     */
-    private void onAddReloadListener(AddReloadListenerEvent event) {
-        event.addListener(new EffectDataLoader());
-        LOGGER.debug("EffectDataLoader registered");
-    }
-
-    /**
-     * Handle player login: 同步已解锁效果到客户端。
+     * Handle player login: 同步玩家数据到客户端。
      */
     private void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
         if (event.getEntity() instanceof ServerPlayer serverPlayer) {
-            NetworkHandler.syncPlayerUnlocks(serverPlayer);
-            NetworkHandler.syncPlayerRealm(serverPlayer);
-            NetworkHandler.syncPlayerDaoPalaces(serverPlayer);
-            LOGGER.debug("Synced unlocks for player {} on login", serverPlayer.getGameProfile().getName());
+            LOGGER.debug("Player {} logged in", serverPlayer.getGameProfile().getName());
         }
     }
 
@@ -158,10 +185,7 @@ public class tizMod {
     private void onPlayerClone(PlayerEvent.Clone event) {
         if (event.isWasDeath()) {
             if (event.getEntity() instanceof ServerPlayer serverPlayer) {
-                NetworkHandler.syncPlayerUnlocks(serverPlayer);
-                NetworkHandler.syncPlayerRealm(serverPlayer);
-                NetworkHandler.syncPlayerDaoPalaces(serverPlayer);
-                LOGGER.debug("Player cloned, unlock data resynced");
+                LOGGER.debug("Player cloned");
             }
         }
     }
@@ -169,35 +193,22 @@ public class tizMod {
     private void onPlayerTick(PlayerTickEvent.Post event) {
         ProjectileReflectionSystem.tick(event.getEntity());
         AttributeBalanceRegistry.enforceFloors(event.getEntity());
-        // 驱动效果系统（抽象效果每 tick 执行 + 词缀/随影）
-        if (!event.getEntity().level().isClientSide) {
-            EffectEventBus.dispatchContext(
-                EffectContext.create(event.getEntity(), null)
-            );
-        }
+        // 全槽位同步 yizmodqzk 自定义属性（主手/副手/盔甲/饰品槽全部生效）
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.sync(event.getEntity());
+        // ARMOR 镜像：1 点防御 = +1 护甲值 + +1 盔甲韧性
+        mirrorArmor(event.getEntity());
     }
 
-    // ==================== 解锁数据持久化 ====================
-
-    private static UnlockSavedData unlockSavedData;
-
-    private void onLevelLoad(LevelEvent.Load event) {
-        if (!(event.getLevel() instanceof ServerLevel serverLevel)) return;
-        if (serverLevel.dimension() != Level.OVERWORLD) return;
-
-        unlockSavedData = serverLevel.getDataStorage().computeIfAbsent(
-            UnlockSavedData.factory(), UnlockSavedData.dataName()
-        );
-        // 每次解锁新效果时标记存档需要保存
-        UnlockManager.setDirtyCallback(unlockSavedData::setDirty);
-        LOGGER.info("Unlock data loaded from world save");
-    }
-
-    private void onLevelSave(LevelEvent.Save event) {
-        if (!(event.getLevel() instanceof ServerLevel serverLevel)) return;
-        if (serverLevel.dimension() != Level.OVERWORLD) return;
-        if (unlockSavedData != null) {
-            unlockSavedData.setDirty();
-        }
+    /** 防御力镜像：读 yizmodqzk:armor → 1:1 写到原版 ARMOR + ARMOR_TOUGHNESS。 */
+    private static void mirrorArmor(net.minecraft.world.entity.LivingEntity entity) {
+        var inst = entity.getAttribute(YizAttributes.ARMOR);
+        if (inst == null) return;
+        double armor = inst.getValue();
+        net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler.setEntityAttribute(
+            entity, net.minecraft.world.entity.ai.attributes.Attributes.ARMOR,
+            "yiz_armor_mirror", armor, net.minecraft.world.entity.ai.attributes.AttributeModifier.Operation.ADD_VALUE);
+        net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler.setEntityAttribute(
+            entity, net.minecraft.world.entity.ai.attributes.Attributes.ARMOR_TOUGHNESS,
+            "yiz_toughness_mirror", armor, net.minecraft.world.entity.ai.attributes.AttributeModifier.Operation.ADD_VALUE);
     }
 }

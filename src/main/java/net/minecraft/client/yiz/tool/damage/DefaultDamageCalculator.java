@@ -2,10 +2,10 @@ package net.minecraft.client.yiz.tool.damage;
 
 import net.minecraft.client.yiz.attribute.AttributeModifier;
 import net.minecraft.client.yiz.attribute.ModifierStack;
-import net.minecraft.client.yiz.effect.EffectContext;
 import net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler;
 import net.minecraft.client.yiz.tool.helper.EffectContextHelper;
 import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.Vec3;
 
@@ -23,40 +23,26 @@ public final class DefaultDamageCalculator {
     /**
      * 计算最终伤害（使用多乘区系统）。
      *
-     * @param context    效果上下文
+     * @param attacker   攻击者
+     * @param target     目标
      * @param baseDamage 基础伤害值
      * @return 伤害结果
      */
-    public static DamageResult calculateDamage(EffectContext context, double baseDamage) {
-        if (context == null) {
-            throw new IllegalArgumentException("context must not be null");
-        }
+    public static DamageResult calculateDamage(Entity attacker, Entity target, double baseDamage) {
         // 1. 收集修正器
         List<AttributeModifier> additive = new ArrayList<>();
         List<AttributeModifier> multiplicative = new ArrayList<>();
         List<AttributeModifier> independent = new ArrayList<>();
 
-        // 1a. 攻击者物品的 %伤害增幅
-        if (context.entity() instanceof LivingEntity attacker) {
-            double amp = ItemAttributeHandler.getTotalDamageAmplification(attacker);
-            if (amp != 0) {
-                multiplicative.add(new AttributeModifier("item_damage_amp", amp, AttributeModifier.ModifierType.MULTIPLICATIVE));
-            }
-        }
+        // 1a. %伤害增幅 — 已迁移至 NeoForge 属性 generic_damage，由 modifyHurtAmount 消费
 
-        // 1b. 目标物品的 %伤害减免
-        if (context.target() instanceof LivingEntity target) {
-            double red = ItemAttributeHandler.getTotalDamageReduction(target);
-            if (red != 0) {
-                multiplicative.add(new AttributeModifier("item_damage_red", -red, AttributeModifier.ModifierType.MULTIPLICATIVE));
-            }
-        }
+        // 1b. %伤害减免 — 已迁移至饰品 AccessoryFlags 路径
 
         // 2. 使用多乘区计算
         double finalDamage = ModifierStack.calculate(baseDamage, additive, multiplicative, independent);
 
         // 3. 应用目标护甲减伤
-        if (context.target() instanceof LivingEntity livingTarget) {
+        if (target instanceof LivingEntity livingTarget) {
             double armor = livingTarget.getArmorValue();
             finalDamage = applyArmorReduction(finalDamage, armor);
         }
@@ -65,44 +51,41 @@ public final class DefaultDamageCalculator {
         return new DamageResult(
             finalDamage,
             baseDamage,
-            context.effect() != null ? context.effect().getId() : null
+            null
         );
     }
 
     /**
      * 应用伤害到目标。
      */
-    public static void applyDamage(EffectContext context, DamageResult damage) {
-        if (context == null) {
-            throw new IllegalArgumentException("context must not be null");
-        }
-        if (!(context.target() instanceof LivingEntity livingTarget)) return;
+    public static void applyDamage(Entity attacker, Entity target, DamageResult damage) {
+        if (!(target instanceof LivingEntity livingTarget)) return;
 
-        DamageSource source = createDamageSource(context);
+        DamageSource source = createDamageSource(attacker, target);
         livingTarget.hurt(source, (float) damage.finalDamage());
 
         // 触发击退
         if (damage.knockback() > 0) {
-            applyKnockback(context, livingTarget, damage.knockback());
+            applyKnockback(attacker, livingTarget, damage.knockback());
         }
     }
 
     /**
      * 快捷方法：计算并应用伤害。
      */
-    public static void calculateAndApply(EffectContext context, double baseDamage) {
-        DamageResult result = calculateDamage(context, baseDamage);
-        applyDamage(context, result);
+    public static void calculateAndApply(Entity attacker, Entity target, double baseDamage) {
+        DamageResult result = calculateDamage(attacker, target, baseDamage);
+        applyDamage(attacker, target, result);
     }
 
     /**
      * 快捷方法：计算并应用伤害（带击退）。
      */
     public static void calculateAndApplyWithKnockback(
-        EffectContext context, double baseDamage, double knockbackStrength
+        Entity attacker, Entity target, double baseDamage, double knockbackStrength
     ) {
-        DamageResult result = calculateDamage(context, baseDamage).withKnockback(knockbackStrength);
-        applyDamage(context, result);
+        DamageResult result = calculateDamage(attacker, target, baseDamage).withKnockback(knockbackStrength);
+        applyDamage(attacker, target, result);
     }
 
     /**
@@ -125,30 +108,19 @@ public final class DefaultDamageCalculator {
     /**
      * 创建伤害源。
      */
-    private static DamageSource createDamageSource(EffectContext context) {
-        if (context.entity() == null) {
-            return context.target().damageSources().generic();
+    private static DamageSource createDamageSource(Entity attacker, Entity target) {
+        if (attacker == null) {
+            return target.damageSources().generic();
         }
-
-        // 根据效果父类类型选择伤害源
-        if (context.effect() != null) {
-            return switch (context.effect().getParentType()) {
-                case ECHO -> EffectContextHelper.getAttackDamageSource(context.entity());
-                case MANIFESTATION -> context.entity().damageSources().magic();
-                case ORIGIN -> context.entity().damageSources().explosion(null);
-                default -> context.entity().damageSources().generic();
-            };
-        }
-
-        return EffectContextHelper.getAttackDamageSource(context.entity());
+        return EffectContextHelper.getAttackDamageSource(attacker);
     }
 
     /**
      * 应用击退效果。
      */
-    private static void applyKnockback(EffectContext context, LivingEntity target, double knockback) {
+    private static void applyKnockback(Entity attacker, LivingEntity target, double knockback) {
         Vec3 direction = target.position()
-            .subtract(context.entity().position())
+            .subtract(attacker.position())
             .normalize();
 
         // 零向量 normalize 会产生 NaN，极近距离时跳过击退

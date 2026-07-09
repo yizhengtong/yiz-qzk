@@ -1,6 +1,5 @@
 package net.minecraft.client.yiz.tool.health;
 
-import net.minecraft.client.yiz.effect.EffectContext;
 import net.minecraft.world.entity.LivingEntity;
 
 import java.util.*;
@@ -71,8 +70,7 @@ public final class HealthModificationScheduler {
         for (ScheduledModification task : tasks) {
             if (task.remainingTicks() <= 0) {
                 // 任务到期，执行
-                EffectContext context = EffectContext.create(entity, null);
-                task.modifier().apply(entity, context);
+                task.modifier().apply(entity);
 
                 // 如果可重复，重新调度
                 if (task.repeat()) {
@@ -97,7 +95,7 @@ public final class HealthModificationScheduler {
      */
     @FunctionalInterface
     public interface ModificationExecutor {
-        void apply(LivingEntity entity, EffectContext context);
+        void apply(LivingEntity entity);
     }
 
     /**

@@ -1,13 +1,7 @@
 package net.minecraft.client.yiz.api;
 
-import net.minecraft.client.yiz.core.event.EffectEventBus;
-import net.minecraft.client.yiz.core.registry.ModRegistries;
 import net.minecraft.client.yiz.tizMod;
-import net.minecraft.client.yiz.effect.AbstractEffect;
-import net.minecraft.client.yiz.effect.EffectContext;
-import net.minecraft.client.yiz.effect.unlock.UnlockManager;
 import net.minecraft.client.yiz.network.NetworkHandler;
-import net.minecraft.client.yiz.ui.PlayerTalentUI;
 import net.minecraft.client.yiz.tool.health.EntityASMUtil;
 import net.minecraft.core.Holder;
 import net.minecraft.resources.ResourceLocation;
@@ -301,20 +295,6 @@ public final class YizModQZKAPI {
      *
      * @param holder 要注册为伤害源的属性
      */
-    public static void registerDamageAttribute(Holder<Attribute> holder) {
-        DamageAttributeRegistry.register(holder);
-    }
-
-    /**
-     * 获取攻击者身上所有已注册伤害属性的总值。
-     *
-     * @param attacker 攻击者实体
-     * @return 所有已注册伤害属性的总和
-     */
-    public static float getDamageAttributeValue(LivingEntity attacker) {
-        return DamageAttributeRegistry.getTotalValue(attacker);
-    }
-
     // ==================== 直接健康值修改（方法②） ====================
 
     /**
@@ -485,119 +465,6 @@ public final class YizModQZKAPI {
         HealBanAttributeRegistry.registerFixed(holder, scale);
     }
 
-    // ==================== 效果注册 ====================
-
-    /**
-     * 注册效果。
-     */
-    public static void registerEffect(AbstractEffect effect) {
-        ModRegistries.registerEffect(effect);
-    }
-
-    /**
-     * 根据 ID 获取效果。
-     */
-    public static Optional<AbstractEffect> getEffect(ResourceLocation id) {
-        return ModRegistries.getEffect(id);
-    }
-
-    // ==================== 解锁管理 ====================
-
-    /**
-     * 为实体解锁效果。
-     * 服务端调用后自动同步到客户端。
-     */
-    public static void unlockEffect(LivingEntity entity, ResourceLocation effectId) {
-        UnlockManager.unlock(entity, effectId);
-        if (entity instanceof ServerPlayer serverPlayer) {
-            NetworkHandler.syncPlayerUnlocks(serverPlayer);
-        }
-    }
-
-    /**
-     * 检查实体是否已解锁效果。
-     */
-    public static boolean isEffectUnlocked(LivingEntity entity, ResourceLocation effectId) {
-        return UnlockManager.isUnlocked(entity, effectId);
-    }
-
-    // ==================== 效果查询 ====================
-
-    /**
-     * 分发效果上下文（触发效果系统）。
-     */
-    public static void dispatchContext(EffectContext context) {
-        EffectEventBus.dispatchContext(context);
-    }
-
-    // ==================== 注册表查询 ====================
-
-    /**
-     * 获取所有注册的效果。
-     */
-    public static List<AbstractEffect> getAllEffects() {
-        return List.copyOf(ModRegistries.getAllEffects());
-    }
-
-    // ==================== 实体天赋查询 ====================
-
-    /**
-     * 获取实体所有已解锁的天赋。
-     * <p>
-     * 自动过滤出 {@link net.minecraft.client.yiz.effect.perception.EntityPerception} 类型的效果，
-     * 并按稀有度 → 等级降序排序。
-     * </p>
-     *
-     * @param entity 目标实体
-     * @return 已解锁的天赋列表
-     */
-    public static List<AbstractEffect> getEntityTalents(LivingEntity entity) {
-        return PlayerTalentUI.getPlayerTalents(entity);
-    }
-
-    /**
-     * 按稀有度统计实体已解锁天赋数量。
-     * <p>
-     * 返回 Map 包含以下键：{@code total}（总数）、
-     * {@code legendary}（传说）、{@code epic}（史诗）。
-     * </p>
-     *
-     * @param entity 目标实体
-     * @return 稀有度 → 数量
-     */
-    public static java.util.Map<String, Integer> countTalentsByRarity(LivingEntity entity) {
-        java.util.Map<String, Integer> counts = new java.util.HashMap<>();
-        counts.put("total", 0);
-        counts.put("legendary", 0);
-        counts.put("epic", 0);
-
-        for (net.minecraft.resources.ResourceLocation id : UnlockManager.getUnlockedEffects(entity)) {
-            java.util.Optional<AbstractEffect> effect = ModRegistries.getEffect(id);
-            if (effect.isPresent()) {
-                counts.merge("total", 1, Integer::sum);
-                switch (effect.get().getRarity()) {
-                    case LEGENDARY -> counts.merge("legendary", 1, Integer::sum);
-                    case EPIC      -> counts.merge("epic", 1, Integer::sum);
-                }
-            }
-        }
-        return java.util.Collections.unmodifiableMap(counts);
-    }
-
-    // ==================== UI 刷新 ====================
-
-    /**
-     * 请求刷新所有 YizMod QZK UI 组件。
-     * <p>
-     * 下游模组在解锁新天赋、变更效果或需要重新渲染 UI 时调用此方法。
-     * </p>
-     */
-    public static void refreshUI() {
-        // UI 组件在下一帧渲染时会自动从注册表重新读取最新状态，
-        // 不持有缓存副本，因此无需额外刷新动作。
-        // 此方法作为 API 契约保留，确保下游模组调用不会出错。
-    }
-
     // ==================== 物品属性修改 ====================
 
     // -- 攻击力 --
@@ -656,16 +523,6 @@ public final class YizModQZKAPI {
         net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler.addSweepRatio(stack, delta);
     }
 
-    // -- 横扫衰减开关 --
-
-    public static boolean isSweepDecayEnabled(ItemStack stack) {
-        return net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler.isSweepDecayEnabled(stack);
-    }
-
-    public static void setSweepDecay(ItemStack stack, boolean enabled) {
-        net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler.setSweepDecay(stack, enabled);
-    }
-
     // -- 耐久值 --
 
     public static int getMaxDurability(ItemStack stack) {
@@ -678,34 +535,6 @@ public final class YizModQZKAPI {
 
     public static void addMaxDurability(ItemStack stack, int delta) {
         net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler.addMaxDurability(stack, delta);
-    }
-
-    // -- %伤害增幅 --
-
-    public static double getDamageAmplification(ItemStack stack) {
-        return net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler.getDamageAmplification(stack);
-    }
-
-    public static void setDamageAmplification(ItemStack stack, double percent) {
-        net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler.setDamageAmplification(stack, percent);
-    }
-
-    public static void addDamageAmplification(ItemStack stack, double delta) {
-        net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler.addDamageAmplification(stack, delta);
-    }
-
-    // -- %伤害减免 --
-
-    public static double getDamageReduction(ItemStack stack) {
-        return net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler.getDamageReduction(stack);
-    }
-
-    public static void setDamageReduction(ItemStack stack, double percent) {
-        net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler.setDamageReduction(stack, percent);
-    }
-
-    public static void addDamageReduction(ItemStack stack, double delta) {
-        net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler.addDamageReduction(stack, delta);
     }
 
     // ==================== 简易指令注册 ====================
@@ -976,7 +805,6 @@ public final class YizModQZKAPI {
      * @return 类别 key，未分类返回 null
      */
     public static String getCreativeTabCategory(Item item) {
-        if (item instanceof ITalentItem) return "talent";
         if (item instanceof ISkillItem) return "skill";
         if (item instanceof IGeneralItem) return "item";
         if (item instanceof IWeaponItem) return "weapon";
@@ -991,22 +819,6 @@ public final class YizModQZKAPI {
      */
     public static boolean isCreativeTabRegistered(Item item) {
         return getCreativeTabCategory(item) != null;
-    }
-
-    // ==================== 快捷方法 ====================
-
-    /**
-     * 直接为物品附加效果（写入 NBT）。
-     */
-    public static void attachEffectToItem(ItemStack stack, AbstractEffect effect) {
-        net.minecraft.client.yiz.core.data.EffectNBTHandler.addEffectToItem(stack, effect);
-    }
-
-    /**
-     * 获取物品上的所有效果。
-     */
-    public static List<AbstractEffect> getItemEffects(ItemStack stack) {
-        return net.minecraft.client.yiz.core.data.EffectNBTHandler.getItemEffects(stack);
     }
 
     // ==================== 技能施法槽位查询 ====================

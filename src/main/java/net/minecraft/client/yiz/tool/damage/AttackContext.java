@@ -1,20 +1,17 @@
 package net.minecraft.client.yiz.tool.damage;
 
-import net.minecraft.client.yiz.core.data.EffectNBTHandler;
-import net.minecraft.client.yiz.effect.AbstractEffect;
-import net.minecraft.client.yiz.effect.EffectContext;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
  * 攻击上下文
  * 收集攻击相关的所有数据，用于标签检测和伤害计算。
+ *
+ * <p>标签检测已从效果框架迁移至属性系统（Phase C）。
+ * 当前 hasEnforcementTag 返回 false，后续由自定义属性驱动。</p>
  */
 public class AttackContext {
 
@@ -22,20 +19,12 @@ public class AttackContext {
     public final Entity target;
     public final ItemStack mainHandItem;
     public final ItemStack offHandItem;
-    public final List<AbstractEffect> activeEffects;
 
     private AttackContext(LivingEntity attacker, Entity target) {
         this.attacker = attacker;
         this.target = target;
         this.mainHandItem = attacker.getMainHandItem();
         this.offHandItem = attacker.getOffhandItem();
-        this.activeEffects = new ArrayList<>();
-        // 填充攻击者身上所有已解锁的天赋效果
-        for (var effect : net.minecraft.client.yiz.core.registry.ModRegistries.getAllEffects()) {
-            if (effect.isUnlocked(attacker)) {
-                this.activeEffects.add(effect);
-            }
-        }
     }
 
     public static AttackContext create(LivingEntity attacker, Entity target) {
@@ -47,47 +36,24 @@ public class AttackContext {
 
     /**
      * 检查是否包含特定强制执行标签。
-     * 逻辑：检查手持物品词缀 + 实体天赋。
+     * TODO Phase C: 改为从攻击者物品的自定义属性读取标签。
      */
     public boolean hasEnforcementTag(DamageTag tag) {
-        // 1. 检查主手物品词缀（通过 NBT 效果）
-        if (checkItemForTag(mainHandItem, tag)) return true;
-
-        // 2. 检查副手物品词缀
-        if (checkItemForTag(offHandItem, tag)) return true;
-
-        // 3. 检查活跃效果
-        for (AbstractEffect effect : activeEffects) {
-            if (effect instanceof DamageTagProvider provider) {
-                if (provider.getAssociatedTags().contains(tag)) return true;
-            }
-        }
-
-        return false;
-    }
-
-    private boolean checkItemForTag(ItemStack stack, DamageTag tag) {
-        if (stack.isEmpty()) return false;
-        // 检查物品 NBT 效果中是否包含指定标签
-        List<AbstractEffect> itemEffects = EffectNBTHandler.getItemEffects(stack);
-        for (AbstractEffect effect : itemEffects) {
-            if (effect instanceof DamageTagProvider provider) {
-                if (provider.getAssociatedTags().contains(tag)) return true;
-            }
-        }
+        // Phase C 将改为属性驱动
         return false;
     }
 
     /**
      * 使用 DamageFormula 计算伤害。
      */
-    public DamageResult calculateDamage(EffectContext context, double baseDamage, DamageValueProvider provider) {
+    public DamageResult calculateDamage(Entity attacker, Entity target,
+                                         double baseDamage, DamageValueProvider provider) {
         DamageFormula formula = new DamageFormula() {
             {
                 withValueProvider(provider);
             }
         };
-        return formula.calculate(context, baseDamage);
+        return formula.calculate(attacker, target, baseDamage);
     }
 
     /**
@@ -98,7 +64,7 @@ public class AttackContext {
     }
 
     /**
-     * 标记效果可以提供标签。
+     * 标记效果可以提供标签（保留接口为 Phase C 属性消费点准备）。
      */
     public interface DamageTagProvider {
         List<DamageTag> getAssociatedTags();

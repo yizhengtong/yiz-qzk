@@ -1,6 +1,5 @@
 package net.minecraft.client.yiz.tool.damage;
 
-import net.minecraft.client.yiz.effect.EffectContext;
 import net.minecraft.client.yiz.tool.helper.EffectContextHelper;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
@@ -18,36 +17,34 @@ public final class CustomDamageCalculator {
     /**
      * 应用伤害（自动根据标签选择应用方式）。
      *
-     * @param context 效果上下文
-     * @param damage  伤害结果
+     * @param entity 攻击者
+     * @param target 目标实体
+     * @param damage 伤害结果
      */
-    public static void applyDamage(EffectContext context, DamageResult damage) {
-        if (context == null) {
-            throw new IllegalArgumentException("context must not be null");
-        }
-        if (!(context.target() instanceof LivingEntity livingTarget)) return;
+    public static void applyDamage(Entity entity, Entity target, DamageResult damage) {
+        if (!(target instanceof LivingEntity livingTarget)) return;
 
         boolean isTrueDamage = damage.hasTag(DamageTag.TRUE_DAMAGE);
         boolean isArmorPiercing = damage.hasTag(DamageTag.ARMOR_PIERCING);
         boolean pierceInvulnerability = damage.hasTag(DamageTag.PIERCE_INVULNERABILITY);
 
         if (isTrueDamage) {
-            applyTrueDamage(context, livingTarget, damage);
+            applyTrueDamage(entity, livingTarget, damage);
         } else if (isArmorPiercing && pierceInvulnerability) {
-            applyArmorPiercingAndPierceInvulnerability(context, livingTarget, damage);
+            applyArmorPiercingAndPierceInvulnerability(entity, livingTarget, damage);
         } else if (isArmorPiercing) {
-            applyArmorPiercingDamage(context, livingTarget, damage);
+            applyArmorPiercingDamage(entity, livingTarget, damage);
         } else if (pierceInvulnerability) {
-            applyPierceInvulnerabilityDamage(context, livingTarget, damage);
+            applyPierceInvulnerabilityDamage(entity, livingTarget, damage);
         } else {
-            applyNormalDamage(context, livingTarget, damage);
+            applyNormalDamage(entity, livingTarget, damage);
         }
     }
 
     /**
      * 真实伤害应用：直接修改 Health，穿透无敌帧。
      */
-    private static void applyTrueDamage(EffectContext context, LivingEntity target, DamageResult damage) {
+    private static void applyTrueDamage(Entity entity, LivingEntity target, DamageResult damage) {
         float currentHealth = target.getHealth();
         float damageAmount = (float) damage.finalDamage();
         if (Float.isNaN(currentHealth)) currentHealth = 20F;
@@ -62,20 +59,20 @@ public final class CustomDamageCalculator {
         }
 
         // 检查死亡
-        if (newHealth <= 0 && context.entity() != null) {
-            target.die(EffectContextHelper.getAttackDamageSource(context.entity()));
+        if (newHealth <= 0 && entity != null) {
+            target.die(EffectContextHelper.getAttackDamageSource(entity));
         }
     }
 
     /**
      * 破甲伤害应用：跳过护甲减伤，仍受无敌帧限制。
      */
-    private static void applyArmorPiercingDamage(EffectContext context, LivingEntity target, DamageResult damage) {
+    private static void applyArmorPiercingDamage(Entity entity, LivingEntity target, DamageResult damage) {
         // 检查无敌帧
         if (target.invulnerableTime > 0) return;
 
-        DamageSource source = context.entity() != null
-            ? context.entity().damageSources().magic()
+        DamageSource source = entity != null
+            ? entity.damageSources().magic()
             : target.damageSources().generic();
 
         target.hurt(source, (float) damage.finalDamage());
@@ -85,14 +82,14 @@ public final class CustomDamageCalculator {
      * 破甲+破无敌帧伤害应用。
      */
     private static void applyArmorPiercingAndPierceInvulnerability(
-        EffectContext context, LivingEntity target, DamageResult damage
+        Entity entity, LivingEntity target, DamageResult damage
     ) {
         int savedInvulnerableTime = target.invulnerableTime;
 
         try {
             target.invulnerableTime = 0;
-            DamageSource source = context.entity() != null
-                ? context.entity().damageSources().magic()
+            DamageSource source = entity != null
+                ? entity.damageSources().magic()
                 : target.damageSources().generic();
             target.hurt(source, (float) damage.finalDamage());
         } finally {
@@ -104,14 +101,14 @@ public final class CustomDamageCalculator {
      * 仅破无敌帧伤害应用：经过护甲减伤，无视无敌帧。
      */
     private static void applyPierceInvulnerabilityDamage(
-        EffectContext context, LivingEntity target, DamageResult damage
+        Entity entity, LivingEntity target, DamageResult damage
     ) {
         int savedInvulnerableTime = target.invulnerableTime;
 
         try {
             target.invulnerableTime = 0;
-            DamageSource source = context.entity() != null
-                ? EffectContextHelper.getAttackDamageSource(context.entity())
+            DamageSource source = entity != null
+                ? EffectContextHelper.getAttackDamageSource(entity)
                 : target.damageSources().generic();
             target.hurt(source, (float) damage.finalDamage());
         } finally {
@@ -122,9 +119,9 @@ public final class CustomDamageCalculator {
     /**
      * 默认伤害应用：经过护甲减伤，受无敌帧限制。
      */
-    private static void applyNormalDamage(EffectContext context, LivingEntity target, DamageResult damage) {
-        DamageSource source = context.entity() != null
-            ? EffectContextHelper.getAttackDamageSource(context.entity())
+    private static void applyNormalDamage(Entity entity, LivingEntity target, DamageResult damage) {
+        DamageSource source = entity != null
+            ? EffectContextHelper.getAttackDamageSource(entity)
             : target.damageSources().generic();
 
         target.hurt(source, (float) damage.finalDamage());
@@ -133,11 +130,11 @@ public final class CustomDamageCalculator {
     /**
      * 应用击退效果。
      */
-    public static void applyKnockback(EffectContext context, LivingEntity target, double knockbackStrength) {
-        if (context.entity() == null || knockbackStrength <= 0) return;
+    public static void applyKnockback(Entity entity, LivingEntity target, double knockbackStrength) {
+        if (entity == null || knockbackStrength <= 0) return;
 
         Vec3 direction = target.position()
-            .subtract(context.entity().position())
+            .subtract(entity.position())
             .normalize();
 
         // 零向量 normalize 会产生 NaN，极近距离时跳过击退

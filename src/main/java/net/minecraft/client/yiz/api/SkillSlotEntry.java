@@ -1,9 +1,6 @@
 package net.minecraft.client.yiz.api;
 
-import net.minecraft.client.yiz.effect.AbstractEffect;
 import net.minecraft.world.item.ItemStack;
-
-import java.util.List;
 
 /**
  * 技能施法槽位条目 — 描述快捷栏下方单个施法槽位的内容。
@@ -17,15 +14,13 @@ import java.util.List;
  * @param skillType   武器技能类型
  * @param attackDamage 攻击伤害
  * @param attackSpeed  攻击速度
- * @param effects     该武器关联的效果列表（通过 NBT 或注册表查找）
  */
 public record SkillSlotEntry(
     int slotIndex,
     ItemStack item,
     ISkillWeapon.SkillType skillType,
     double attackDamage,
-    double attackSpeed,
-    List<AbstractEffect> effects
+    double attackSpeed
 ) {
     public boolean isEmpty() { return item.isEmpty(); }
     public boolean isOccupied() { return !item.isEmpty(); }

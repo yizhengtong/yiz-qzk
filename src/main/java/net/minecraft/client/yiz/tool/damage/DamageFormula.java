@@ -1,7 +1,7 @@
 package net.minecraft.client.yiz.tool.damage;
 
-import net.minecraft.client.yiz.effect.EffectContext;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 
 import java.util.HashSet;
@@ -24,23 +24,24 @@ public class DamageFormula {
     /**
      * 计算最终伤害。
      *
-     * @param context    效果上下文
+     * @param entity     攻击者
+     * @param target     目标
      * @param baseDamage 基础伤害值
      * @return 伤害结果
      */
-    public DamageResult calculate(EffectContext context, double baseDamage) {
+    public DamageResult calculate(Entity entity, Entity target, double baseDamage) {
         if (valueProvider == null) {
             throw new IllegalStateException("DamageValueProvider has not been set. Call withValueProvider() first.");
         }
 
         // 1. 获取固定数值（接口2）
-        double fixedValue = valueProvider.getFixedValue(context);
+        double fixedValue = valueProvider.getFixedValue(entity, target);
 
         // 2. 基础伤害 + 固定修正
         double damageAfterFixed = baseDamage + fixedValue;
 
         // 3. 获取目标最大生命值百分比（接口1）
-        if (context.target() instanceof LivingEntity livingTarget) {
+        if (target instanceof LivingEntity livingTarget) {
             double maxHealthPercentage = valueProvider.getTargetMaxHealthPercentage(livingTarget);
             if (maxHealthPercentage > 0) {
                 double percentageDamage = livingTarget.getMaxHealth() * maxHealthPercentage;
@@ -49,16 +50,14 @@ public class DamageFormula {
         }
 
         // 4. 获取最终百分比提升（接口3）
-        double finalMultiplier = valueProvider.getFinalPercentageMultiplier(context);
+        double finalMultiplier = valueProvider.getFinalPercentageMultiplier(entity, target);
         double finalDamage = damageAfterFixed * (1.0 + finalMultiplier);
 
         // 5. 确保伤害不为负
         finalDamage = Math.max(0, finalDamage);
 
         // 6. 构建结果
-        ResourceLocation source = context.effect() != null
-            ? context.effect().getId()
-            : ResourceLocation.parse("yizmodqzk:generic_damage");
+        ResourceLocation source = ResourceLocation.parse("yizmodqzk:generic_damage");
 
         return new DamageResult(finalDamage, baseDamage, source)
             .withTags(tags);

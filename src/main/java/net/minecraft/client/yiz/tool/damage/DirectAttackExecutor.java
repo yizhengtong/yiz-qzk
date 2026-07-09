@@ -1,6 +1,5 @@
 package net.minecraft.client.yiz.tool.damage;
 
-import net.minecraft.client.yiz.effect.EffectContext;
 import net.minecraft.client.yiz.tool.helper.EffectContextHelper;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
@@ -75,10 +74,10 @@ public final class DirectAttackExecutor {
     }
 
     /**
-     * 使用 EffectContext 执行强制攻击。
+     * 使用显式参数执行强制攻击。
      */
-    public static void executeForcedAttackFromContext(EffectContext context, DamageResult damage) {
-        if (!(context.target() instanceof LivingEntity livingTarget) || context.entity() == null) return;
+    public static void executeForcedAttackFromContext(Entity entity, Entity target, DamageResult damage) {
+        if (!(target instanceof LivingEntity livingTarget) || entity == null) return;
 
         boolean isTrueDamage = damage.hasTag(DamageTag.TRUE_DAMAGE);
         boolean isArmorPiercing = damage.hasTag(DamageTag.ARMOR_PIERCING);
@@ -95,10 +94,10 @@ public final class DirectAttackExecutor {
             }
 
             if (livingTarget.getHealth() <= 0) {
-                livingTarget.die(EffectContextHelper.getAttackDamageSource(context.entity()));
+                livingTarget.die(EffectContextHelper.getAttackDamageSource(entity));
             }
         } else if (isArmorPiercing) {
-            DamageSource source = context.entity().damageSources().magic();
+            DamageSource source = entity.damageSources().magic();
             if (damage.hasTag(DamageTag.PIERCE_INVULNERABILITY)) {
                 int saved = livingTarget.invulnerableTime;
                 try {
@@ -111,7 +110,7 @@ public final class DirectAttackExecutor {
                 livingTarget.hurt(source, (float) damage.finalDamage());
             }
         } else {
-            DamageSource source = context.entity().damageSources().magic();
+            DamageSource source = entity.damageSources().magic();
             if (damage.hasTag(DamageTag.PIERCE_INVULNERABILITY)) {
                 int saved = livingTarget.invulnerableTime;
                 livingTarget.invulnerableTime = 0;

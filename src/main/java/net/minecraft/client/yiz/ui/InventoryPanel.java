@@ -122,7 +122,7 @@ public class InventoryPanel {
             ItemStack stack = slots.get(i);
             if (stack.isEmpty()) {
                 entries.add(new SkillSlotEntry(
-                    i, ItemStack.EMPTY, null, 0, 1.0, java.util.List.of()));
+                    i, ItemStack.EMPTY, null, 0, 1.0));
                 continue;
             }
 
@@ -131,14 +131,11 @@ public class InventoryPanel {
                 double attackDamage = weapon.getAttackDamage(stack);
                 double attackSpeed = weapon.getAttackSpeed(stack);
 
-                java.util.List<net.minecraft.client.yiz.effect.AbstractEffect> effects =
-                    net.minecraft.client.yiz.core.data.EffectNBTHandler.getItemEffects(stack);
-
                 entries.add(new SkillSlotEntry(
-                    i, stack, skillType, attackDamage, attackSpeed, effects));
+                    i, stack, skillType, attackDamage, attackSpeed));
             } else {
                 entries.add(new SkillSlotEntry(
-                    i, ItemStack.EMPTY, null, 0, 1.0, java.util.List.of()));
+                    i, ItemStack.EMPTY, null, 0, 1.0));
             }
         }
         return entries;

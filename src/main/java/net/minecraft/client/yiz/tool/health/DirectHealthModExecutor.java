@@ -1,6 +1,5 @@
 package net.minecraft.client.yiz.tool.health;
 
-import net.minecraft.client.yiz.effect.EffectContext;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 
@@ -18,10 +17,10 @@ public final class DirectHealthModExecutor {
      * 执行直接健康值修改（通过完整的事件-聚合-应用流程）。
      */
     public static void executeDirectHealthMod(
-        LivingEntity attacker, Entity target, EffectContext context
+        LivingEntity attacker, Entity target
     ) {
         if (!(target instanceof LivingEntity livingTarget)) return;
-        HealthModificationManager.executeModification(livingTarget, context);
+        HealthModificationManager.executeModification(livingTarget);
     }
 
     /**

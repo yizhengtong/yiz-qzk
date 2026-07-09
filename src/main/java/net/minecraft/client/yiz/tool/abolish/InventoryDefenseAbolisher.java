@@ -17,7 +17,6 @@ import org.slf4j.LoggerFactory;
  * <ol>
  *   <li><b>香版护甲值</b> — VTable 覆写 {@link LivingEntity#getArmorValue()} → 返回 0</li>
  *   <li><b>香版附魔保护</b> — VTable 覆写 {@link LivingEntity#getDamageAfterMagicAbsorb(float, float)} → 返回原伤害</li>
- *   <li><b>QZK 自定义 % 减伤</b> — {@link ItemAttributeHandler#setDefenseAbolished(UUID, boolean)} 开关</li>
  *   <li><b>QZK ASM Agent 层</b> — {@link DamageReductionRegistry#setAbolished(boolean)} 全局开关</li>
  * </ol>
  *
@@ -116,7 +115,6 @@ public final class InventoryDefenseAbolisher {
      * @param player 目标玩家
      */
     public static void abolishPlayerDefense(Player player) {
-        // 确保 VTable 层已执行
         if (!vtableApplied) {
             try {
                 applyVTableOverrides();
@@ -126,47 +124,21 @@ public final class InventoryDefenseAbolisher {
             }
         }
 
-        // 玩家粒度：跳过物品 % 减伤
-        net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler.setDefenseAbolished(
-                player.getUUID(), true);
-
-        // 全局：跳过 ASM Agent 层减免
         DamageReductionRegistry.setAbolished(true);
-
-        // 状态管理器（Mix 层护甲废除检查）
         AbolitionStateManager.setArmorAbolished(true);
 
         LOGGER.info("Defense abolished for player {}", player.getName().getString());
     }
 
-    /**
-     * 恢复指定玩家的背包防御。
-     *
-     * @param player 目标玩家（可为 null，此时只关全局开关）
-     */
     public static void restorePlayerDefense(Player player) {
-        if (player != null) {
-            net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler.setDefenseAbolished(
-                    player.getUUID(), false);
-        }
-
-        // 检查是否还有其他玩家处于废除状态
-        // 注意：当前实现简化处理——有任何一个玩家恢复就关闭全局开关
-        // 更精确的实现需要引用计数，但目前只需一个条件就足够
         DamageReductionRegistry.setAbolished(false);
-
-        // 状态管理器（Mix 层护甲废除关闭）
         AbolitionStateManager.setArmorAbolished(false);
 
-        LOGGER.info("Defense restored for player {}", 
+        LOGGER.info("Defense restored for player {}",
                 player != null ? player.getName().getString() : "global");
     }
 
-    /**
-     * 查询指定玩家的背包防御是否已被废除。
-     */
     public static boolean isPlayerAbolished(Player player) {
-        return net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler.isDefenseAbolished(
-                player.getUUID());
+        return DamageReductionRegistry.isAbolished();
     }
 }

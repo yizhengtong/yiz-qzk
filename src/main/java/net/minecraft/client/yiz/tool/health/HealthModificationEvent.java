@@ -1,6 +1,5 @@
 package net.minecraft.client.yiz.tool.health;
 
-import net.minecraft.client.yiz.effect.EffectContext;
 import net.minecraft.world.entity.LivingEntity;
 import net.neoforged.bus.api.Event;
 
@@ -16,14 +15,12 @@ import java.util.List;
 public class HealthModificationEvent extends Event {
 
     private final LivingEntity targetEntity;
-    private final EffectContext context;
     private final List<HealthModifier> modifiers = new ArrayList<>();
     private boolean canceled = false;
     private String cancelReason = "";
 
-    public HealthModificationEvent(LivingEntity targetEntity, EffectContext context) {
+    public HealthModificationEvent(LivingEntity targetEntity) {
         this.targetEntity = targetEntity;
-        this.context = context;
     }
 
     /**
@@ -50,10 +47,6 @@ public class HealthModificationEvent extends Event {
 
     public LivingEntity getTargetEntity() {
         return targetEntity;
-    }
-
-    public EffectContext getContext() {
-        return context;
     }
 
     public void cancel(String reason) {

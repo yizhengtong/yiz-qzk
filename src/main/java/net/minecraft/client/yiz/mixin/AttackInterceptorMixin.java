@@ -1,11 +1,9 @@
 package net.minecraft.client.yiz.mixin;
 
 import net.minecraft.client.yiz.core.AttackTargetLock;
-import net.minecraft.client.yiz.api.DamageAttributeRegistry;
 import net.minecraft.client.yiz.api.HealBanAttributeRegistry;
 import net.minecraft.client.yiz.api.SpecialDamageAttributeRegistry;
 import net.minecraft.client.yiz.api.YizModQZKAPI;
-import net.minecraft.client.yiz.effect.EffectContext;
 import net.minecraft.client.yiz.tool.health.HealBanConfig;
 import net.minecraft.client.yiz.tool.damage.AttackContext;
 import net.minecraft.client.yiz.tool.damage.DamageResult;
@@ -72,8 +70,7 @@ public abstract class AttackInterceptorMixin {
 
         // 2a. DIRECT_HEALTH_MOD 优先：走健康值修改管理器管道
         if (hasDirectHealthMod) {
-            EffectContext effectContext = EffectContext.create(attacker, target);
-            DirectHealthModExecutor.executeDirectHealthMod(attacker, target, effectContext);
+            DirectHealthModExecutor.executeDirectHealthMod(attacker, target);
             yizmodqzk$attackIntercepted.set(true);
             ci.cancel();
             yizmodqzk$LOGGER.debug("Direct health modification intercepted");
@@ -81,9 +78,6 @@ public abstract class AttackInterceptorMixin {
         }
 
         if (hasTrueDamage || hasArmorPiercing) {
-            // 创建效果上下文
-            EffectContext effectContext = EffectContext.create(attacker, target);
-
             // 读取武器实际攻击力（含物品属性修饰符、药水效果等）
             // 真伤/破甲以武器自身伤害为基础，不设默认附加值。
             // 如需额外附加伤害，由 DamageTagProvider 效果在 execute() 中
@@ -149,11 +143,7 @@ public abstract class AttackInterceptorMixin {
 
         Player attacker = (Player) (Object) this;
 
-        // 1. 伤害属性 → 额外真实伤害
-        float attrDamage = DamageAttributeRegistry.getTotalValue(attacker);
-        if (attrDamage > 0) {
-            YizModQZKAPI.damage(livingTarget, attrDamage, attacker);
-        }
+        // 1. 伤害属性额外伤害已移除（DamageAttributeRegistry 已删除）
 
         // 2. 禁疗属性 → 为目标施加禁疗
         float banPercent = HealBanAttributeRegistry.getPercentTotal(attacker);

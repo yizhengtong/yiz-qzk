@@ -108,9 +108,6 @@ public final class DamageReductionRegistry {
 
         float oldHealth = entity.getHealth();
 
-        // 要致死时放行（/kill 等），不拦截
-        if (newHealth <= 0) return newHealth;
-
         // 只对扣血方向生效（治疗/不变时不干涉）
         if (newHealth >= oldHealth) return newHealth;
 

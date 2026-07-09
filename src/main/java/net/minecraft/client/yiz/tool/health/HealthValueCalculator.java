@@ -1,6 +1,5 @@
 package net.minecraft.client.yiz.tool.health;
 
-import net.minecraft.client.yiz.effect.EffectContext;
 import net.minecraft.world.entity.LivingEntity;
 import net.neoforged.neoforge.common.NeoForge;
 
@@ -31,12 +30,11 @@ public final class HealthValueCalculator {
      * </ol>
      *
      * @param target  被修改健康值的实体
-     * @param context 效果上下文
      * @return 计算结果
      */
-    public static CalculationResult calculate(LivingEntity target, EffectContext context) {
+    public static CalculationResult calculate(LivingEntity target) {
         // 1. 创建并发布事件
-        HealthModificationEvent event = new HealthModificationEvent(target, context);
+        HealthModificationEvent event = new HealthModificationEvent(target);
         NeoForge.EVENT_BUS.post(event);
 
         // 2. 检查取消
@@ -52,7 +50,7 @@ public final class HealthValueCalculator {
 
         // 5. 聚合计算
         MultiModifierAggregator.AggregatedResult aggregated =
-            MultiModifierAggregator.aggregate(modifiers, target, context);
+            MultiModifierAggregator.aggregate(modifiers, target);
 
         // 6. 收集 bypass 标记
         Set<HealthModificationResult.BypassFlag> bypassFlags = collectBypassFlags(modifiers);

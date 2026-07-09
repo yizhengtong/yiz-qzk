@@ -266,8 +266,7 @@ public class LivingHealthTransformer implements ClassFileTransformer {
 
         @Override
         protected void onMethodEnter() {
-            // 保存 slot 1 (health参数) 以便后续重写
-            // 检查保护状态
+            // ── 1. 保护态 clamp（原有逻辑）──
             Label notProtected = new Label();
             mv.visitVarInsn(Opcodes.ALOAD, 0); // this
             mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL,
@@ -279,7 +278,6 @@ public class LivingHealthTransformer implements ClassFileTransformer {
             mv.visitJumpInsn(Opcodes.IFEQ, notProtected);
 
             // 受保护：clamp health
-            // FLOAD 1 (原值) → clamp → FSTORE 1
             mv.visitVarInsn(Opcodes.FLOAD, 1);
             mv.visitMethodInsn(Opcodes.INVOKESTATIC,
                     ASM_UTIL, "clampProtectedHealth",

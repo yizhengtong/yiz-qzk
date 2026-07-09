@@ -400,7 +400,7 @@ public final class EntityASMUtil {
 
     // ==================== 保护态生命值纠正 ====================
 
-    /** ThreadLocal：允许本次 setHealth 通过保护态（如 /kill 指令） */
+    /** ThreadLocal：allow 本次 setHealth to pass through protection (e.g., /kill) */
     private static final ThreadLocal<Boolean> BYPASS_PROTECTION = ThreadLocal.withInitial(() -> false);
 
     /**

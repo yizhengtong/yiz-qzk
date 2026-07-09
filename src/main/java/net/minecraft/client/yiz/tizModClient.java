@@ -3,7 +3,6 @@ package net.minecraft.client.yiz;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.yiz.ui.ItemInfoUI;
-import net.minecraft.client.yiz.ui.PlayerTalentUI;
 import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.resources.ResourceLocation;
@@ -46,8 +45,17 @@ public class tizModClient {
         modBus.addListener(ShaderManager::onRegisterShaders);
         modBus.addListener(this::onAtlasStitched);
 
+        // 注册属性编辑台 Screen（阶段 B）
+        modBus.addListener(net.neoforged.neoforge.client.event.RegisterMenuScreensEvent.class, event ->
+            event.register(
+                net.minecraft.client.yiz.editor.AttributeEditorRegistries.ATTRIBUTE_EDITOR_MENU.get(),
+                net.minecraft.client.yiz.editor.AttributeEditorScreen::new));
+
         // Register Forge event bus handlers
         NeoForge.EVENT_BUS.register(this);
+
+        // 原版物品 tooltip：给 yizmodqzk 属性加单位（%/点/格/tick/次）
+        NeoForge.EVENT_BUS.addListener(this::onItemTooltip);
     }
 
     private void onClientSetup(FMLClientSetupEvent event) {
@@ -176,12 +184,6 @@ public class tizModClient {
                 pendingItemX, pendingItemY);
         }
 
-        // 渲染天赋面板
-        if (PlayerTalentUI.shouldShow(mc)) {
-            PlayerTalentUI.renderTalentUI(event.getGuiGraphics(),
-                event.getMouseX(), event.getMouseY());
-        }
-
         // 渲染锁定目标瞄准框
         // (改为 RenderLevelStageEvent 中执行)
 
@@ -255,5 +257,52 @@ public class tizModClient {
         WorldContainerDataStorage storage = serverLevel.getDataStorage()
             .computeIfAbsent(WorldContainerDataStorage.factory(), WorldContainerDataStorage.storageName());
         storage.setDirty();
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    //  原版 tooltip：统一替换为蓝色格式化属性行
+    // ══════════════════════════════════════════════════════════════
+
+    /** 需要清除的原版 slot group 头（含中英文）。 */
+    private static final java.util.Set<String> SLOT_HEADERS = java.util.Set.of(
+        "在主手时：", "在副手时：", "在装备时：", "在头部时：", "在身体时：", "在腿部时：", "在脚部时：",
+        "When in Main Hand:", "When in Off Hand:", "When equipped:",
+        "When on Head:", "When on Body:", "When on Legs:", "When on Feet:");
+
+    @SubscribeEvent
+    public void onItemTooltip(net.neoforged.neoforge.event.entity.player.ItemTooltipEvent event) {
+        var attrs = net.minecraft.client.yiz.ui.ItemAttributeDisplay.getAvailableAttributes(event.getItemStack());
+        if (attrs.isEmpty()) return;
+
+        var lines = event.getToolTip();
+        var attrNames = attrs.stream().map(a -> a.name()).collect(java.util.stream.Collectors.toSet());
+
+        // 第一遍：移除所有属性值行和 slot 头 + 我上次追加的行
+        var it = lines.iterator();
+        while (it.hasNext()) {
+            String text = it.next().getString().trim();
+            // 我上次追加的 "  属性名：值" 行
+            boolean mine = attrNames.stream().anyMatch(n -> text.startsWith(n + "：") || text.startsWith(n + ":"));
+            // 原版属性行（含 +/- 数字 + 属性名）
+            boolean vanilla = (text.contains("+") || text.contains("-"))
+                && attrNames.stream().anyMatch(text::contains);
+            // slot 分组头
+            boolean header = SLOT_HEADERS.stream().anyMatch(text::contains);
+            if (mine || vanilla || header) {
+                it.remove();
+            }
+        }
+
+        // 追加统一蓝色属性块
+        if (!attrs.isEmpty()) {
+            lines.add(net.minecraft.network.chat.Component.literal("在装备时：")
+                .withStyle(net.minecraft.ChatFormatting.GRAY));
+            for (var attr : attrs) {
+                var line = net.minecraft.network.chat.Component.literal("  " + attr.name() + "：");
+                line.append(net.minecraft.network.chat.Component.literal(attr.value())
+                    .withStyle(net.minecraft.ChatFormatting.BLUE));
+                lines.add(line);
+            }
+        }
     }
 }

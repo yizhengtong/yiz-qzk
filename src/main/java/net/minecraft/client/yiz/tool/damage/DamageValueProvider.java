@@ -1,6 +1,5 @@
 package net.minecraft.client.yiz.tool.damage;
 
-import net.minecraft.client.yiz.effect.EffectContext;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 
@@ -24,20 +23,22 @@ public interface DamageValueProvider {
     /**
      * 固定数值修正。
      *
-     * @param context 效果上下文
+     * @param entity 攻击实体
+     * @param target 目标实体
      * @return 固定数值（可正可负），默认 0
      */
-    default double getFixedValue(EffectContext context) {
+    default double getFixedValue(Entity entity, Entity target) {
         return 0.0;
     }
 
     /**
      * 最终数值百分比提升。
      *
-     * @param context 效果上下文
+     * @param entity 攻击实体
+     * @param target 目标实体
      * @return 百分比值（-1.0 到 +∞），默认 0
      */
-    default double getFinalPercentageMultiplier(EffectContext context) {
+    default double getFinalPercentageMultiplier(Entity entity, Entity target) {
         return 0.0;
     }
 }

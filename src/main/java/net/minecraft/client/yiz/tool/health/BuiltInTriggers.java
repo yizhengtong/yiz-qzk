@@ -1,8 +1,8 @@
 package net.minecraft.client.yiz.tool.health;
 
-import net.minecraft.client.yiz.effect.EffectContext;
 import net.minecraft.world.entity.LivingEntity;
 
+import java.util.Map;
 import java.util.function.Predicate;
 
 /**
@@ -28,7 +28,7 @@ public final class BuiltInTriggers {
         }
 
         @Override
-        public boolean shouldTrigger(LivingEntity entity, EffectContext context) {
+        public boolean shouldTrigger(LivingEntity entity) {
             tickCounter++;
             if (tickCounter >= intervalTicks) {
                 tickCounter = 0;
@@ -70,11 +70,10 @@ public final class BuiltInTriggers {
          * 检查是否应在当前 tick 触发。
          *
          * @param entity   目标实体
-         * @param context  效果上下文
          * @param tickCount 当前 tick 计数（通常来自 entity.tickCount）
          * @return true = 触发
          */
-        public boolean shouldTrigger(LivingEntity entity, EffectContext context, int tickCount) {
+        public boolean shouldTrigger(LivingEntity entity, int tickCount) {
             if (tickCount - lastTriggerTick >= intervalTicks) {
                 lastTriggerTick = tickCount;
                 return true;
@@ -83,8 +82,8 @@ public final class BuiltInTriggers {
         }
 
         @Override
-        public boolean shouldTrigger(LivingEntity entity, EffectContext context) {
-            return shouldTrigger(entity, context, entity.tickCount);
+        public boolean shouldTrigger(LivingEntity entity) {
+            return shouldTrigger(entity, entity.tickCount);
         }
 
         @Override
@@ -101,15 +100,15 @@ public final class BuiltInTriggers {
      * 条件触发器（满足条件时触发）。
      */
     public static class ConditionTrigger implements HealthModificationTrigger {
-        private final Predicate<EffectContext> condition;
+        private final Predicate<LivingEntity> condition;
 
-        public ConditionTrigger(Predicate<EffectContext> condition) {
+        public ConditionTrigger(Predicate<LivingEntity> condition) {
             this.condition = condition;
         }
 
         @Override
-        public boolean shouldTrigger(LivingEntity entity, EffectContext context) {
-            return condition.test(context);
+        public boolean shouldTrigger(LivingEntity entity) {
+            return condition.test(entity);
         }
 
         @Override
@@ -123,14 +122,16 @@ public final class BuiltInTriggers {
      */
     public static class EventTrigger implements HealthModificationTrigger {
         private final String triggerEvent;
+        private final Map<String, Object> metadata;
 
-        public EventTrigger(String triggerEvent) {
+        public EventTrigger(String triggerEvent, Map<String, Object> metadata) {
             this.triggerEvent = triggerEvent;
+            this.metadata = metadata;
         }
 
         @Override
-        public boolean shouldTrigger(LivingEntity entity, EffectContext context) {
-            return context.metadata() != null && context.metadata().containsKey(triggerEvent);
+        public boolean shouldTrigger(LivingEntity entity) {
+            return metadata != null && metadata.containsKey(triggerEvent);
         }
 
         @Override
@@ -144,7 +145,7 @@ public final class BuiltInTriggers {
      */
     public static class ImmediateTrigger implements HealthModificationTrigger {
         @Override
-        public boolean shouldTrigger(LivingEntity entity, EffectContext context) {
+        public boolean shouldTrigger(LivingEntity entity) {
             return true;
         }
 
@@ -165,7 +166,7 @@ public final class BuiltInTriggers {
         }
 
         @Override
-        public boolean shouldTrigger(LivingEntity entity, EffectContext context) {
+        public boolean shouldTrigger(LivingEntity entity) {
             return entity.getHealth() / entity.getMaxHealth() < healthPercentage;
         }
 
