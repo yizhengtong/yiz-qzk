@@ -263,9 +263,7 @@ public abstract class LivingEntityMixin implements HealthDataBridge {
                 }
             }
             // 注册表减伤（饰品 EffectTag，yizxian 注册）
-            if (!DamageReductionRegistry.consumeReductionApplied()) {
-                newHealth = DamageReductionRegistry.applyBeforeSetHealth(self, newHealth);
-            }
+            newHealth = DamageReductionRegistry.applyBeforeSetHealth(self, newHealth);
             var blockInst = self.getAttribute(
                 net.minecraft.client.yiz.attribute.YizAttributes.DAMAGE_BLOCK);
             if (blockInst != null) {

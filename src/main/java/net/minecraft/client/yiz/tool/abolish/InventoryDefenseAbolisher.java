@@ -17,7 +17,7 @@ import org.slf4j.LoggerFactory;
  * <ol>
  *   <li><b>香版护甲值</b> — VTable 覆写 {@link LivingEntity#getArmorValue()} → 返回 0</li>
  *   <li><b>香版附魔保护</b> — VTable 覆写 {@link LivingEntity#getDamageAfterMagicAbsorb(float, float)} → 返回原伤害</li>
- *   <li><b>QZK ASM Agent 层</b> — {@link DamageReductionRegistry#setAbolished(boolean)} 全局开关</li>
+ *   <li><b>DamageReductionRegistry</b> — {@link DamageReductionRegistry#setAbolished(boolean)} 全局开关</li>
  * </ol>
  *
  * <p>注意：香版护甲韧性 ({@code getArmorValue()} → 0) 和附魔保护
@@ -108,7 +108,7 @@ public final class InventoryDefenseAbolisher {
      * <ol>
      *   <li>VTable 覆写（全局一次）</li>
      *   <li>ItemAttributeHandler 跳过物品 % 减伤</li>
-     *   <li>DamageReductionRegistry 跳过 ASM Agent 层减免</li>
+     *   <li>DamageReductionRegistry 全局废除</li>
      * </ol>
      * </p>
      *
