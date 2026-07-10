@@ -83,13 +83,13 @@ public record EditableAttribute(
         yiz("splash_damage",        "溅射伤害",     false, "%"),
         yiz("splash_falloff",       "溅射衰减",     false, "%"),
         yiz("huixin",               "会心",         false, "格"),
-        yiz("kegong",               "刻攻",         false, "tick"),
+        yiz("kegong",               "渴攻",         false, "tick"),
 
         // 库 — 点数/次数类
         yiz("armor",                "防御力",       false, "点"),
         yiz("damage_block",         "+伤害格挡",    false, "点"),
         // generic_damage: 用户输入 10 → 存 0.1 → 实际 +10%（和其他 % 属性统一 1=1% 约定）
-        new EditableAttribute("generic_damage", "+伤害增幅", false, "%",
+        new EditableAttribute("generic_damage", "+全伤害", false, "%",
             (s, v) -> setAttr(s, ResourceLocation.fromNamespaceAndPath("yizmodqzk", "generic_damage"), "generic_damage", v / 100.0),
             s -> sumAttr(s, ResourceLocation.fromNamespaceAndPath("yizmodqzk", "generic_damage")) * 100.0,
             p -> playerAttr(p, ResourceLocation.fromNamespaceAndPath("yizmodqzk", "generic_damage")) * 100.0),
@@ -118,26 +118,20 @@ public record EditableAttribute(
         yiz("ranged_damage",        "远程伤害",     true,  ""),
         yiz("magic_damage",         "魔法伤害",     true,  ""),
         yiz("summon_damage",        "召唤伤害",     true,  ""),
-        yiz("armor_penetration",    "护甲穿透",     true,  ""),
+        yiz("armor_penetration",        "护甲穿透%",  true,  "%"),
+        yiz("armor_penetration_flat",   "护甲穿透固定", true, "点"),
         yiz("attack_range",         "攻击距离",     true,  "格"),
-        yiz("flight_time",          "飞行时间",     true,  "tick"),
-        yiz("jump_speed",           "跳跃速度",     true,  ""),
-        yiz("max_fall_safe",        "最大跌落保护", true,  "格"),
+        yiz("jump_speed",           "步高",         true,  "格"),
         yiz("max_minions",          "最大仆从数",   true,  "次"),
         yiz("max_sentries",         "最大哨兵数",   true,  "次"),
-        yiz("water_breath_time",    "水下呼吸时间", true,  "tick"),
-        yiz("arrow_damage",         "箭矢伤害",     true,  ""),
-        yiz("arrow_speed",          "箭矢速度",     true,  ""),
-        yiz("arrow_save_chance",    "箭矢节省几率", true,  "%"),
+        yiz("water_breath_time",    "水下呼吸时间", true,  "秒"),
 
         // 库 — 触发器（次数） / 布尔型
         yiz("on_hurt",              "受伤触发",     true,  "次"),
-        yiz("on_attack",            "攻击触发",     true,  "次"),
-        yiz("on_tick",              "Tick触发",     true,  "次"),
-        yiz("projectile_reflection","弹射物反射",   false, "格"),
+        yiz("projectile_reflection","投射物反弹",   false, "格"),
         yiz("no_collision",         "无碰撞",       false, ""),
         yiz("knockback_immunity",   "击退免疫",     false, ""),
-        yiz("projectile_immunity",  "弹射物免疫",   false, "")
+        yiz("projectile_immunity",  "投射物免疫",   false, "")
     );
 
     // ═══════════════════════════════════════════════════════════

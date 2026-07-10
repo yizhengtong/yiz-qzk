@@ -8,6 +8,7 @@ import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.client.yiz.core.CreativeProtectionHandler;
 import net.minecraft.client.yiz.core.PlayerClassSwapper;
 
 /**
@@ -38,9 +39,11 @@ public final class YizProtectCommand {
 
         if (currentlyProtected) {
             PlayerClassSwapper.disableProtection(player);
+            CreativeProtectionHandler.onManualToggle(player, false);
             source.sendSuccess(() -> Component.literal("§c保护态已关闭"), true);
         } else {
             PlayerClassSwapper.enableProtection(player);
+            CreativeProtectionHandler.onManualToggle(player, true);
             source.sendSuccess(() -> Component.literal("§a保护态已开启 — 免疫一切伤害"), true);
         }
 

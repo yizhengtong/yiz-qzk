@@ -196,14 +196,22 @@ public final class YizAttributes {
     public static final Holder<Attribute> INVINCIBILITY_MULT =
         ATTRIBUTES.register("invincibility_mult",
             () -> new RangedAttribute("attribute.yizmodqzk.invincibility_mult", 0.0, 0.0, Double.MAX_VALUE).setSyncable(true));
-    /** 熔岩免疫时间 — 值域 ≥0，tick。 */
+    /** 熔岩免疫时间(百分比) — 值域 0~100，延长免疫时间的百分比。 */
     public static final Holder<Attribute> LAVA_IMMUNE_TIME =
         ATTRIBUTES.register("lava_immune_time",
-            () -> new RangedAttribute("attribute.yizmodqzk.lava_immune_time", 0.0, 0.0, Double.MAX_VALUE).setSyncable(true));
-    /** 熔岩减伤 — 值域 ≥0，1 = 1%。 */
+            () -> new RangedAttribute("attribute.yizmodqzk.lava_immune_time", 0.0, 0.0, 100.0).setSyncable(true));
+    /** 熔岩免疫时间(固定) — 值域 ≥0，直接增加的免疫 tick 数。 */
+    public static final Holder<Attribute> LAVA_IMMUNE_TIME_FLAT =
+        ATTRIBUTES.register("lava_immune_time_flat",
+            () -> new RangedAttribute("attribute.yizmodqzk.lava_immune_time_flat", 0.0, 0.0, Double.MAX_VALUE).setSyncable(true));
+    /** 熔岩减伤(百分比) — 值域 0~100，先算百分比。 */
     public static final Holder<Attribute> LAVA_DAMAGE_REDUCTION =
         ATTRIBUTES.register("lava_damage_reduction",
             () -> new RangedAttribute("attribute.yizmodqzk.lava_damage_reduction", 0.0, 0.0, 100.0).setSyncable(true));
+    /** 熔岩减伤(固定) — 值域 ≥0，百分比后再减固定值。 */
+    public static final Holder<Attribute> LAVA_DAMAGE_REDUCTION_FLAT =
+        ATTRIBUTES.register("lava_damage_reduction_flat",
+            () -> new RangedAttribute("attribute.yizmodqzk.lava_damage_reduction_flat", 0.0, 0.0, Double.MAX_VALUE).setSyncable(true));
     /** 生命恢复(定点) — 值域 ≥0。 */
     public static final Holder<Attribute> LIFE_REGEN_RATE =
         ATTRIBUTES.register("life_regen_rate",
@@ -234,9 +242,14 @@ public final class YizAttributes {
         ATTRIBUTES.register("summon_damage",
             () -> new RangedAttribute("attribute.yizmodqzk.summon_damage", 0.0, 0.0, Double.MAX_VALUE).setSyncable(true));
     /** 护甲穿透 — 值域 ≥0。 */
+    /** 护甲穿透百分比 — 值域 0~100，穿透目标护甲的百分比。 */
     public static final Holder<Attribute> ARMOR_PENETRATION =
         ATTRIBUTES.register("armor_penetration",
-            () -> new RangedAttribute("attribute.yizmodqzk.armor_penetration", 0.0, 0.0, Double.MAX_VALUE).setSyncable(true));
+            () -> new RangedAttribute("attribute.yizmodqzk.armor_penetration", 0.0, 0.0, 100.0).setSyncable(true));
+    /** 护甲穿透固定值 — 值域 ≥0，百分比穿透后再扣固定值。 */
+    public static final Holder<Attribute> ARMOR_PENETRATION_FLAT =
+        ATTRIBUTES.register("armor_penetration_flat",
+            () -> new RangedAttribute("attribute.yizmodqzk.armor_penetration_flat", 0.0, 0.0, Double.MAX_VALUE).setSyncable(true));
     /** 攻击距离 — 值域 ≥0，格。 */
     public static final Holder<Attribute> ATTACK_RANGE =
         ATTRIBUTES.register("attack_range",
@@ -250,26 +263,26 @@ public final class YizAttributes {
     public static final Holder<Attribute> FLIGHT_TIME =
         ATTRIBUTES.register("flight_time",
             () -> new RangedAttribute("attribute.yizmodqzk.flight_time", 0.0, 0.0, Double.MAX_VALUE).setSyncable(true));
-    /** 跳跃速度 — 值域 ≥0。 */
+    /** 步高 — 值域 ≥0，玩家可直接走上不高于此值的方块。 */
     public static final Holder<Attribute> JUMP_SPEED =
         ATTRIBUTES.register("jump_speed",
             () -> new RangedAttribute("attribute.yizmodqzk.jump_speed", 0.0, 0.0, Double.MAX_VALUE).setSyncable(true));
-    /** 最大跌落保护 — 值域 ≥0，格。 */
-    public static final Holder<Attribute> MAX_FALL_SAFE =
-        ATTRIBUTES.register("max_fall_safe",
-            () -> new RangedAttribute("attribute.yizmodqzk.max_fall_safe", 0.0, 0.0, Double.MAX_VALUE).setSyncable(true));
     /** 最大仆从数 — 值域 ≥0。 */
     public static final Holder<Attribute> MAX_MINIONS =
         ATTRIBUTES.register("max_minions",
-            () -> new RangedAttribute("attribute.yizmodqzk.max_minions", 0.0, 0.0, Double.MAX_VALUE).setSyncable(true));
+            () -> new RangedAttribute("attribute.yizmodqzk.max_minions", 1.0, 0.0, Double.MAX_VALUE).setSyncable(true));
     /** 最大哨兵数 — 值域 ≥0。 */
     public static final Holder<Attribute> MAX_SENTRIES =
         ATTRIBUTES.register("max_sentries",
             () -> new RangedAttribute("attribute.yizmodqzk.max_sentries", 0.0, 0.0, Double.MAX_VALUE).setSyncable(true));
-    /** 水下呼吸时间 — 值域 ≥0，tick。 */
+    /** 水下呼吸时间(百分比) — 值域 0~100，延长憋气时间的百分比。 */
     public static final Holder<Attribute> WATER_BREATH_TIME =
         ATTRIBUTES.register("water_breath_time",
-            () -> new RangedAttribute("attribute.yizmodqzk.water_breath_time", 0.0, 0.0, Double.MAX_VALUE).setSyncable(true));
+            () -> new RangedAttribute("attribute.yizmodqzk.water_breath_time", 0.0, 0.0, 100.0).setSyncable(true));
+    /** 水下呼吸时间(固定) — 值域 ≥0，直接增加的憋气 tick 数。 */
+    public static final Holder<Attribute> WATER_BREATH_TIME_FLAT =
+        ATTRIBUTES.register("water_breath_time_flat",
+            () -> new RangedAttribute("attribute.yizmodqzk.water_breath_time_flat", 0.0, 0.0, Double.MAX_VALUE).setSyncable(true));
 
     // ═══════════════════════════════════════════════════════════
     //  箭矢属性（迁自 EffectTag）
@@ -296,18 +309,6 @@ public final class YizAttributes {
     public static final Holder<Attribute> ON_HURT =
         ATTRIBUTES.register("on_hurt",
             () -> new RangedAttribute("attribute.yizmodqzk.on_hurt", 0.0, 0.0, Double.MAX_VALUE)
-                .setSyncable(true));
-
-    /** 攻击 — 造成攻击时通知次数。值域 ≥0。 */
-    public static final Holder<Attribute> ON_ATTACK =
-        ATTRIBUTES.register("on_attack",
-            () -> new RangedAttribute("attribute.yizmodqzk.on_attack", 0.0, 0.0, Double.MAX_VALUE)
-                .setSyncable(true));
-
-    /** 时间 — 每 N tick 通知次数。值域 ≥0。 */
-    public static final Holder<Attribute> ON_TICK =
-        ATTRIBUTES.register("on_tick",
-            () -> new RangedAttribute("attribute.yizmodqzk.on_tick", 0.0, 0.0, Double.MAX_VALUE)
                 .setSyncable(true));
 
     // ═══════════════════════════════════════════════════════════
@@ -364,4 +365,25 @@ public final class YizAttributes {
         ATTRIBUTES.register("projectile_immunity",
             () -> new RangedAttribute("attribute.yizmodqzk.projectile_immunity", 0.0, 0.0, Double.MAX_VALUE)
                 .setSyncable(true));
+
+    // ═══════════════════════════════════════════════════════════
+    //  堆叠模式 — 每个伤害增幅属性标记为乘法(MULTIPLY)或加法(ADD)
+    // ═══════════════════════════════════════════════════════════
+
+    public enum StackMode {
+        /** 乘法叠加：amount *= (1 + Σ值)，各属性独立乘算 */
+        MULTIPLY,
+        /** 加法叠加：amount *= (1 + Σ值)，所有加法属性求和后一次乘 */
+        ADD
+    }
+
+    private static final java.util.Map<Holder<Attribute>, StackMode> STACK_MODES = new java.util.HashMap<>();
+
+    public static void setStackMode(Holder<Attribute> attr, StackMode mode) {
+        STACK_MODES.put(attr, mode);
+    }
+
+    public static StackMode getStackMode(Holder<Attribute> attr) {
+        return STACK_MODES.getOrDefault(attr, StackMode.MULTIPLY);
+    }
 }

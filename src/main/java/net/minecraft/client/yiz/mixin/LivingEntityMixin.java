@@ -154,6 +154,8 @@ public abstract class LivingEntityMixin implements HealthDataBridge {
         if (entity.tickCount % 10 == 0) {
             HealBanHandler.enforceTick(entity);
         }
+        // tick 计数器 +1（供法球系统读取）
+        EntityASMUtil.incrementTickCount(entity);
     }
 
     @Inject(method = "die", at = @At("HEAD"), cancellable = true)
@@ -208,13 +210,71 @@ public abstract class LivingEntityMixin implements HealthDataBridge {
         amount = DamageValueModifierRegistry.apply(self, source, amount);
         if (amount <= 0) return 0;
 
-        // === 全伤害 — 攻击者属性 ===
+        // === 攻击者伤害增幅（按堆叠模式：MULTIPLY 逐项乘，ADD 求和后一次乘）===
         if (source.getEntity() instanceof LivingEntity attacker) {
-            var inst = attacker.getAttribute(
-                net.minecraft.client.yiz.attribute.YizAttributes.GENERIC_DAMAGE);
-            if (inst != null) {
+            // 攻击计数器 +1（供法球系统读取）
+            EntityASMUtil.incrementAttackCount(attacker);
+
+            double distSq = attacker.distanceToSqr(self);
+            float addSum = 0f;
+
+            for (var holder : new net.minecraft.core.Holder[]{
+                net.minecraft.client.yiz.attribute.YizAttributes.GENERIC_DAMAGE,
+                (distSq <= 100.0)
+                    ? net.minecraft.client.yiz.attribute.YizAttributes.MELEE_DAMAGE
+                    : net.minecraft.client.yiz.attribute.YizAttributes.RANGED_DAMAGE
+            }) {
+                var inst = attacker.getAttribute(holder);
+                if (inst == null) continue;
                 double amp = inst.getValue();
-                if (amp > 0) amount *= (1.0F + (float) amp);
+                if (amp <= 0) continue;
+
+                if (net.minecraft.client.yiz.attribute.YizAttributes.getStackMode(holder)
+                        == net.minecraft.client.yiz.attribute.YizAttributes.StackMode.ADD) {
+                    addSum += (float) amp;
+                } else {
+                    amount *= (1.0F + (float) amp);
+                }
+            }
+            if (addSum > 0) amount *= (1.0F + addSum);
+
+            // 护甲穿透：存下攻击者的百分比+固定穿透值，供目标 getArmorValue() 注入扣减
+            var penPctInst = attacker.getAttribute(
+                net.minecraft.client.yiz.attribute.YizAttributes.ARMOR_PENETRATION);
+            var penFlatInst = attacker.getAttribute(
+                net.minecraft.client.yiz.attribute.YizAttributes.ARMOR_PENETRATION_FLAT);
+            float penPct = penPctInst != null ? (float) penPctInst.getValue() : 0f;
+            float penFlat = penFlatInst != null ? (float) penFlatInst.getValue() : 0f;
+            if (penPct > 0 || penFlat > 0) {
+                net.minecraft.client.yiz.tool.health.EntityASMUtil.setArmorPenetration(penPct, penFlat);
+            }
+        }
+
+        // 注：MAGIC_DAMAGE / SUMMON_DAMAGE 保留给后续魔法武器/召唤武器系统，暂不在此处消费。
+
+        // === 熔岩/火焰防护（目标方属性）===
+        if (source.is(net.minecraft.tags.DamageTypeTags.IS_FIRE)) {
+            // 熔岩免疫：有任意免疫属性值 → 完全免疫火焰伤害（类似防火药水）
+            var immPct = self.getAttribute(
+                net.minecraft.client.yiz.attribute.YizAttributes.LAVA_IMMUNE_TIME);
+            var immFlat = self.getAttribute(
+                net.minecraft.client.yiz.attribute.YizAttributes.LAVA_IMMUNE_TIME_FLAT);
+            if ((immPct != null && immPct.getValue() > 0)
+                || (immFlat != null && immFlat.getValue() > 0)) {
+                return 0;
+            }
+            // 熔岩减伤：先百分比再固定
+            var lavaRedPct = self.getAttribute(
+                net.minecraft.client.yiz.attribute.YizAttributes.LAVA_DAMAGE_REDUCTION);
+            if (lavaRedPct != null) {
+                double red = lavaRedPct.getValue();
+                if (red > 0) amount *= (float) (1.0 - Math.min(1.0, red / 100.0));
+            }
+            var lavaRedFlat = self.getAttribute(
+                net.minecraft.client.yiz.attribute.YizAttributes.LAVA_DAMAGE_REDUCTION_FLAT);
+            if (lavaRedFlat != null) {
+                double flat = lavaRedFlat.getValue();
+                if (flat > 0) amount = Math.max(0, amount - (float) flat);
             }
         }
 
@@ -249,9 +309,12 @@ public abstract class LivingEntityMixin implements HealthDataBridge {
 
         float current = self.getHealth();
 
+        // 清除本次 hurt 的护甲穿透（getArmorValue 注入已使用）
+        net.minecraft.client.yiz.tool.health.EntityASMUtil.clearArmorPenetration();
+
         // 减伤 / 格挡（扣血方向）
         if (newHealth < current) {
-            // 原生减伤 先处理完整伤害量（避免注册表 clamp 破坏致死信号）
+            // 原生减伤 先处理完整伤害量
             var reductionInst = self.getAttribute(
                 net.minecraft.client.yiz.attribute.YizAttributes.DAMAGE_REDUCTION);
             if (reductionInst != null) {
@@ -262,8 +325,7 @@ public abstract class LivingEntityMixin implements HealthDataBridge {
                     newHealth = current - damage;
                 }
             }
-            // 注册表减伤（饰品 EffectTag，yizxian 注册）
-            newHealth = DamageReductionRegistry.applyBeforeSetHealth(self, newHealth);
+            // 格挡 在注册表之前，避免注册表 clamp 破坏致死信号
             var blockInst = self.getAttribute(
                 net.minecraft.client.yiz.attribute.YizAttributes.DAMAGE_BLOCK);
             if (blockInst != null) {
@@ -274,6 +336,8 @@ public abstract class LivingEntityMixin implements HealthDataBridge {
                     newHealth = current - damage;
                 }
             }
+            // 注册表减伤（饰品 EffectTag，yizxian 注册）
+            newHealth = DamageReductionRegistry.applyBeforeSetHealth(self, newHealth);
             return newHealth;
         }
 
@@ -317,13 +381,16 @@ public abstract class LivingEntityMixin implements HealthDataBridge {
         if (source.is(net.minecraft.tags.DamageTypeTags.IS_PROJECTILE)) {
             LivingEntity self = (LivingEntity) (Object) this;
             var inst = self.getAttribute(YizAttributes.PROJECTILE_IMMUNITY);
-            if (inst != null && inst.getValue() > 0) {
-                cir.setReturnValue(false);
+            if (inst != null) {
+                double v = inst.getValue();
+                if (v >= 100.0 || (v > 0 && Math.random() < v / 100.0)) {
+                    cir.setReturnValue(false);
+                }
             }
         }
     }
 
-    // ==================== 复活系统（属性驱动） ====================
+    // ==================== 复活系统（属性驱动，每条命独立次数）====================
 
     @Inject(method = "checkTotemDeathProtection", at = @At("RETURN"), cancellable = true)
     private void yizmodqzk$onCheckTotemDeathProtection(DamageSource source, CallbackInfoReturnable<Boolean> cir) {
@@ -332,12 +399,18 @@ public abstract class LivingEntityMixin implements HealthDataBridge {
 
         var undyingInst = self.getAttribute(YizAttributes.UNDYING);
         if (undyingInst == null) return;
-        double undying = undyingInst.getValue();
-        if (undying <= 0) return;
+        int max = (int) undyingInst.getValue();
+        if (max <= 0) return;
 
-        // 消耗 1 次复活
-        undyingInst.setBaseValue(undying - 1.0);
+        java.util.UUID uuid = self.getUUID();
+        int remaining = EntityASMUtil.getUndyingCharges(uuid);
+        if (remaining < 0) { // 首次使用，用属性值初始化
+            remaining = max;
+            EntityASMUtil.resetUndyingCharges(uuid, max);
+        }
+        if (remaining <= 0) return;
 
+        EntityASMUtil.consumeUndyingCharge(uuid);
         self.setHealth(self.getMaxHealth());
         cir.setReturnValue(true);
     }
@@ -355,11 +428,8 @@ public abstract class LivingEntityMixin implements HealthDataBridge {
         if (!(srcEntity instanceof LivingEntity attacker)) return;
         if (attacker == player) return;
 
-        // === 受击触发器 ===
-        double onHurt = player.getAttributeValue(YizAttributes.ON_HURT);
-        if (onHurt <= 0) return;
-
         // === 反击：受击 → 反击率判定 → 反击值×反击数 ===
+        // ON_HURT 作为独立计数器存在（EntityASMUtil），不在此处门控反击系统
         double rate = player.getAttributeValue(YizAttributes.COUNTER_RATE);
         if (rate <= 0) return;
 
@@ -386,8 +456,11 @@ public abstract class LivingEntityMixin implements HealthDataBridge {
     private void yizmodqzk$onKnockback(double d0, double d1, double d2, CallbackInfo ci) {
         LivingEntity self = (LivingEntity) (Object) this;
         var inst = self.getAttribute(YizAttributes.KNOCKBACK_IMMUNITY);
-        if (inst != null && inst.getValue() > 0) {
-            ci.cancel();
+        if (inst != null) {
+            double v = inst.getValue();
+            if (v >= 100.0 || (v > 0 && Math.random() < v / 100.0)) {
+                ci.cancel();
+            }
         }
     }
 
@@ -398,6 +471,71 @@ public abstract class LivingEntityMixin implements HealthDataBridge {
         LivingEntity self = (LivingEntity) (Object) this;
         if (net.minecraft.client.yiz.core.PlayerClassSwapper.isProtectedByUuid(self.getStringUUID())) {
             ci.cancel();
+        }
+    }
+
+
+    // ==================== 水下呼吸 ====================
+
+    @Inject(method = "decreaseAirSupply", at = @At("RETURN"), cancellable = true)
+    private void yizmodqzk$modifyAirDecrease(int currentAir, CallbackInfoReturnable<Integer> cir) {
+        LivingEntity self = (LivingEntity) (Object) this;
+        var pctInst = self.getAttribute(YizAttributes.WATER_BREATH_TIME);
+        var flatInst = self.getAttribute(YizAttributes.WATER_BREATH_TIME_FLAT);
+        double pct = pctInst != null ? pctInst.getValue() : 0;
+        double flat = flatInst != null ? flatInst.getValue() : 0;
+        if (pct <= 0 && flat <= 0) return;
+        if (pct >= 100) { cir.setReturnValue(currentAir); return; } // 100% = 无限呼吸
+        int maxAir = self.getMaxAirSupply();
+        int effectiveMax = maxAir + (int) flat;
+        if (pct > 0) effectiveMax = (int)(effectiveMax * (1.0 + pct / 100.0));
+        int decreased = cir.getReturnValue();
+        // 按有效上限比例减少扣气量
+        double ratio = (double) maxAir / (double) Math.max(1, effectiveMax);
+        cir.setReturnValue(currentAir - Math.max(0, (int)((currentAir - decreased) * ratio)));
+    }
+
+    // ==================== 步高 ====================
+
+    @Inject(method = "maxUpStep", at = @At("RETURN"), cancellable = true)
+    private void yizmodqzk$modifyStepHeight(CallbackInfoReturnable<Float> cir) {
+        LivingEntity self = (LivingEntity) (Object) this;
+        float extra = 0f;
+        // 原生属性值（饰品槽由 EquipmentAttributeSync 汇入，主手/副手/盔甲由原版自动汇入）
+        var inst = self.getAttribute(YizAttributes.JUMP_SPEED);
+        if (inst != null) extra += (float) inst.getValue();
+        // 手动扫描装备槽（兜底：部分情况下原版可能不自动应用 custom attribute）
+        for (var slot : net.minecraft.world.entity.EquipmentSlot.values()) {
+            var stack = self.getItemBySlot(slot);
+            var mods = stack.getOrDefault(net.minecraft.core.component.DataComponents.ATTRIBUTE_MODIFIERS,
+                net.minecraft.world.item.component.ItemAttributeModifiers.EMPTY);
+            for (var entry : mods.modifiers()) {
+                if (entry.attribute() != null && entry.attribute().is(YizAttributes.JUMP_SPEED)
+                    && entry.modifier().operation() == net.minecraft.world.entity.ai.attributes.AttributeModifier.Operation.ADD_VALUE) {
+                    extra += (float) entry.modifier().amount();
+                }
+            }
+        }
+        if (extra > 0) cir.setReturnValue(cir.getReturnValue() + extra);
+    }
+
+    // ==================== 护甲穿透 ====================
+
+    @Inject(method = "getArmorValue", at = @At("RETURN"), cancellable = true)
+    private void yizmodqzk$applyArmorPenetration(CallbackInfoReturnable<Integer> cir) {
+        float penPct = EntityASMUtil.peekArmorPenPct();
+        float penFlat = EntityASMUtil.peekArmorPenFlat();
+        if (penPct > 0 || penFlat > 0) {
+            int armor = cir.getReturnValue();
+            // 先百分比穿透
+            if (penPct > 0) {
+                armor = armor - (int)(armor * penPct / 100f);
+            }
+            // 再固定穿透
+            if (penFlat > 0) {
+                armor = armor - (int) penFlat;
+            }
+            cir.setReturnValue(Math.max(0, armor));
         }
     }
 }

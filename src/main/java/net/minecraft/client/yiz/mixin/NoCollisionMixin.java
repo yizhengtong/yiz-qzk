@@ -35,6 +35,8 @@ public class NoCollisionMixin {
     private static boolean isNoCollision(Entity entity) {
         if (!(entity instanceof LivingEntity le)) return false;
         var inst = le.getAttribute(YizAttributes.NO_COLLISION);
-        return inst != null && inst.getValue() > 0;
+        if (inst == null) return false;
+        double v = inst.getValue();
+        return v >= 100.0 || (v > 0 && Math.random() < v / 100.0);
     }
 }

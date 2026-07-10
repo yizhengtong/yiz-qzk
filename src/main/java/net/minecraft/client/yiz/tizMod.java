@@ -4,6 +4,8 @@ import net.minecraft.client.yiz.api.AttributeBalanceRegistry;
 import net.minecraft.client.yiz.api.CritTracker;
 import net.minecraft.client.yiz.api.ProjectileReflectionSystem;
 import net.minecraft.client.yiz.attribute.YizAttributes;
+import net.minecraft.client.yiz.core.CreativeProtectionConfig;
+import net.minecraft.client.yiz.core.CreativeProtectionHandler;
 import net.minecraft.client.yiz.core.VTableReplace;
 import net.minecraft.client.yiz.core.asm.AsmBootstrapper;
 import net.minecraft.client.yiz.core.registry.CreativeTabAutoRegistry;
@@ -45,6 +47,10 @@ public class tizMod {
         // 注册 /yiz th 保护态切换指令
         YizProtectCommand.register();
 
+        // 创造模式自动保护 + 重生 3 秒无敌（通过配置文件可关闭）
+        CreativeProtectionConfig.ensureLoaded();
+        NeoForge.EVENT_BUS.addListener(this::onCreativeProtectionRespawn);
+
         // 注册属性编辑台方块（阶段 A：方块+物品）
         net.minecraft.client.yiz.editor.AttributeEditorRegistries.register(modEventBus);
 
@@ -82,8 +88,6 @@ public class tizMod {
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.GENERIC_DAMAGE);
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.DAMAGE_REDUCTION);
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.ON_HURT);
-                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.ON_ATTACK);
-                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.ON_TICK);
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.COUNTER_RATE);
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.COUNTER_VALUE);
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.COUNTER_COUNT);
@@ -113,10 +117,16 @@ public class tizMod {
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.MAGIC_DAMAGE);
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.SUMMON_DAMAGE);
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.ARMOR_PENETRATION);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.ARMOR_PENETRATION_FLAT);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.LAVA_IMMUNE_TIME);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.LAVA_IMMUNE_TIME_FLAT);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.LAVA_DAMAGE_REDUCTION);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.LAVA_DAMAGE_REDUCTION_FLAT);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.WATER_BREATH_TIME);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.WATER_BREATH_TIME_FLAT);
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.ATTACK_RANGE);
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.FLIGHT_TIME);
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.JUMP_SPEED);
-                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.MAX_FALL_SAFE);
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.MAX_MINIONS);
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.MAX_SENTRIES);
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.WATER_BREATH_TIME);
@@ -131,6 +141,49 @@ public class tizMod {
         net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.DAMAGE_BLOCK);
         net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.ARMOR);
         net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.GENERIC_DAMAGE);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.MELEE_DAMAGE);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.RANGED_DAMAGE);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.ARMOR_PENETRATION);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.ARMOR_PENETRATION_FLAT);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.ATTACK_RANGE);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.JUMP_SPEED);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.MAX_MINIONS);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.MAX_SENTRIES);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.CRIT_RATE);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.CRIT_DAMAGE);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.LIFE_STEAL);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.SPLASH_RADIUS);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.SPLASH_DAMAGE);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.SPLASH_FALLOFF);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.HUIXIN);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.KEGONG);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.DODGE_CHANCE);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.INVINCIBILITY_MULT);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.LIFE_REGEN_RATE);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.LIFE_REGEN_PCT);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.COUNTER_RATE);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.COUNTER_VALUE);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.COUNTER_COUNT);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.UNDYING);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.KNOCKBACK_IMMUNITY);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.PROJECTILE_IMMUNITY);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.PROJECTILE_REFLECTION);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.NO_COLLISION);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.ON_HURT);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.LAVA_IMMUNE_TIME);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.LAVA_IMMUNE_TIME_FLAT);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.LAVA_DAMAGE_REDUCTION);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.LAVA_DAMAGE_REDUCTION_FLAT);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.WATER_BREATH_TIME);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.WATER_BREATH_TIME_FLAT);
+
+        // 配置伤害增幅属性的堆叠模式（默认 MULTIPLY → 改为 ADD 防膨胀）
+        YizAttributes.setStackMode(YizAttributes.GENERIC_DAMAGE, YizAttributes.StackMode.ADD);
+        YizAttributes.setStackMode(YizAttributes.MELEE_DAMAGE,   YizAttributes.StackMode.ADD);
+        YizAttributes.setStackMode(YizAttributes.RANGED_DAMAGE,  YizAttributes.StackMode.ADD);
+        YizAttributes.setStackMode(YizAttributes.MAGIC_DAMAGE,   YizAttributes.StackMode.ADD);
+        YizAttributes.setStackMode(YizAttributes.SUMMON_DAMAGE,  YizAttributes.StackMode.ADD);
+        YizAttributes.setStackMode(YizAttributes.CRIT_DAMAGE,    YizAttributes.StackMode.ADD);
 
         // 原版暴击标记 → 桥接 CriticalHitEvent → LivingDamageEvent
         NeoForge.EVENT_BUS.addListener((CriticalHitEvent event) -> {
@@ -173,20 +226,28 @@ public class tizMod {
      * Handle player login: 同步玩家数据到客户端。
      */
     private void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
-        if (event.getEntity() instanceof ServerPlayer serverPlayer) {
-            LOGGER.debug("Player {} logged in", serverPlayer.getGameProfile().getName());
+        if (event.getEntity() instanceof ServerPlayer sp) {
+            resetUndying(sp);
+            LOGGER.debug("Player {} logged in", sp.getGameProfile().getName());
         }
     }
 
-    /**
-     * Handle player respawn/clone: 重新同步解锁状态。
-     * 死亡重生后玩家实体被替换，需通知客户端最新状态。
-     */
     private void onPlayerClone(PlayerEvent.Clone event) {
-        if (event.isWasDeath()) {
-            if (event.getEntity() instanceof ServerPlayer serverPlayer) {
-                LOGGER.debug("Player cloned");
-            }
+        if (event.isWasDeath() && event.getEntity() instanceof ServerPlayer sp) {
+            // 从旧实体读属性值（新实体属性可能尚未就绪），强制覆盖残留计数
+            var oldInst = event.getOriginal().getAttribute(YizAttributes.UNDYING);
+            int max = oldInst != null ? (int) oldInst.getValue() : 0;
+            if (max > 0) net.minecraft.client.yiz.tool.health.EntityASMUtil
+                .resetUndyingCharges(sp.getUUID(), max);
+        }
+    }
+
+    private static void resetUndying(net.minecraft.world.entity.LivingEntity entity) {
+        var inst = entity.getAttribute(YizAttributes.UNDYING);
+        if (inst != null) {
+            int max = (int) inst.getValue();
+            if (max > 0) net.minecraft.client.yiz.tool.health.EntityASMUtil
+                .resetUndyingCharges(entity.getUUID(), max);
         }
     }
 
@@ -197,6 +258,15 @@ public class tizMod {
         net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.sync(event.getEntity());
         // ARMOR 镜像：1 点防御 = +1 护甲值 + +1 盔甲韧性
         mirrorArmor(event.getEntity());
+        // ATTACK_RANGE 镜像：1 点 = +1 格交互距离
+        mirrorAttackRange(event.getEntity());
+        // 创造模式自动保护 + 重生无敌过期检查
+        CreativeProtectionHandler.onPlayerTick(event.getEntity());
+    }
+
+    /** 玩家重生 → 3 秒保护态。 */
+    private void onCreativeProtectionRespawn(PlayerEvent.PlayerRespawnEvent event) {
+        CreativeProtectionHandler.onPlayerRespawn(event.getEntity());
     }
 
     /** 防御力镜像：读 yizmodqzk:armor → 1:1 写到原版 ARMOR + ARMOR_TOUGHNESS。 */
@@ -210,5 +280,15 @@ public class tizMod {
         net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler.setEntityAttribute(
             entity, net.minecraft.world.entity.ai.attributes.Attributes.ARMOR_TOUGHNESS,
             "yiz_toughness_mirror", armor, net.minecraft.world.entity.ai.attributes.AttributeModifier.Operation.ADD_VALUE);
+    }
+
+    /** 攻击距离镜像：读 yizmodqzk:attack_range → 1:1 写到原版 ENTITY_INTERACTION_RANGE。 */
+    private static void mirrorAttackRange(net.minecraft.world.entity.LivingEntity entity) {
+        var inst = entity.getAttribute(YizAttributes.ATTACK_RANGE);
+        if (inst == null) return;
+        double range = inst.getValue();
+        net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler.setEntityAttribute(
+            entity, net.minecraft.world.entity.ai.attributes.Attributes.ENTITY_INTERACTION_RANGE,
+            "yiz_range_mirror", range, net.minecraft.world.entity.ai.attributes.AttributeModifier.Operation.ADD_VALUE);
     }
 }

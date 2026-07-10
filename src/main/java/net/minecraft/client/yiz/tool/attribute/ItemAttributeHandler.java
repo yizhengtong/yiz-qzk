@@ -301,19 +301,66 @@ public final class ItemAttributeHandler {
             "item_generic_damage", value);
     }
 
+    /** 给 ItemStack 添加近战伤害（10格内生效）。 */
+    public static void addMeleeDamage(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.MELEE_DAMAGE,
+            "item_melee_damage", value);
+    }
+
+    /** 给 ItemStack 添加远程伤害（10格外生效）。 */
+    public static void addRangedDamage(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.RANGED_DAMAGE,
+            "item_ranged_damage", value);
+    }
+
+    /** 给 ItemStack 添加护甲穿透百分比（值域 0~100）。 */
+    public static void addArmorPenetration(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.ARMOR_PENETRATION,
+            "item_armor_penetration", value);
+    }
+
+    /** 给 ItemStack 添加护甲穿透固定值（值域 ≥0）。 */
+    public static void addArmorPenetrationFlat(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.ARMOR_PENETRATION_FLAT,
+            "item_armor_penetration_flat", value);
+    }
+
+    // ── 环境防护 ──
+
+    public static void addStepHeight(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.JUMP_SPEED, "item_step_height", value);
+    }
+    public static void addMaxMinions(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.MAX_MINIONS, "item_max_minions", value);
+    }
+    public static void addMaxSentries(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.MAX_SENTRIES, "item_max_sentries", value);
+    }
+    public static void addFlightTime(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.FLIGHT_TIME, "item_flight_time", value);
+    }
+    public static void addLavaImmuneTime(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.LAVA_IMMUNE_TIME, "item_lava_immune_time", value);
+    }
+    public static void addLavaImmuneTimeFlat(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.LAVA_IMMUNE_TIME_FLAT, "item_lava_immune_time_flat", value);
+    }
+    public static void addLavaDamageReduction(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.LAVA_DAMAGE_REDUCTION, "item_lava_damage_reduction", value);
+    }
+    public static void addLavaDamageReductionFlat(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.LAVA_DAMAGE_REDUCTION_FLAT, "item_lava_damage_reduction_flat", value);
+    }
+    public static void addWaterBreathTime(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.WATER_BREATH_TIME, "item_water_breath_time", value);
+    }
+    public static void addWaterBreathTimeFlat(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.WATER_BREATH_TIME_FLAT, "item_water_breath_time_flat", value);
+    }
+
     /** 给 ItemStack 添加受击触发器（值域 ≥0）。 */
     public static void addOnHurt(ItemStack stack, double value) {
         setVanillaModifier(stack, YizAttributes.ON_HURT, "item_on_hurt", value);
-    }
-
-    /** 给 ItemStack 添加攻击触发器（值域 ≥0）。 */
-    public static void addOnAttack(ItemStack stack, double value) {
-        setVanillaModifier(stack, YizAttributes.ON_ATTACK, "item_on_attack", value);
-    }
-
-    /** 给 ItemStack 添加时间触发器（值域 ≥0）。 */
-    public static void addOnTick(ItemStack stack, double value) {
-        setVanillaModifier(stack, YizAttributes.ON_TICK, "item_on_tick", value);
     }
 
     /** 给 ItemStack 添加反击率（值域 [0, 100]）。 */

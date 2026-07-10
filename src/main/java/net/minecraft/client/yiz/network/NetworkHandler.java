@@ -31,6 +31,12 @@ public final class NetworkHandler {
             SyncLockPayload.STREAM_CODEC,
             SyncLockPayload::handle
         );
+        // 快速重生：C2S 请求 30 秒无敌重生
+        registrar.playToServer(
+            C2SFastRespawnPayload.TYPE,
+            C2SFastRespawnPayload.STREAM_CODEC,
+            C2SFastRespawnPayload::handle
+        );
         // 属性编辑台：C2S 应用属性
         registrar.playToServer(
             net.minecraft.client.yiz.editor.C2SAttributeEditorPayload.TYPE,

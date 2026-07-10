@@ -400,8 +400,63 @@ public final class EntityASMUtil {
 
     // ==================== 保护态生命值纠正 ====================
 
+    // ==================== 攻击/时间 计数器（供法球系统读取）====================
+
+    private static final java.util.Map<java.util.UUID, Integer> ATTACK_COUNTS = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final java.util.Map<java.util.UUID, Integer> TICK_COUNTS = new java.util.concurrent.ConcurrentHashMap<>();
+
+    public static int incrementAttackCount(LivingEntity entity) {
+        return ATTACK_COUNTS.merge(entity.getUUID(), 1, Integer::sum);
+    }
+    public static int getAttackCount(LivingEntity entity) {
+        return ATTACK_COUNTS.getOrDefault(entity.getUUID(), 0);
+    }
+    public static int incrementTickCount(LivingEntity entity) {
+        return TICK_COUNTS.merge(entity.getUUID(), 1, Integer::sum);
+    }
+    public static int getTickCount(LivingEntity entity) {
+        return TICK_COUNTS.getOrDefault(entity.getUUID(), 0);
+    }
+
+    // ==================== 复活剩余次数（每条命独立）====================
+
+    private static final java.util.Map<java.util.UUID, Integer> UNDYING_CHARGES = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** 获取剩余复活次数（未初始化则返回 -1）。 */
+    public static int getUndyingCharges(java.util.UUID uuid) {
+        return UNDYING_CHARGES.getOrDefault(uuid, -1);
+    }
+
+    /** 消耗一次复活，返回剩余次数。 */
+    public static int consumeUndyingCharge(java.util.UUID uuid) {
+        return UNDYING_CHARGES.merge(uuid, -1, (old, v) -> Math.max(0, old - 1));
+    }
+
+    /** 重置复活次数到上限（玩家复活/登录时调用）。 */
+    public static void resetUndyingCharges(java.util.UUID uuid, int max) {
+        UNDYING_CHARGES.put(uuid, Math.max(0, max));
+    }
+
+    // ==================== 保护态 ====================
+
     /** ThreadLocal：allow 本次 setHealth to pass through protection (e.g., /kill) */
     private static final ThreadLocal<Boolean> BYPASS_PROTECTION = ThreadLocal.withInitial(() -> false);
+
+    /** ThreadLocal：hurt 入口存下攻击者的护甲穿透(百分比)，供目标 getArmorValue() 注入扣减 */
+    private static final ThreadLocal<Float> ARMOR_PEN_PCT = ThreadLocal.withInitial(() -> 0f);
+    /** ThreadLocal：hurt 入口存下攻击者的护甲穿透(固定值) */
+    private static final ThreadLocal<Float> ARMOR_PEN_FLAT = ThreadLocal.withInitial(() -> 0f);
+
+    public static void setArmorPenetration(float pct, float flat) {
+        ARMOR_PEN_PCT.set(pct);
+        ARMOR_PEN_FLAT.set(flat);
+    }
+    public static float peekArmorPenPct() { return ARMOR_PEN_PCT.get(); }
+    public static float peekArmorPenFlat() { return ARMOR_PEN_FLAT.get(); }
+    public static void clearArmorPenetration() {
+        ARMOR_PEN_PCT.set(0f);
+        ARMOR_PEN_FLAT.set(0f);
+    }
 
     /**
      * 临时放行保护态——调用方在触发能杀死实体的操作前设置，
