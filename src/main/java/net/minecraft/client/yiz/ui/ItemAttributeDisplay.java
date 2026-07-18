@@ -69,13 +69,16 @@ public final class ItemAttributeDisplay {
         yiz("splash_falloff",       "溅射衰减",     "%",   1.0);
         yiz("huixin",               "会心",         "格",   1.0);
         yiz("kegong",               "渴攻",         "tick", 1.0);
-        yiz("armor",                "防御力",       "点",   1.0);
+        yiz("armor", "攻击强度防御",       "点",   1.0);
         yiz("damage_block",         "伤害格挡",     "点",   1.0);
         yiz("generic_damage",       "全伤害",       "%",   100.0);
         yiz("damage_reduction",     "伤害减免",     "%",   1.0);
         yiz("counter_rate",         "反击率",       "%",   1.0);
         yiz("counter_value",        "反击值",       "%",   1.0);
         yiz("counter_count",        "反击数",       "次",   1.0);
+        yiz("combo_rate",           "连击",         "%",   1.0);
+        yiz("combo_value",          "连击倍率",     "%",   1.0);
+        yiz("combo_count",          "连击次数",     "次",   1.0);
         yiz("undying",              "不死",         "次",   1.0);
         yiz("projectile_reflection","投射物反弹",   "格",   1.0);
         yiz("no_collision",         "无碰撞",       "",    1.0);
@@ -101,7 +104,7 @@ public final class ItemAttributeDisplay {
         yiz("life_regen_pct",       "生命恢复(%)",  "%",   1.0);
         yiz("melee_damage",         "近战伤害",     "",    1.0);
         yiz("ranged_damage",        "远程伤害",     "",    1.0);
-        yiz("magic_damage",         "魔法伤害",     "",    1.0);
+        yiz("magic_damage", "法术伤害增幅",     "",    1.0);
         yiz("summon_damage",        "召唤伤害",     "",    1.0);
         yiz("armor_penetration",        "护甲穿透(%)",  "%",  1.0);
         yiz("armor_penetration_flat",   "护甲穿透(固定)","点", 1.0);
@@ -112,9 +115,31 @@ public final class ItemAttributeDisplay {
         yiz("max_sentries",         "最大哨兵数",   "个",  1.0);
         yiz("water_breath_time",        "水下呼吸时间(%)","%",   1.0);
         yiz("water_breath_time_flat",   "水下呼吸时间(固定)","tick",1.0);
-        yiz("arrow_damage",         "箭矢伤害",     "",    1.0);
-        yiz("arrow_speed",          "箭矢速度",     "",    1.0);
-        yiz("arrow_save_chance",    "箭矢节省几率", "%",   1.0);
+        // 状态效果 — 攻方
+        yiz("stun_attack",          "眩晕(攻)",     "%",   1.0);
+        yiz("slow_attack",          "减速(攻)",     "%",   1.0);
+        yiz("freeze_attack",        "冰冻(攻)",     "%",   1.0);
+        yiz("shock_attack",         "感电(攻)",     "%",   1.0);
+        yiz("knockback_attack",     "击飞(攻)",     "%",   1.0);
+        // 状态效果 — 防方
+        yiz("stun_defense",         "眩晕(防)",     "%",   1.0);
+        yiz("slow_defense",         "减速(防)",     "%",   1.0);
+        yiz("freeze_defense",       "冰冻(防)",     "%",   1.0);
+        yiz("shock_defense",        "感电(防)",     "%",   1.0);
+        yiz("knockback_defense",    "击飞(防)",     "%",   1.0);
+        // 状态效果共享 — 时间
+        yiz("stun_time",            "眩晕时间",     "tick",1.0);
+        yiz("slow_time",            "减速时间",     "tick",1.0);
+        yiz("freeze_time",          "冰冻时间",     "tick",1.0);
+        yiz("shock_time",           "感电时间",     "tick",1.0);
+        yiz("shock_range",         "感电范围",     "格",  1.0);
+        yiz("knockback_time",       "击飞时间",     "tick",1.0);
+        // 状态效果共享 — 伤害
+        yiz("stun_damage",          "眩晕伤害",     "点",  1.0);
+        yiz("slow_damage",          "减速伤害",     "点",  1.0);
+        yiz("freeze_damage",        "冰冻伤害",     "点",  1.0);
+        yiz("shock_damage",         "感电伤害",     "点",  1.0);
+        yiz("knockback_damage",     "击飞伤害",     "点",  1.0);
     }
 
     private static void rule(Holder<Attribute> attr, String name, String unit, double scale) {

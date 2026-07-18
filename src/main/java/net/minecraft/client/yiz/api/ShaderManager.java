@@ -328,6 +328,37 @@ public final class ShaderManager extends RenderType {
                         .createCompositeState(false));
     }
 
+    /**
+     * 体表闪电表面 RenderType — NEW_ENTITY 格式(含 Normal) + 加法混合 + EQUAL 深度贴附模型表面。
+     * 由 LightningShaders 注册 surface shader 后调用，shader 通过 Supplier 注入。
+     */
+    public static net.minecraft.client.renderer.RenderType createLightningSurfaceType(
+            java.util.function.Supplier<net.minecraft.client.renderer.ShaderInstance> shader) {
+        ShaderStateShard shaderState = new ShaderStateShard(shader);
+        TransparencyStateShard additive = new TransparencyStateShard("lightning_additive",
+                () -> {
+                    com.mojang.blaze3d.systems.RenderSystem.enableBlend();
+                    com.mojang.blaze3d.systems.RenderSystem.blendFuncSeparate(
+                            com.mojang.blaze3d.platform.GlStateManager.SourceFactor.SRC_ALPHA,
+                            com.mojang.blaze3d.platform.GlStateManager.DestFactor.ONE,
+                            com.mojang.blaze3d.platform.GlStateManager.SourceFactor.ONE,
+                            com.mojang.blaze3d.platform.GlStateManager.DestFactor.ONE);
+                },
+                () -> {
+                    com.mojang.blaze3d.systems.RenderSystem.disableBlend();
+                    com.mojang.blaze3d.systems.RenderSystem.defaultBlendFunc();
+                });
+        return create("lightning_surface",
+                VERTEX_FORMAT,
+                com.mojang.blaze3d.vertex.VertexFormat.Mode.QUADS, 1536, false, false,
+                CompositeState.builder()
+                        .setShaderState(shaderState)
+                        .setWriteMaskState(COLOR_WRITE).setCullState(NO_CULL)
+                        .setDepthTestState(new DepthTestStateShard("<=", 515)).setTransparencyState(additive)
+                        .setOutputState(ITEM_ENTITY_TARGET)
+                        .createCompositeState(false));
+    }
+
     // 共享的 RenderStateShard 工厂
     private static TransparencyStateShard filmTransparency() {
         return new TransparencyStateShard("film_trans",

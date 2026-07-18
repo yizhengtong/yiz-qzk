@@ -5,6 +5,7 @@ import net.minecraft.client.yiz.api.DamageValueModifierRegistry;
 import net.minecraft.client.yiz.attribute.YizAttributes;
 import net.minecraft.client.yiz.api.KnockbackImmunityRegistry;
 import net.minecraft.client.yiz.api.ProjectileImmunityRegistry;
+import net.minecraft.client.yiz.bridge.ControlDataBridge;
 import net.minecraft.client.yiz.bridge.HealthDataBridge;
 import net.minecraft.client.yiz.bridge.InvulnerableDataBridge;
 import net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler;
@@ -46,7 +47,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * </ol>
  */
 @Mixin(LivingEntity.class)
-public abstract class LivingEntityMixin implements HealthDataBridge {
+public abstract class LivingEntityMixin implements HealthDataBridge, ControlDataBridge {
 
     // ==================== DataParameter 定义 ====================
 
@@ -69,6 +70,25 @@ public abstract class LivingEntityMixin implements HealthDataBridge {
     @Override
     public void yizmodqzk$setHealthDelta(float delta) {
         ((LivingEntity) (Object) this).getEntityData().set(yizmodqzk$FE_GET_HEALTH_DATA, delta);
+    }
+
+    // ==================== ControlDataBridge 接口实现 ====================
+
+    /** 控制效果剩余 tick（服务端 Map 跟踪；感电视觉走 S2CShockFxPayload，不走此处同步） */
+    @Unique
+    private static final java.util.Map<java.util.UUID, Integer> yizmodqzk$CONTROL_TICKS =
+        new java.util.concurrent.ConcurrentHashMap<>();
+
+    @Override
+    public int yizmodqzk$getControlTicks() {
+        return yizmodqzk$CONTROL_TICKS.getOrDefault(((LivingEntity) (Object) this).getUUID(), 0);
+    }
+
+    @Override
+    public void yizmodqzk$setControlTicks(int ticks) {
+        LivingEntity self = (LivingEntity) (Object) this;
+        if (ticks <= 0) yizmodqzk$CONTROL_TICKS.remove(self.getUUID());
+        else yizmodqzk$CONTROL_TICKS.put(self.getUUID(), ticks);
     }
 
     // ==================== defineSynchedData ====================
@@ -137,6 +157,9 @@ public abstract class LivingEntityMixin implements HealthDataBridge {
         LivingEntity entity = (LivingEntity) (Object) this;
         if (entity.level().isClientSide()) return;
 
+        // 状态效果 tick（感电周期 AoE/传播、减速到期、控制计时）
+        net.minecraft.client.yiz.core.StatusEffectDispatcher.tickControlTimers(entity);
+
         if (entity.tickCount % yizmodqzk$DELTA_DECAY_INTERVAL == 0 && !entity.isDeadOrDying()) {
             float delta = entity.getEntityData().get(yizmodqzk$FE_GET_HEALTH_DATA);
             if (delta <= -1) {
@@ -171,6 +194,7 @@ public abstract class LivingEntityMixin implements HealthDataBridge {
         entity.getEntityData().set(yizmodqzk$FE_GET_HEALTH_DATA, 0F);
         HealthModificationScheduler.removeAll(entity);
         HealBanConfig.remove(entity);
+        net.minecraft.client.yiz.tool.health.ShieldTracker.remove(entity);
     }
 
     // ==================== NBT 持久化 ====================
@@ -206,14 +230,83 @@ public abstract class LivingEntityMixin implements HealthDataBridge {
         if (amount <= 0) return amount;
         LivingEntity self = (LivingEntity) (Object) this;
 
+        // === 破限附魔：恢复 Player.attack() 中传入的原始伤害 ===
+        //    Boss 的 custom hurt() 在调用 super.hurt() 前已用 Math.min(cap, amount) 裁切，
+        //    此处用 PoxianDamageTracker 捕获的原始值恢复——通用跳过任意 mod 的伤害上限
+        Float expected = net.minecraft.client.yiz.editor.PoxianDamageTracker.get();
+        if (expected != null && expected > amount) {
+            amount = expected;
+        }
+
+        // === 免疫掉落伤害（奔雷疾等技能授予） ===
+        if (source.is(net.minecraft.tags.DamageTypeTags.IS_FALL)
+                && self instanceof net.minecraft.world.entity.player.Player pl
+                && net.minecraft.client.yiz.handler.FallImmunityTracker.consume(pl)) {
+            return 0;
+        }
+
         // === DamageValueModifierRegistry — 自定义伤害数值修改（前置处理） ===
         amount = DamageValueModifierRegistry.apply(self, source, amount);
         if (amount <= 0) return 0;
 
         // === 攻击者伤害增幅（按堆叠模式：MULTIPLY 逐项乘，ADD 求和后一次乘）===
         if (source.getEntity() instanceof LivingEntity attacker) {
-            // 攻击计数器 +1（供法球系统读取）
-            EntityASMUtil.incrementAttackCount(attacker);
+            // 状态伤害（感电/眩晕等派发的 hurt）不再次触发攻方派发——防递归 + 防充能误计
+            if (!net.minecraft.client.yiz.core.StatusEffectDispatcher.DISPATCHING.get()) {
+                // 攻击计数器 +1（供法球系统读取）
+                EntityASMUtil.incrementAttackCount(attacker);
+                // 被动充能 + 技能后首击
+                if (attacker instanceof net.minecraft.world.entity.player.Player pl) {
+                    // PassiveChargeTracker.onAttack 已移除：旧"满6充能+1+感电"逻辑废弃。
+                    // 攻击充能计数改由天雷引 onAttack 负责（经 onHurtReturn 的 dispatchPassiveAttack）。
+                    float[] bonus = net.minecraft.client.yiz.handler.PostSkillAttackTracker.tryConsume(pl);
+                    if (bonus != null) { amount += bonus[0]; pl.heal(bonus[1]); }
+                    // 充能态（持临时 buff 期间）每次普攻：附伤 + 回血 + 感电
+                    boolean chargedBuff = net.minecraft.client.yiz.handler.PassiveChargeTracker.hasTempBuff(pl);
+                    if (chargedBuff && !self.level().isClientSide()) {
+                        // 充能态攻击：标记当前目标为感电源（次级 AoE 由 tick 触发）
+                        float reduction = (float) pl.getAttributeValue(YizAttributes.MANA_COST_REDUCTION);
+                        boolean hasMana = net.minecraft.client.yiz.tool.health.ManaTracker.consume(pl,
+                            Math.max(0, 1 - reduction));
+                        if (hasMana) {
+                            net.minecraft.client.yiz.handler.ChargedShockTracker.markTarget(self);
+                        } else {
+                            chargedBuff = false;
+                        }
+                    }
+                    if (chargedBuff) {
+                        double spellPow = YizAttributes.getEffectiveSpellPower(pl);
+                        float bonusDmg = (float) (0.85 + spellPow * 0.225);
+                        float heal = (float) (0.375 + pl.getMaxHealth() * 0.006);
+                        amount += bonusDmg;
+                        pl.heal(heal);
+                    }
+                    // 霹雳标签：NBT 标记强制暴击（CRIT_DAMAGE 倍率附加伤害）
+                    var pd = pl.getPersistentData();
+                    if (pd.getBoolean("yiz:pili_crit")) {
+                        pd.remove("yiz:pili_crit"); // 只生效一次
+                        double critBonus = pl.getAttributeValue(YizAttributes.CRIT_DAMAGE);
+                        if (critBonus > 0) {
+                            amount += (float) critBonus;
+                        }
+                        // 暴击粒子
+                        if (self.level() instanceof net.minecraft.server.level.ServerLevel sl) {
+                            sl.sendParticles(net.minecraft.core.particles.ParticleTypes.CRIT,
+                                self.getX(), self.getY() + self.getBbHeight() / 2, self.getZ(),
+                                8, 0.3, 0.3, 0.3, 0.1);
+                        }
+                    }
+                }
+                // 状态效果派发（仅服务端：applyShock/doShockAoE 会发 S2C 包，客户端不能发 clientbound）
+                if (!self.level().isClientSide()) {
+                    var atkEffects = net.minecraft.client.yiz.api.StatusEffectAttributeRegistry.getAttackEffects(attacker);
+                    if (!atkEffects.isEmpty())
+                        net.minecraft.client.yiz.core.StatusEffectDispatcher.dispatchToTarget(self, atkEffects, attacker);
+                    var defEffects = net.minecraft.client.yiz.api.StatusEffectAttributeRegistry.getDefenseEffects(self);
+                    if (!defEffects.isEmpty())
+                        net.minecraft.client.yiz.core.StatusEffectDispatcher.dispatchToAttacker(attacker, defEffects, self);
+                }
+            }
 
             double distSq = attacker.distanceToSqr(self);
             float addSum = 0f;
@@ -237,6 +330,12 @@ public abstract class LivingEntityMixin implements HealthDataBridge {
                 }
             }
             if (addSum > 0) amount *= (1.0F + addSum);
+            // 攻击强度
+            var atkStr = attacker.getAttribute(net.minecraft.client.yiz.attribute.YizAttributes.ATTACK_STRENGTH);
+            if (atkStr != null && atkStr.getValue() > 1.0) amount += (float)(atkStr.getValue() - 1.0);
+            // 法术强度（含法术提升加成）
+            double spellPow = net.minecraft.client.yiz.attribute.YizAttributes.getEffectiveSpellPower(attacker);
+            if (spellPow > 0) amount += (float)(spellPow * 0.1);
 
             // 护甲穿透：存下攻击者的百分比+固定穿透值，供目标 getArmorValue() 注入扣减
             var penPctInst = attacker.getAttribute(
@@ -278,6 +377,22 @@ public abstract class LivingEntityMixin implements HealthDataBridge {
             }
         }
 
+        // === ARMOR / SPELL_DEFENSE 指数减免（目标方，hurt 层）===
+        // 策略：只对明确的"物理类"伤害走 ARMOR；其余一切（含其他模组自定义伤害）
+        // 默认走 SPELL_DEFENSE。这样第三方模组不设标签也不会被漏掉。
+        boolean isPhysical = source.is(net.minecraft.tags.DamageTypeTags.IS_PROJECTILE)
+            || source.is(net.minecraft.tags.DamageTypeTags.IS_EXPLOSION)
+            || source.is(net.minecraft.tags.DamageTypeTags.IS_PLAYER_ATTACK)
+            || source.is(net.minecraft.tags.DamageTypeTags.IS_FALL);
+        var expAttr = isPhysical
+            ? net.minecraft.client.yiz.attribute.YizAttributes.ARMOR
+            : net.minecraft.client.yiz.attribute.YizAttributes.SPELL_DEFENSE;
+        var expInst = self.getAttribute(expAttr);
+        if (expInst != null && expInst.getValue() > 0) {
+            double reduction = 1.0 - Math.exp(-0.0277259 * expInst.getValue());
+            amount *= (float)(1.0 - Math.min(1.0, reduction));
+        }
+
         return Math.max(0, amount);
     }
 
@@ -314,7 +429,7 @@ public abstract class LivingEntityMixin implements HealthDataBridge {
 
         // 减伤 / 格挡（扣血方向）
         if (newHealth < current) {
-            // 原生减伤 先处理完整伤害量
+            // 原生减伤 百分比
             var reductionInst = self.getAttribute(
                 net.minecraft.client.yiz.attribute.YizAttributes.DAMAGE_REDUCTION);
             if (reductionInst != null) {
@@ -325,7 +440,7 @@ public abstract class LivingEntityMixin implements HealthDataBridge {
                     newHealth = current - damage;
                 }
             }
-            // 格挡 在注册表之前，避免注册表 clamp 破坏致死信号
+            // 格挡 在注册表之前
             var blockInst = self.getAttribute(
                 net.minecraft.client.yiz.attribute.YizAttributes.DAMAGE_BLOCK);
             if (blockInst != null) {
@@ -335,6 +450,14 @@ public abstract class LivingEntityMixin implements HealthDataBridge {
                     damage = Math.max(0, damage - (float) block);
                     newHealth = current - damage;
                 }
+            }
+            // 护盾吸收：在格挡之后，消耗护盾值吸收剩余伤害
+            float shield = net.minecraft.client.yiz.tool.health.ShieldTracker.get(self);
+            if (shield > 0) {
+                float damage = current - newHealth;
+                float absorbed = Math.min(damage, shield);
+                net.minecraft.client.yiz.tool.health.ShieldTracker.set(self, shield - absorbed);
+                newHealth = current - (damage - absorbed);
             }
             // 注册表减伤（饰品 EffectTag，yizxian 注册）
             newHealth = DamageReductionRegistry.applyBeforeSetHealth(self, newHealth);
@@ -422,29 +545,78 @@ public abstract class LivingEntityMixin implements HealthDataBridge {
         if (!cir.getReturnValue()) return;
         LivingEntity self = (LivingEntity) (Object) this;
         if (self.level().isClientSide()) return;
-        if (!(self instanceof Player player)) return;
 
         Entity srcEntity = source.getEntity();
         if (!(srcEntity instanceof LivingEntity attacker)) return;
-        if (attacker == player) return;
 
-        // === 反击：受击 → 反击率判定 → 反击值×反击数 ===
-        // ON_HURT 作为独立计数器存在（EntityASMUtil），不在此处门控反击系统
-        double rate = player.getAttributeValue(YizAttributes.COUNTER_RATE);
-        if (rate <= 0) return;
+        // ── 标签攻击后处理（无影击/霹雳/雷神）──
+        // 仅对玩家主手主动攻击触发一次；感电/链电等派生 hurt(DISPATCHING=true)跳过，避免反复触发。
+        if (srcEntity instanceof net.minecraft.server.level.ServerPlayer spAttacker && !(self instanceof Player)
+            && !net.minecraft.client.yiz.core.StatusEffectDispatcher.DISPATCHING.get()) {
+            net.minecraft.client.yiz.editor.EnhanceTagRegistry.onPlayerAttack(spAttacker);
+            // 被动物品攻击分发（天雷引充能等）
+            net.minecraft.client.yiz.tizMod.dispatchPassiveAttack(spAttacker, self);
+        }
 
-        if (Math.random() >= rate / 100.0) return;
+        // ── 反击：玩家受击时触发 ──
+        if (self instanceof Player player && attacker != player) {
+            double rate = player.getAttributeValue(YizAttributes.COUNTER_RATE);
+            if (rate > 0 && Math.random() < rate / 100.0) {
+                double value = player.getAttributeValue(YizAttributes.COUNTER_VALUE);
+                if (value <= 0) value = 50.0;
+                double count = player.getAttributeValue(YizAttributes.COUNTER_COUNT);
+                if (count < 1) count = 1;
 
-        double value = player.getAttributeValue(YizAttributes.COUNTER_VALUE);
-        if (value <= 0) value = 50.0; // 默认 50%
-        double count = player.getAttributeValue(YizAttributes.COUNTER_COUNT);
-        if (count < 1) count = 1;
+                double playerAtk = player.getAttributeValue(net.minecraft.world.entity.ai.attributes.Attributes.ATTACK_DAMAGE);
+                float counterDmg = (float) (playerAtk * value / 100.0);
 
-        double playerAtk = player.getAttributeValue(net.minecraft.world.entity.ai.attributes.Attributes.ATTACK_DAMAGE);
-        float counterDmg = (float) (playerAtk * value / 100.0);
+                for (int i = 0; i < (int) count; i++) {
+                    attacker.hurt(player.damageSources().mobAttack(player), counterDmg);
+                }
+            }
+        }
 
-        for (int i = 0; i < (int) count; i++) {
-            attacker.hurt(player.damageSources().mobAttack(player), counterDmg);
+        // ── 雷神标签：每次攻击追加 80% 伤害的 1 次连击 ──
+        if (srcEntity instanceof net.minecraft.server.level.ServerPlayer tagPlayer && !(self instanceof Player)
+            && net.minecraft.client.yiz.editor.EnhanceTagRegistry.isTagActive(tagPlayer, "leishen")) {
+            net.minecraft.nbt.CompoundTag pd2 = self.getPersistentData();
+            if (!pd2.getBoolean("yiz:leishen_hit")) {
+                pd2.putBoolean("yiz:leishen_hit", true);
+                try {
+                    double atk = tagPlayer.getAttributeValue(net.minecraft.world.entity.ai.attributes.Attributes.ATTACK_DAMAGE);
+                    self.invulnerableTime = 0;
+                    self.hurt(tagPlayer.damageSources().mobAttack(tagPlayer), (float)(atk * 0.8));
+                } finally {
+                    pd2.putBoolean("yiz:leishen_hit", false);
+                }
+            }
+        }
+
+        // ── 连击：玩家攻击时触发（玩家是伤害来源，目标非玩家）──
+        if (srcEntity instanceof net.minecraft.server.level.ServerPlayer cPlayer && !(self instanceof Player)) {
+            double cRate = cPlayer.getAttributeValue(YizAttributes.COMBO_RATE);
+            if (cRate > 0 && Math.random() < cRate / 100.0) {
+                net.minecraft.nbt.CompoundTag pd = self.getPersistentData();
+                if (!pd.getBoolean("yiz:combo_hitting")) {
+                    pd.putBoolean("yiz:combo_hitting", true);
+                    try {
+                        double cValue = cPlayer.getAttributeValue(YizAttributes.COMBO_VALUE);
+                        if (cValue <= 0) cValue = 100.0;
+                        double cCount = cPlayer.getAttributeValue(YizAttributes.COMBO_COUNT);
+                        if (cCount < 1) cCount = 1;
+
+                        double baseAtk = cPlayer.getAttributeValue(net.minecraft.world.entity.ai.attributes.Attributes.ATTACK_DAMAGE);
+                        float comboDmg = (float) (baseAtk * cValue / 100.0);
+
+                        for (int j = 0; j < (int) cCount; j++) {
+                            self.invulnerableTime = 0;
+                            self.hurt(cPlayer.damageSources().mobAttack(cPlayer), comboDmg);
+                        }
+                    } finally {
+                        pd.putBoolean("yiz:combo_hitting", false);
+                    }
+                }
+            }
         }
     }
 

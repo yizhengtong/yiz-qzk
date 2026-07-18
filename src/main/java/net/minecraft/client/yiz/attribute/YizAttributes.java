@@ -96,6 +96,15 @@ public final class YizAttributes {
                 .setSyncable(true));
 
     /**
+     * 攻击冷却缩减 — 百分比减少攻击间隔（0=无效果, 100=立即重置）。
+     * <p>值域 0~100。计算公式：实际冷却 = 原冷却 × (1 - 值/100)。</p>
+     */
+    public static final Holder<Attribute> COOLDOWN_REDUCTION =
+        ATTRIBUTES.register("cooldown_reduction",
+            () -> new RangedAttribute("attribute.yizmodqzk.cooldown_reduction", 0.0, 0.0, 100.0)
+                .setSyncable(true));
+
+    /**
      * 渴攻 — 锁定充能时间（tick）。
      * <p>值域 ≥0，无上限。1 = 1 tick（0.05 秒）。</p>
      */
@@ -105,7 +114,56 @@ public final class YizAttributes {
                 .setSyncable(true));
 
     /**
-     * 格挡 — 固定值减免伤害（在百分比减免之后扣除）。
+     * 护盾值 — 当前护盾容量上限（初始值，由物品/技能叠加）。
+     * <p>实际护盾消耗由 {@code ShieldTracker} 追踪，受击时在格挡之后吸收伤害。</p>
+     */
+    public static final Holder<Attribute> SHIELD_VALUE =
+        ATTRIBUTES.register("shield_value",
+            () -> new RangedAttribute("attribute.yizmodqzk.shield_value", 0.0, 0.0, Double.MAX_VALUE)
+                .setSyncable(true));
+
+    // ═══════════════════════════════════════════════════════════
+    //  蓝条系统
+    // ═══════════════════════════════════════════════════════════
+
+    /** 蓝量上限 — 玩家默认 200。 */
+    public static final Holder<Attribute> MAX_MANA =
+        ATTRIBUTES.register("max_mana",
+            () -> new RangedAttribute("attribute.yizmodqzk.max_mana", 200.0, 0.0, Double.MAX_VALUE)
+                .setSyncable(true));
+
+    /** 固定回蓝 — 每 tick 回 值×0.05 蓝。玩家默认 1。 */
+    public static final Holder<Attribute> MANA_REGEN =
+        ATTRIBUTES.register("mana_regen",
+            () -> new RangedAttribute("attribute.yizmodqzk.mana_regen", 1.0, 0.0, Double.MAX_VALUE)
+                .setSyncable(true));
+
+    /** 百分比回蓝 — 每 tick 回 值/100/20 × 蓝上限。 */
+    public static final Holder<Attribute> MANA_REGEN_PCT =
+        ATTRIBUTES.register("mana_regen_pct",
+            () -> new RangedAttribute("attribute.yizmodqzk.mana_regen_pct", 0.0, 0.0, 100.0)
+                .setSyncable(true));
+
+    /** 永恒储蓝 — 直接减少技能耗蓝。 */
+    public static final Holder<Attribute> MANA_COST_REDUCTION =
+        ATTRIBUTES.register("mana_cost_reduction",
+            () -> new RangedAttribute("attribute.yizmodqzk.mana_cost_reduction", 0.0, 0.0, Double.MAX_VALUE)
+                .setSyncable(true));
+
+    /** 单次耗蓝 — 技能物品的属性，使用一次消耗的蓝量。 */
+    public static final Holder<Attribute> MANA_COST =
+        ATTRIBUTES.register("mana_cost",
+            () -> new RangedAttribute("attribute.yizmodqzk.mana_cost", 0.0, 0.0, Double.MAX_VALUE)
+                .setSyncable(true));
+
+    /** 每秒耗蓝 — 持续性技能每秒耗蓝，实际按 tick 扣 值/20。 */
+    public static final Holder<Attribute> MANA_COST_PER_SEC =
+        ATTRIBUTES.register("mana_cost_per_sec",
+            () -> new RangedAttribute("attribute.yizmodqzk.mana_cost_per_sec", 0.0, 0.0, Double.MAX_VALUE)
+                .setSyncable(true));
+
+    /**
+     * 格挡 — 固定值减免伤害（在百分比减免之后、护盾之前扣除）。
      * <p>值域 ≥0，无上限。1 = 1 点伤害减免。</p>
      */
     public static final Holder<Attribute> DAMAGE_BLOCK =
@@ -134,12 +192,130 @@ public final class YizAttributes {
                 .setSyncable(true));
 
     /**
-     * 防御力 — 每 1 点 = +1 护甲值 + +1 盔甲韧性。
-     * <p>值域 ≥0。在每 tick 同步器中 1:1 镜像到原版 {@code ARMOR} 和 {@code ARMOR_TOUGHNESS}。</p>
+     * 攻击强度防御 — 1:1 镜像到原版护甲+韧性，同时提供指数公式通用伤害减免。
+     * <p>减免公式：1 - e^(-0.0277259 × 值)。25点≈50%，50点≈75%。</p>
+     * <p>仅减免通用型伤害（物理类），不减免火焰/冰冻/闪电/魔法伤害。</p>
      */
     public static final Holder<Attribute> ARMOR =
         ATTRIBUTES.register("armor",
             () -> new RangedAttribute("attribute.yizmodqzk.armor", 0.0, 0.0, Double.MAX_VALUE)
+                .setSyncable(true));
+
+    /**
+     * 攻击强度 — 独立攻击数值，每点超出 1 的部分直接加算到伤害。
+     * <p>不受原版攻击力影响，玩家默认拥有 1 点。</p>
+     */
+    public static final Holder<Attribute> ATTACK_STRENGTH =
+        ATTRIBUTES.register("attack_strength",
+            () -> new RangedAttribute("attribute.yizmodqzk.attack_strength", 0.0, 0.0, Double.MAX_VALUE)
+                .setSyncable(true));
+
+    /**
+     * 法术防御 — 1:1 镜像到原版击退韧性，同时提供指数公式非通用伤害减免。
+     * <p>减免公式：1 - e^(-0.0277259 × 值)。减免火焰/冰冻/闪电/魔法等非物理伤害。</p>
+     */
+    public static final Holder<Attribute> SPELL_DEFENSE =
+        ATTRIBUTES.register("spell_defense",
+            () -> new RangedAttribute("attribute.yizmodqzk.spell_defense", 0.0, 0.0, Double.MAX_VALUE)
+                .setSyncable(true));
+
+    /**
+     * 法术强度 — 每次攻击附加 0.1×值 的伤害（伤害类型=魔法）。
+     * <p>与攻击强度同为后续全部技能的基础计算属性。</p>
+     */
+    public static final Holder<Attribute> SPELL_POWER =
+        ATTRIBUTES.register("spell_power",
+            () -> new RangedAttribute("attribute.yizmodqzk.spell_power", 0.0, 0.0, Double.MAX_VALUE)
+                .setSyncable(true));
+
+    /**
+     * 冷却值 — 决定物品功能冷却间隔（tick）。≤0=无冷却。
+     */
+    public static final Holder<Attribute> COOLDOWN_VALUE =
+        ATTRIBUTES.register("cooldown_value",
+            () -> new RangedAttribute("attribute.yizmodqzk.cooldown_value", 0.0, 0.0, Double.MAX_VALUE)
+                .setSyncable(true));
+
+    /**
+     * 技能范围倍率 — 百分比放大技能所有用途的效果范围（AoE/链锁/光环半径）。
+     * <p>值域 ≥0，1 = +1%。例：20 = 所有范围 ×1.2。配合 {@code SkillRanges.get} 使用，
+     * 倍率作用于 (基础值 + 定向偏移) 之上。强化槽加 modifier 即可全局扩大技能范围。</p>
+     */
+    public static final Holder<Attribute> SKILL_RANGE =
+        ATTRIBUTES.register("skill_range",
+            () -> new RangedAttribute("attribute.yizmodqzk.skill_range", 0.0, 0.0, Double.MAX_VALUE)
+                .setSyncable(true));
+
+    /**
+     * 技能间隔加速率 — 百分比缩短技能所有用途的周期间隔（伤害/护盾/击退等周期）。
+     * <p>值域 0~100，1 = 周期 ×0.99。例：20 = 所有间隔 ×0.8（触发更频繁）。配合 {@code SkillIntervals.get} 使用。
+     * 强化槽加 modifier 即可全局加速技能周期。</p>
+     */
+    public static final Holder<Attribute> SKILL_INTERVAL =
+        ATTRIBUTES.register("skill_interval",
+            () -> new RangedAttribute("attribute.yizmodqzk.skill_interval", 0.0, 0.0, 100.0)
+                .setSyncable(true));
+
+    /**
+     * 最大充能数 — 技能可攒的可用次数上限。默认 1。大装载槽位 ×2。
+     * <p>放一次技能消耗 1 充能；充能未满时每 cooldown_value 回复 1。</p>
+     */
+    public static final Holder<Attribute> MAX_CHARGES =
+        ATTRIBUTES.register("max_charges",
+            () -> new RangedAttribute("attribute.yizmodqzk.max_charges", 1.0, 0.0, 100.0)
+                .setSyncable(true));
+
+    /**
+     * 伤害类型 — 技能造成的伤害类型编码。
+     * 0=物理, 1=火焰, 2=冰冻, 3=闪电, 4=感电, 5=魔法。
+     */
+    public static final Holder<Attribute> DAMAGE_TYPE =
+        ATTRIBUTES.register("damage_type",
+            () -> new RangedAttribute("attribute.yizmodqzk.damage_type", 0.0, 0.0, 5.0)
+                .setSyncable(true));
+
+    /**
+     * 回血系数(攻) — 攻击强度×系数% 转化为回复量。值域 0~100。
+     */
+    public static final Holder<Attribute> HEAL_ATK_COEFF =
+        ATTRIBUTES.register("heal_atk_coeff",
+            () -> new RangedAttribute("attribute.yizmodqzk.heal_atk_coeff", 0.0, 0.0, 100.0)
+                .setSyncable(true));
+    /**
+     * 回血系数(法) — 法术强度×系数% 转化为回复量。值域 0~100。
+     */
+    public static final Holder<Attribute> HEAL_SPELL_COEFF =
+        ATTRIBUTES.register("heal_spell_coeff",
+            () -> new RangedAttribute("attribute.yizmodqzk.heal_spell_coeff", 0.0, 0.0, 100.0)
+                .setSyncable(true));
+    /**
+     * 回血系数(命) — 最大生命值×系数% 转化为回复量。值域 0~100。
+     */
+    public static final Holder<Attribute> HEAL_HP_COEFF =
+        ATTRIBUTES.register("heal_hp_coeff",
+            () -> new RangedAttribute("attribute.yizmodqzk.heal_hp_coeff", 0.0, 0.0, 100.0)
+                .setSyncable(true));
+
+    /**
+     * 基础伤害 — 技能固定伤害值（公式：base + spell_power×spell_coeff/100）。值域 ≥0。
+     */
+    public static final Holder<Attribute> DAMAGE_BASE =
+        ATTRIBUTES.register("damage_base",
+            () -> new RangedAttribute("attribute.yizmodqzk.damage_base", 0.0, 0.0, Double.MAX_VALUE)
+                .setSyncable(true));
+    /**
+     * 法术伤害系数 — 法术强度转化为伤害的比例（%）。值域 0~100。
+     */
+    public static final Holder<Attribute> DAMAGE_SPELL_COEFF =
+        ATTRIBUTES.register("damage_spell_coeff",
+            () -> new RangedAttribute("attribute.yizmodqzk.damage_spell_coeff", 0.0, 0.0, 100.0)
+                .setSyncable(true));
+    /**
+     * 基础回血 — 技能固定回血量。值域 ≥0。
+     */
+    public static final Holder<Attribute> HEAL_BASE =
+        ATTRIBUTES.register("heal_base",
+            () -> new RangedAttribute("attribute.yizmodqzk.heal_base", 0.0, 0.0, Double.MAX_VALUE)
                 .setSyncable(true));
 
     // ═══════════════════════════════════════════════════════════
@@ -233,7 +409,7 @@ public final class YizAttributes {
     public static final Holder<Attribute> RANGED_DAMAGE =
         ATTRIBUTES.register("ranged_damage",
             () -> new RangedAttribute("attribute.yizmodqzk.ranged_damage", 0.0, 0.0, Double.MAX_VALUE).setSyncable(true));
-    /** 魔法伤害 — 值域 ≥0。 */
+    /** 法术伤害增幅 — 值域 ≥0。 */
     public static final Holder<Attribute> MAGIC_DAMAGE =
         ATTRIBUTES.register("magic_damage",
             () -> new RangedAttribute("attribute.yizmodqzk.magic_damage", 0.0, 0.0, Double.MAX_VALUE).setSyncable(true));
@@ -285,21 +461,108 @@ public final class YizAttributes {
             () -> new RangedAttribute("attribute.yizmodqzk.water_breath_time_flat", 0.0, 0.0, Double.MAX_VALUE).setSyncable(true));
 
     // ═══════════════════════════════════════════════════════════
-    //  箭矢属性（迁自 EffectTag）
+    //  状态效果属性 — 攻方（攻击时对目标施加效果）
     // ═══════════════════════════════════════════════════════════
 
-    /** 箭矢伤害 — 值域 ≥0。 */
-    public static final Holder<Attribute> ARROW_DAMAGE =
-        ATTRIBUTES.register("arrow_damage",
-            () -> new RangedAttribute("attribute.yizmodqzk.arrow_damage", 0.0, 0.0, Double.MAX_VALUE).setSyncable(true));
-    /** 箭矢速度 — 值域 ≥0。 */
-    public static final Holder<Attribute> ARROW_SPEED =
-        ATTRIBUTES.register("arrow_speed",
-            () -> new RangedAttribute("attribute.yizmodqzk.arrow_speed", 0.0, 0.0, Double.MAX_VALUE).setSyncable(true));
-    /** 箭矢节省几率 — 值域 ≥0，1 = 1%。 */
-    public static final Holder<Attribute> ARROW_SAVE_CHANCE =
-        ATTRIBUTES.register("arrow_save_chance",
-            () -> new RangedAttribute("attribute.yizmodqzk.arrow_save_chance", 0.0, 0.0, 100.0).setSyncable(true));
+    /** 眩晕(攻) — 触发概率%。值域 [0, 100]，1=1%。 */
+    public static final Holder<Attribute> STUN_ATTACK =
+        ATTRIBUTES.register("stun_attack",
+            () -> new RangedAttribute("attribute.yizmodqzk.stun_attack", 0.0, 0.0, 100.0).setSyncable(true));
+    /** 减速(攻) — 触发概率%。值域 [0, 100]。 */
+    public static final Holder<Attribute> SLOW_ATTACK =
+        ATTRIBUTES.register("slow_attack",
+            () -> new RangedAttribute("attribute.yizmodqzk.slow_attack", 0.0, 0.0, 100.0).setSyncable(true));
+    /** 冰冻(攻) — 触发概率%。值域 [0, 100]。 */
+    public static final Holder<Attribute> FREEZE_ATTACK =
+        ATTRIBUTES.register("freeze_attack",
+            () -> new RangedAttribute("attribute.yizmodqzk.freeze_attack", 0.0, 0.0, 100.0).setSyncable(true));
+    /** 感电(攻) — 触发概率%。值域 [0, 100]。 */
+    public static final Holder<Attribute> SHOCK_ATTACK =
+        ATTRIBUTES.register("shock_attack",
+            () -> new RangedAttribute("attribute.yizmodqzk.shock_attack", 0.0, 0.0, 100.0).setSyncable(true));
+    /** 击飞(攻) — 触发概率%。值域 [0, 100]。 */
+    public static final Holder<Attribute> KNOCKBACK_ATTACK =
+        ATTRIBUTES.register("knockback_attack",
+            () -> new RangedAttribute("attribute.yizmodqzk.knockback_attack", 0.0, 0.0, 100.0).setSyncable(true));
+
+    // ═══════════════════════════════════════════════════════════
+    //  状态效果属性 — 防方（受击时对攻击者施加效果）
+    // ═══════════════════════════════════════════════════════════
+
+    /** 眩晕(防) — 触发概率%。值域 [0, 100]。 */
+    public static final Holder<Attribute> STUN_DEFENSE =
+        ATTRIBUTES.register("stun_defense",
+            () -> new RangedAttribute("attribute.yizmodqzk.stun_defense", 0.0, 0.0, 100.0).setSyncable(true));
+    /** 减速(防) — 触发概率%。值域 [0, 100]。 */
+    public static final Holder<Attribute> SLOW_DEFENSE =
+        ATTRIBUTES.register("slow_defense",
+            () -> new RangedAttribute("attribute.yizmodqzk.slow_defense", 0.0, 0.0, 100.0).setSyncable(true));
+    /** 冰冻(防) — 触发概率%。值域 [0, 100]。 */
+    public static final Holder<Attribute> FREEZE_DEFENSE =
+        ATTRIBUTES.register("freeze_defense",
+            () -> new RangedAttribute("attribute.yizmodqzk.freeze_defense", 0.0, 0.0, 100.0).setSyncable(true));
+    /** 感电(防) — 触发概率%。值域 [0, 100]。 */
+    public static final Holder<Attribute> SHOCK_DEFENSE =
+        ATTRIBUTES.register("shock_defense",
+            () -> new RangedAttribute("attribute.yizmodqzk.shock_defense", 0.0, 0.0, 100.0).setSyncable(true));
+    /** 击飞(防) — 触发概率%。值域 [0, 100]。 */
+    public static final Holder<Attribute> KNOCKBACK_DEFENSE =
+        ATTRIBUTES.register("knockback_defense",
+            () -> new RangedAttribute("attribute.yizmodqzk.knockback_defense", 0.0, 0.0, 100.0).setSyncable(true));
+
+    // ═══════════════════════════════════════════════════════════
+    //  状态效果属性 — 共享（攻击/防御 共用时间与伤害）
+    // ═══════════════════════════════════════════════════════════
+
+    /** 眩晕时间 — 共享，单位 tick。默认 20。 */
+    public static final Holder<Attribute> STUN_TIME =
+        ATTRIBUTES.register("stun_time",
+            () -> new RangedAttribute("attribute.yizmodqzk.stun_time", 0.0, 0.0, Double.MAX_VALUE).setSyncable(true));
+    /** 减速时间 — 共享，单位 tick。默认 20。 */
+    public static final Holder<Attribute> SLOW_TIME =
+        ATTRIBUTES.register("slow_time",
+            () -> new RangedAttribute("attribute.yizmodqzk.slow_time", 0.0, 0.0, Double.MAX_VALUE).setSyncable(true));
+    /** 冰冻时间 — 共享，单位 tick。默认 20。 */
+    public static final Holder<Attribute> FREEZE_TIME =
+        ATTRIBUTES.register("freeze_time",
+            () -> new RangedAttribute("attribute.yizmodqzk.freeze_time", 0.0, 0.0, Double.MAX_VALUE).setSyncable(true));
+    /** 感电时间 — 共享，单位 tick，持续时长。默认 20。 */
+    public static final Holder<Attribute> SHOCK_TIME =
+        ATTRIBUTES.register("shock_time",
+            () -> new RangedAttribute("attribute.yizmodqzk.shock_time", 0.0, 0.0, Double.MAX_VALUE).setSyncable(true));
+    /** 感电范围 — 共享，单位 格，连锁半径。默认 2。 */
+    public static final Holder<Attribute> SHOCK_RANGE =
+        ATTRIBUTES.register("shock_range",
+            () -> new RangedAttribute("attribute.yizmodqzk.shock_range", 0.0, 0.0, Double.MAX_VALUE).setSyncable(true));
+    /** 感电间隔 — 共享，单位 tick，AoE 爆发间隔。默认 10。 */
+    public static final Holder<Attribute> SHOCK_INTERVAL =
+        ATTRIBUTES.register("shock_interval",
+            () -> new RangedAttribute("attribute.yizmodqzk.shock_interval", 0.0, 0.0, Double.MAX_VALUE).setSyncable(true));
+    /** 击飞时间 — 共享，单位 tick。默认 20。 */
+    public static final Holder<Attribute> KNOCKBACK_TIME =
+        ATTRIBUTES.register("knockback_time",
+            () -> new RangedAttribute("attribute.yizmodqzk.knockback_time", 0.0, 0.0, Double.MAX_VALUE).setSyncable(true));
+
+    /** 眩晕伤害 — 共享，默认 2 点。 */
+    public static final Holder<Attribute> STUN_DAMAGE =
+        ATTRIBUTES.register("stun_damage",
+            () -> new RangedAttribute("attribute.yizmodqzk.stun_damage", 0.0, 0.0, Double.MAX_VALUE).setSyncable(true));
+    /** 减速伤害 — 共享，默认 2 点。 */
+    public static final Holder<Attribute> SLOW_DAMAGE =
+        ATTRIBUTES.register("slow_damage",
+            () -> new RangedAttribute("attribute.yizmodqzk.slow_damage", 0.0, 0.0, Double.MAX_VALUE).setSyncable(true));
+    /** 冰冻伤害 — 共享，默认 2 点。 */
+    public static final Holder<Attribute> FREEZE_DAMAGE =
+        ATTRIBUTES.register("freeze_damage",
+            () -> new RangedAttribute("attribute.yizmodqzk.freeze_damage", 0.0, 0.0, Double.MAX_VALUE).setSyncable(true));
+    /** 感电伤害 — 共享，默认 2 点。 */
+    public static final Holder<Attribute> SHOCK_DAMAGE =
+        ATTRIBUTES.register("shock_damage",
+            () -> new RangedAttribute("attribute.yizmodqzk.shock_damage", 0.0, 0.0, Double.MAX_VALUE).setSyncable(true));
+    /** 击飞伤害 — 共享，默认 2 点。 */
+    public static final Holder<Attribute> KNOCKBACK_DAMAGE =
+        ATTRIBUTES.register("knockback_damage",
+            () -> new RangedAttribute("attribute.yizmodqzk.knockback_damage", 0.0, 0.0, Double.MAX_VALUE).setSyncable(true));
 
     // ═══════════════════════════════════════════════════════════
     //  触发器属性（后续大部分效果通过这三个入口驱动）
@@ -331,6 +594,28 @@ public final class YizAttributes {
     public static final Holder<Attribute> COUNTER_COUNT =
         ATTRIBUTES.register("counter_count",
             () -> new RangedAttribute("attribute.yizmodqzk.counter_count", 1.0, 1.0, Double.MAX_VALUE)
+                .setSyncable(true));
+
+    // ═══════════════════════════════════════════════════════════
+    //  连击效果属性
+    // ═══════════════════════════════════════════════════════════
+
+    /** 连击 — 攻击时触发额外连击的概率。值域 [0, 100]，1 = 1%。 */
+    public static final Holder<Attribute> COMBO_RATE =
+        ATTRIBUTES.register("combo_rate",
+            () -> new RangedAttribute("attribute.yizmodqzk.combo_rate", 0.0, 0.0, 100.0)
+                .setSyncable(true));
+
+    /** 连击倍率 — 连击伤害百分比。值域 ≥0，1 = 1%，默认 100%。 */
+    public static final Holder<Attribute> COMBO_VALUE =
+        ATTRIBUTES.register("combo_value",
+            () -> new RangedAttribute("attribute.yizmodqzk.combo_value", 0.0, 0.0, Double.MAX_VALUE)
+                .setSyncable(true));
+
+    /** 连击次数 — 每次触发连击的攻击次数。值域 ≥0，无物品时 mixin 默认 1。 */
+    public static final Holder<Attribute> COMBO_COUNT =
+        ATTRIBUTES.register("combo_count",
+            () -> new RangedAttribute("attribute.yizmodqzk.combo_count", 0.0, 0.0, Double.MAX_VALUE)
                 .setSyncable(true));
 
     /**
@@ -385,5 +670,14 @@ public final class YizAttributes {
 
     public static StackMode getStackMode(Holder<Attribute> attr) {
         return STACK_MODES.getOrDefault(attr, StackMode.MULTIPLY);
+    }
+
+    /** 获取经过法术提升加成后的有效法术强度 = SPELL_POWER × (1 + MAGIC_DAMAGE/100)。 */
+    public static double getEffectiveSpellPower(net.minecraft.world.entity.LivingEntity entity) {
+        var sp = entity.getAttribute(SPELL_POWER);
+        double base = sp != null ? sp.getValue() : 0;
+        var md = entity.getAttribute(MAGIC_DAMAGE);
+        double boost = md != null ? md.getValue() : 0;
+        return base * (1.0 + boost / 100.0);
     }
 }

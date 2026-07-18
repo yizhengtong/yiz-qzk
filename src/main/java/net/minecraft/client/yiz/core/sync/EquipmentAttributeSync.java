@@ -56,7 +56,7 @@ public final class EquipmentAttributeSync {
      * 分工：原版槽位靠原版自动生效；饰品槽靠本同步器。</p>
      */
     public static void sync(Player player) {
-        // 收集饰品槽物品（通过解耦接口，无下游注册时为空 → sum 为空 → 仅清理残留 modifier）
+        // 收集饰品槽物品
         List<ItemStack> stacks = new ArrayList<>();
         AccessorySlotProvider provider = AccessorySlotProvider.get();
         if (provider != null) {
@@ -65,11 +65,34 @@ public final class EquipmentAttributeSync {
             }
         }
 
+        // 收集技能装载槽物品（从 PlayerDataAPI 同步的 load_slots）
+        collectLoadSlots(player, stacks);
+
         // 按 yizmodqzk 自定义属性累加 modifier 值
         Map<Holder<Attribute>, Double> sum = collectYizAttributes(stacks);
 
         // 写入玩家属性（值=0 则移除）
         applyToPlayer(player, sum);
+    }
+
+    /** 从 PlayerDataAPI 读取装载槽物品加入收集列表。 */
+    private static void collectLoadSlots(Player player, List<ItemStack> stacks) {
+        try {
+            String raw = net.minecraft.client.yiz.api.PlayerDataAPI.get(player, "yizmodqzk:load_slots");
+            if (raw == null || raw.isEmpty()) return;
+            com.google.gson.JsonObject json =
+                com.google.gson.JsonParser.parseString(raw).getAsJsonObject();
+            for (String k : new String[]{"big", "s0", "s1", "s2"}) {
+                String snbt = json.has(k) ? json.get(k).getAsString() : "";
+                if (snbt.isEmpty()) continue;
+                try {
+                    net.minecraft.world.item.ItemStack.parse(
+                        player.registryAccess(),
+                        net.minecraft.nbt.TagParser.parseTag(snbt))
+                        .ifPresent(s -> { if (!s.isEmpty()) stacks.add(s); });
+                } catch (Exception ignored) {}
+            }
+        } catch (Exception ignored) {}
     }
 
     /**

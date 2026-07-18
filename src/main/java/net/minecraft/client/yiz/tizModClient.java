@@ -7,6 +7,17 @@ import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.client.yiz.api.ShaderManager;
 import net.minecraft.client.yiz.api.ShaderProtectionRegistry;
+import com.mojang.blaze3d.platform.InputConstants;
+import net.minecraft.client.yiz.handler.SkillKeyMappings;
+import net.minecraft.client.yiz.hud.BlockHud;
+import net.minecraft.client.yiz.hud.ChargeHud;
+import net.minecraft.client.yiz.hud.HudEditorScreen;
+import net.minecraft.client.yiz.hud.HudManager;
+import net.minecraft.client.yiz.hud.HudPositionConfig;
+import net.minecraft.client.yiz.hud.ManaHud;
+import net.minecraft.client.yiz.hud.ShieldHud;
+import net.minecraft.client.yiz.hud.SkillHud;
+import net.minecraft.client.yiz.hud.SkillInfoHud;
 import net.minecraft.client.yiz.ui.UIConfig;
 import net.minecraft.client.yiz.impl.WorldContainerDataStorage;
 import net.minecraft.server.level.ServerLevel;
@@ -39,13 +50,29 @@ public class tizModClient {
         modBus.addListener(this::onRegisterKeyMappings);
         modBus.addListener(ShaderProtectionRegistry::onRegisterShaders);
         modBus.addListener(ShaderManager::onRegisterShaders);
+        modBus.addListener(net.minecraft.client.yiz.lightning.render.LightningShaders::onRegisterShaders);
         modBus.addListener(this::onAtlasStitched);
 
         // 注册属性编辑台 Screen（阶段 B）
-        modBus.addListener(net.neoforged.neoforge.client.event.RegisterMenuScreensEvent.class, event ->
+        modBus.addListener(net.neoforged.neoforge.client.event.RegisterMenuScreensEvent.class, event -> {
             event.register(
                 net.minecraft.client.yiz.editor.AttributeEditorRegistries.ATTRIBUTE_EDITOR_MENU.get(),
-                net.minecraft.client.yiz.editor.AttributeEditorScreen::new));
+                net.minecraft.client.yiz.editor.AttributeEditorScreen::new);
+            event.register(
+                net.minecraft.client.yiz.editor.SkillConfigRegistries.SKILL_CONFIG_MENU.get(),
+                net.minecraft.client.yiz.editor.SkillConfigScreen::new);
+        });
+
+        // ═══ HUD 系统（管理能力由 yizmodqzk 提供） ═══
+        HudPositionConfig.load();
+        HudManager.register(new SkillHud());
+        HudManager.register(new ChargeHud());
+        HudManager.register(new ShieldHud());
+        HudManager.register(new BlockHud());
+        HudManager.register(new ManaHud());
+        HudManager.register(new SkillInfoHud());
+        NeoForge.EVENT_BUS.addListener(HudManager::onRenderGui);
+        NeoForge.EVENT_BUS.addListener(this::onSkillKeyTick);
 
         // Register Forge event bus handlers
         NeoForge.EVENT_BUS.register(this);
@@ -106,9 +133,8 @@ public class tizModClient {
      * Register key mappings so they appear in Controls settings and work properly.
      */
     private void onRegisterKeyMappings(RegisterKeyMappingsEvent event) {
-        event.register(UIConfig.getTogglePanelFixKey());
-        event.register(UIConfig.getTogglePanelKeyboardKey());
         event.register(UIConfig.getToggleAbolishPanelKey());
+        SkillKeyMappings.registerAll(event);
     }
 
     /**
@@ -121,17 +147,26 @@ public class tizModClient {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) return;
 
-        boolean ctrlHeld = Screen.hasControlDown();
+        // [里程碑1 调试] F8：在视线前方 spawn 一条闪电电弧，验证渲染管线。后续接正式技能后移除。
+        if (event.getKey() == GLFW.GLFW_KEY_F8) {
+            net.minecraft.world.phys.Vec3 eye = mc.player.getEyePosition(0f);
+            net.minecraft.world.phys.Vec3 to = eye.add(mc.player.getLookAngle().scale(8.0));
+            net.minecraft.client.yiz.lightning.LightningFX.spawnArc(eye, to);
+        }
 
-        // CTRL + C: 切换面板固定/跟随
-        if (ctrlHeld && UIConfig.isPanelFixKey(event.getKey(), event.getAction())) {
-            net.minecraft.client.yiz.client.render.HandheldPanelRenderer.toggleFixCurrent();
+        // [火花] F9：一键开关火花系统（总开关），actionbar 回显
+        if (event.getKey() == GLFW.GLFW_KEY_F9) {
+            boolean now = net.minecraft.client.yiz.lightning.config.SparkConfig.toggleEnabled();
+            mc.player.displayClientMessage(
+                    net.minecraft.network.chat.Component.literal("§b[闪电] 火花系统：" + (now ? "§a开" : "§c关")),
+                    true);
         }
 
         // F7: 打开物品废除面板（单独键，不需要 CTRL，避免与复述功能 CTRL+B 冲突）
         if (UIConfig.isAbolishPanelKey(event.getKey(), event.getAction())) {
             mc.setScreen(new net.minecraft.client.yiz.ui.AbolishPanelScreen());
         }
+
     }
 
     // ══════════════════════════════════════════════════════════════════
@@ -142,6 +177,7 @@ public class tizModClient {
     public void onRenderLevelStage(RenderLevelStageEvent event) {
         net.minecraft.client.yiz.client.render.EntityLockRenderer.onRenderLevelStage(event);
         net.minecraft.client.yiz.client.render.HandheldPanelRenderer.onRenderLevelStage(event);
+        net.minecraft.client.yiz.lightning.render.LightningRenderer.onRenderLevelStage(event);
     }
 
     // ══════════════════════════════════════════════════════════════════
@@ -151,6 +187,8 @@ public class tizModClient {
     @SubscribeEvent
     public void onClientTickPost(net.neoforged.neoforge.client.event.ClientTickEvent.Post event) {
         net.minecraft.client.yiz.client.render.PanelInteractionManager.onClientTick();
+        net.minecraft.client.yiz.lightning.render.LightningRenderer.tick();
+        net.minecraft.client.yiz.api.ShockedEntityAPI.tick();
     }
 
     @SubscribeEvent
@@ -213,32 +251,80 @@ public class tizModClient {
     @SubscribeEvent
     public void onItemTooltip(net.neoforged.neoforge.event.entity.player.ItemTooltipEvent event) {
         var attrs = net.minecraft.client.yiz.ui.ItemAttributeDisplay.getAvailableAttributes(event.getItemStack());
-        if (attrs.isEmpty()) return;
-
         var lines = event.getToolTip();
 
-        // 清理上次追加的自定义行（避免重复叠加）
-        var attrNames = attrs.stream().map(a -> a.name()).collect(java.util.stream.Collectors.toSet());
+        // 先清理所有之前追加的自定义行
+        cleanTooltip(lines, attrs, event.getItemStack());
+
+        // 统一从 index=1 开始顺次插入：已觉醒 → 装备时
+        int insertAt = 1;
+        insertAt = insertAwakenedEffects(event.getItemStack(), lines, insertAt);
+        if (!attrs.isEmpty()) {
+            lines.add(insertAt++, net.minecraft.network.chat.Component.literal("在装备时：")
+                .withStyle(net.minecraft.ChatFormatting.GRAY));
+            for (var attr : attrs) {
+                var line = net.minecraft.network.chat.Component.literal("  " + attr.name() + "：");
+                line.append(net.minecraft.network.chat.Component.literal(attr.value())
+                    .withStyle(net.minecraft.ChatFormatting.BLUE));
+                lines.add(insertAt++, line);
+            }
+            lines.add(insertAt, net.minecraft.network.chat.Component.empty());
+        }
+    }
+
+    /** 清理之前追加的所有自定义行。 */
+    private static void cleanTooltip(
+            java.util.List<net.minecraft.network.chat.Component> lines,
+            java.util.List<net.minecraft.client.yiz.ui.ItemAttributeDisplay.AttributeInfo> attrs,
+            net.minecraft.world.item.ItemStack stack) {
+        var entries = net.minecraft.client.yiz.editor.SkillEnhanceConfig.getEnhancementsFor(stack);
         var it = lines.iterator();
         while (it.hasNext()) {
-            String text = it.next().getString().trim();
-            if (attrNames.stream().anyMatch(n -> text.startsWith(n + "：") || text.startsWith(n + ":"))) {
-                it.remove();
+            String txt = it.next().getString().trim();
+            if (txt.isEmpty()) continue;
+            if (txt.equals("在装备时：") || txt.equals("已觉醒效果：")) { it.remove(); continue; }
+            // 属性行
+            if (!attrs.isEmpty()) {
+                var attrNames = attrs.stream().map(a -> a.name()).collect(java.util.stream.Collectors.toSet());
+                if (attrNames.stream().anyMatch(n -> txt.startsWith(n + "：") || txt.startsWith(n + ":"))) {
+                    it.remove(); continue;
+                }
+            }
+            // 觉醒名称行
+            for (var e : entries) {
+                if (txt.equals(e.displayName())) { it.remove(); break; }
             }
         }
+    }
 
-        // 置顶蓝色属性块（插入在物品名称下方，防止长 tooltip 被挤出屏幕）
-        int insertAt = 1; // 紧跟物品名称（index 0）
-        lines.add(insertAt++, net.minecraft.network.chat.Component.literal("在装备时：")
-            .withStyle(net.minecraft.ChatFormatting.GRAY));
-        for (var attr : attrs) {
-            var line = net.minecraft.network.chat.Component.literal("  " + attr.name() + "：");
-            line.append(net.minecraft.network.chat.Component.literal(attr.value())
-                .withStyle(net.minecraft.ChatFormatting.BLUE));
-            lines.add(insertAt++, line);
+    /** 插入已觉醒效果行，返回下一个可用的 insertAt。 */
+    private static int insertAwakenedEffects(net.minecraft.world.item.ItemStack stack,
+                                             java.util.List<net.minecraft.network.chat.Component> lines,
+                                             int insertAt) {
+        if (!(stack.getItem() instanceof net.minecraft.client.yiz.api.ISkillItem)
+            && !(stack.getItem() instanceof net.minecraft.client.yiz.api.IPassiveItem)) return insertAt;
+
+        var entries = net.minecraft.client.yiz.editor.SkillEnhanceConfig.getEnhancementsFor(stack);
+        if (entries.isEmpty()) return insertAt;
+
+        var mc = Minecraft.getInstance();
+        if (mc.player == null) return insertAt;
+        int[] levels = net.minecraft.client.yiz.editor.SkillConfigStorage.getEnhanceLevels(stack);
+
+        boolean hasActive = false;
+        for (int i = 0; i < Math.min(entries.size(), levels.length); i++)
+            if (levels[i] > 0) { hasActive = true; break; }
+        if (!hasActive) return insertAt;
+
+        lines.add(insertAt++, net.minecraft.network.chat.Component.literal("已觉醒效果：")
+            .withStyle(net.minecraft.ChatFormatting.BLUE));
+        for (int i = 0; i < Math.min(entries.size(), levels.length); i++) {
+            if (levels[i] > 0) {
+                lines.add(insertAt++, net.minecraft.network.chat.Component.literal(entries.get(i).displayName())
+                    .withStyle(net.minecraft.ChatFormatting.GRAY));
+            }
         }
-        // 属性块与后面内容之间加一个空行
-        lines.add(insertAt, net.minecraft.network.chat.Component.empty());
+        return insertAt;
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -263,5 +349,270 @@ public class tizModClient {
             .bounds(event.getScreen().width / 2 - 100, event.getScreen().height / 4 + 120, 200, 20)
             .build()
         );
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    //  [闪电特效] /yzarc 调试命令：生成持续 20 秒的固定电弧，便于绕着观察立体感
+    // ══════════════════════════════════════════════════════════════
+
+    @SubscribeEvent
+    public void onRegisterCommands(net.neoforged.neoforge.event.RegisterCommandsEvent event) {
+        event.getDispatcher().register(
+                net.minecraft.commands.Commands.literal("yzarc")
+                        .executes(this::spawnTestArc)
+                        .then(net.minecraft.commands.Commands.literal("clear").executes(this::clearArcs))
+                        .then(net.minecraft.commands.Commands.literal("surface").executes(this::spawnSurfaceTest))
+                        .then(net.minecraft.commands.Commands.literal("ball").executes(this::spawnBallTest))
+                        .then(net.minecraft.commands.Commands.literal("shoot").executes(this::spawnShootTest))
+                        .then(net.minecraft.commands.Commands.literal("sparktest").executes(this::sparkTest))
+                        .then(net.minecraft.commands.Commands.literal("spark")
+                                .then(net.minecraft.commands.Commands.literal("on").executes(this::sparkOn))
+                                .then(net.minecraft.commands.Commands.literal("off").executes(this::sparkOff))
+                                .then(net.minecraft.commands.Commands.literal("endpoint").executes(this::sparkToggleEndpoint))
+                                .then(net.minecraft.commands.Commands.literal("hit").executes(this::sparkToggleHit))
+                                .then(net.minecraft.commands.Commands.literal("surface").executes(this::sparkToggleSurface))
+                                .executes(this::sparkStatus))
+                        .then(net.minecraft.commands.Commands.literal("skill")
+                                .then(net.minecraft.commands.Commands.literal("a").executes(this::skillA))
+                                .then(net.minecraft.commands.Commands.literal("b").executes(this::skillB))
+                                .then(net.minecraft.commands.Commands.literal("c").executes(this::skillC)))
+        );
+    }
+
+    private int spawnTestArc(com.mojang.brigadier.context.CommandContext<net.minecraft.commands.CommandSourceStack> ctx) {
+        net.minecraft.commands.CommandSourceStack src = ctx.getSource();
+        net.minecraft.world.entity.Entity ent = src.getEntity();
+        if (ent == null) {
+            src.sendFailure(net.minecraft.network.chat.Component.literal("需要由玩家执行"));
+            return 0;
+        }
+        net.minecraft.world.phys.Vec3 eye = ent.getEyePosition(1f);
+        net.minecraft.world.phys.Vec3 to = eye.add(ent.getViewVector(1f).scale(8.0));
+        net.minecraft.client.yiz.lightning.LightningFX.spawnArc(eye, to, 20f, 0.055f,
+                net.minecraft.client.yiz.lightning.LightningFX.DEFAULT_R,
+                net.minecraft.client.yiz.lightning.LightningFX.DEFAULT_G,
+                net.minecraft.client.yiz.lightning.LightningFX.DEFAULT_B);
+        src.sendSuccess(() -> net.minecraft.network.chat.Component.literal("§b[闪电] 已在视线前方生成 20 秒电弧，可绕着观察（/yzarc clear 清除）"), false);
+        return 1;
+    }
+
+    private int clearArcs(com.mojang.brigadier.context.CommandContext<net.minecraft.commands.CommandSourceStack> ctx) {
+        net.minecraft.client.yiz.lightning.render.LightningRenderer.clear();
+        ctx.getSource().sendSuccess(() -> net.minecraft.network.chat.Component.literal("§b[闪电] 已清除所有电弧"), false);
+        return 1;
+    }
+
+    private int spawnSurfaceTest(com.mojang.brigadier.context.CommandContext<net.minecraft.commands.CommandSourceStack> ctx) {
+        net.minecraft.commands.CommandSourceStack src = ctx.getSource();
+        net.minecraft.world.entity.Entity ent = src.getEntity();
+        if (!(ent instanceof net.minecraft.world.entity.player.Player player)) {
+            src.sendFailure(net.minecraft.network.chat.Component.literal("需要由玩家执行"));
+            return 0;
+        }
+        // 找准星前方最近的可拾取实体；找不到则对自己施加（便于观察）
+        net.minecraft.world.phys.Vec3 eye = player.getEyePosition(1f);
+        net.minecraft.world.phys.Vec3 view = player.getViewVector(1f);
+        net.minecraft.world.phys.AABB search = player.getBoundingBox().expandTowards(view.scale(16)).inflate(1.0);
+        net.minecraft.world.entity.Entity target = player.level()
+                .getEntities(player, search, e -> e.isAlive() && e.isPickable())
+                .stream()
+                .min(java.util.Comparator.comparingDouble(e -> e.getEyePosition().distanceToSqr(eye)))
+                .orElse(null);
+        if (target == null) target = player;
+        net.minecraft.client.yiz.lightning.LightningFX.spawnSurfaceArc(target);
+        net.minecraft.world.entity.Entity t = target;
+        src.sendSuccess(() -> net.minecraft.network.chat.Component.literal(
+                "§b[闪电] 已对 " + t.getName().getString() + " 施加 20 秒表面缠绕电弧"), false);
+        return 1;
+    }
+
+    private int spawnBallTest(com.mojang.brigadier.context.CommandContext<net.minecraft.commands.CommandSourceStack> ctx) {
+        net.minecraft.commands.CommandSourceStack src = ctx.getSource();
+        net.minecraft.world.entity.Entity ent = src.getEntity();
+        if (!(ent instanceof net.minecraft.world.entity.player.Player player)) {
+            src.sendFailure(net.minecraft.network.chat.Component.literal("需要由玩家执行"));
+            return 0;
+        }
+        // 头顶上方 1 格 = FollowingEntity(玩家) + 偏移(0, 身高+1, 0)
+        var headPos = net.minecraft.client.yiz.lightning.orchestrate.PositionSupplier.offset(
+                net.minecraft.client.yiz.lightning.orchestrate.PositionSupplier.following(player),
+                0, player.getBbHeight() + 1.0, 0);
+        net.minecraft.client.yiz.lightning.LightningFX.spawnBall(headPos, 0.5f, 20f, true);
+        src.sendSuccess(() -> net.minecraft.network.chat.Component.literal("§b[闪电] 已在头顶生成 20 秒球状闪电"), false);
+        return 1;
+    }
+
+    private int spawnShootTest(com.mojang.brigadier.context.CommandContext<net.minecraft.commands.CommandSourceStack> ctx) {
+        net.minecraft.commands.CommandSourceStack src = ctx.getSource();
+        net.minecraft.world.entity.Entity ent = src.getEntity();
+        if (!(ent instanceof net.minecraft.world.entity.player.Player player)) {
+            src.sendFailure(net.minecraft.network.chat.Component.literal("需要由玩家执行"));
+            return 0;
+        }
+        // 从眼睛朝视线方向发射飞行球，速度 20 格/s，寿命 2 秒（飞约 40 格）
+        net.minecraft.world.phys.Vec3 eye = player.getEyePosition(1f);
+        net.minecraft.world.phys.Vec3 vel = player.getViewVector(1f).scale(8.0);
+        var pos = net.minecraft.client.yiz.lightning.orchestrate.PositionSupplier.flying(eye, vel);
+        net.minecraft.client.yiz.lightning.LightningFX.spawnBall(pos, 1.0f, 2.0f, true);
+        src.sendSuccess(() -> net.minecraft.network.chat.Component.literal("§b[闪电] 已发射球状闪电（8 格/秒，2 秒）"), false);
+        return 1;
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  [火花·阶段1] /yzarc sparktest：静止亮点 + 飞行拖尾，验证火花渲染管线
+    // ══════════════════════════════════════════════════════════════════
+
+    private int sparkTest(com.mojang.brigadier.context.CommandContext<net.minecraft.commands.CommandSourceStack> ctx) {
+        net.minecraft.commands.CommandSourceStack src = ctx.getSource();
+        net.minecraft.world.entity.Entity ent = src.getEntity();
+        if (!(ent instanceof net.minecraft.world.entity.player.Player player)) {
+            src.sendFailure(net.minecraft.network.chat.Component.literal("需要由玩家执行"));
+            return 0;
+        }
+        net.minecraft.world.phys.Vec3 eye = player.getEyePosition(1f);
+        net.minecraft.world.phys.Vec3 fwd = player.getViewVector(1f);
+        // 静止火花：视线前方 6 格，纯亮点无拖尾（velocity=0 退化对称亮点）
+        net.minecraft.client.yiz.lightning.render.LightningRenderer.enqueueSpark(
+                new net.minecraft.client.yiz.lightning.fx.SparkEffect(
+                        net.minecraft.client.yiz.lightning.orchestrate.PositionSupplier.fixed(eye.add(fwd.scale(6))),
+                        net.minecraft.world.phys.Vec3.ZERO,
+                        java.util.concurrent.ThreadLocalRandom.current().nextInt(),
+                        0.08f, 1.5f, 0.40f, 0.60f, 1.00f,
+                        net.minecraft.client.yiz.lightning.fx.SparkEffect.Kind.HIT, 0f));
+        // 拖尾火花：视线前方 4 格，沿视线方向飞 6 格/s，观察拖尾朝向运动方向
+        net.minecraft.client.yiz.lightning.render.LightningRenderer.enqueueSpark(
+                new net.minecraft.client.yiz.lightning.fx.SparkEffect(
+                        net.minecraft.client.yiz.lightning.orchestrate.PositionSupplier.fixed(eye.add(fwd.scale(4))),
+                        fwd.scale(6),
+                        java.util.concurrent.ThreadLocalRandom.current().nextInt(),
+                        0.06f, 1.2f, 0.40f, 0.60f, 1.00f,
+                        net.minecraft.client.yiz.lightning.fx.SparkEffect.Kind.ENDPOINT, 2f));
+        src.sendSuccess(() -> net.minecraft.network.chat.Component.literal("§b[闪电] 火花渲染测试：静止亮点 + 沿视线飞行拖尾（~1.5s）"), false);
+        return 1;
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  [火花·阶段3] /yzarc spark on|off|endpoint|hit|surface — 运行时开关
+    // ══════════════════════════════════════════════════════════════════
+
+    private int sparkOn(com.mojang.brigadier.context.CommandContext<net.minecraft.commands.CommandSourceStack> ctx) {
+        net.minecraft.client.yiz.lightning.config.SparkConfig.setAll(true);
+        ctx.getSource().sendSuccess(() -> net.minecraft.network.chat.Component.literal("§b[闪电] 火花系统：全开（端点/命中/表面）"), false);
+        return 1;
+    }
+
+    private int sparkOff(com.mojang.brigadier.context.CommandContext<net.minecraft.commands.CommandSourceStack> ctx) {
+        net.minecraft.client.yiz.lightning.config.SparkConfig.setAll(false);
+        ctx.getSource().sendSuccess(() -> net.minecraft.network.chat.Component.literal("§b[闪电] 火花系统：全关"), false);
+        return 1;
+    }
+
+    private int sparkToggleEndpoint(com.mojang.brigadier.context.CommandContext<net.minecraft.commands.CommandSourceStack> ctx) {
+        boolean now = net.minecraft.client.yiz.lightning.config.SparkConfig.toggleEndpoint();
+        ctx.getSource().sendSuccess(() -> net.minecraft.network.chat.Component.literal("§b[闪电] 端点火花：" + onOff(now)), false);
+        return 1;
+    }
+
+    private int sparkToggleHit(com.mojang.brigadier.context.CommandContext<net.minecraft.commands.CommandSourceStack> ctx) {
+        boolean now = net.minecraft.client.yiz.lightning.config.SparkConfig.toggleHit();
+        ctx.getSource().sendSuccess(() -> net.minecraft.network.chat.Component.literal("§b[闪电] 命中火花：" + onOff(now)), false);
+        return 1;
+    }
+
+    private int sparkToggleSurface(com.mojang.brigadier.context.CommandContext<net.minecraft.commands.CommandSourceStack> ctx) {
+        boolean now = net.minecraft.client.yiz.lightning.config.SparkConfig.toggleSurface();
+        ctx.getSource().sendSuccess(() -> net.minecraft.network.chat.Component.literal("§b[闪电] 表面火花：" + onOff(now)), false);
+        return 1;
+    }
+
+    private int sparkStatus(com.mojang.brigadier.context.CommandContext<net.minecraft.commands.CommandSourceStack> ctx) {
+        boolean en = net.minecraft.client.yiz.lightning.config.SparkConfig.isEnabled();
+        boolean ep = net.minecraft.client.yiz.lightning.config.SparkConfig.isEndpoint();
+        boolean ht = net.minecraft.client.yiz.lightning.config.SparkConfig.isHit();
+        boolean sf = net.minecraft.client.yiz.lightning.config.SparkConfig.isSurface();
+        ctx.getSource().sendSuccess(() -> net.minecraft.network.chat.Component.literal(
+                "§b[闪电] 火花系统 " + onOff(en)
+                        + " §7|§r 端点 " + onOff(ep)
+                        + " §7|§r 命中 " + onOff(ht)
+                        + " §7|§r 表面 " + onOff(sf)), false);
+        return 1;
+    }
+
+    private static String onOff(boolean v) { return v ? "§a开" : "§c关"; }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  [里程碑4] 预设技能 /yzarc skill a|b|c
+    // ══════════════════════════════════════════════════════════════════
+
+    private int runSkill(com.mojang.brigadier.context.CommandContext<net.minecraft.commands.CommandSourceStack> ctx,
+                         java.util.function.Consumer<net.minecraft.world.entity.player.Player> fn, String name) {
+        net.minecraft.commands.CommandSourceStack src = ctx.getSource();
+        if (!(src.getEntity() instanceof net.minecraft.world.entity.player.Player player)) {
+            src.sendFailure(net.minecraft.network.chat.Component.literal("需要由玩家执行"));
+            return 0;
+        }
+        fn.accept(player);
+        String n = name;
+        src.sendSuccess(() -> net.minecraft.network.chat.Component.literal("§b[闪电] 释放 " + n), false);
+        return 1;
+    }
+
+    private int skillA(com.mojang.brigadier.context.CommandContext<net.minecraft.commands.CommandSourceStack> ctx) {
+        return runSkill(ctx, net.minecraft.client.yiz.lightning.LightningFX::skillA, "技能A（头顶球·自动链式）");
+    }
+
+    private int skillB(com.mojang.brigadier.context.CommandContext<net.minecraft.commands.CommandSourceStack> ctx) {
+        return runSkill(ctx, net.minecraft.client.yiz.lightning.LightningFX::skillB, "技能B（定向·命中扩散）");
+    }
+
+    private int skillC(com.mojang.brigadier.context.CommandContext<net.minecraft.commands.CommandSourceStack> ctx) {
+        return runSkill(ctx, net.minecraft.client.yiz.lightning.LightningFX::skillC, "技能C（范围·群体链式）");
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    //  技能释放：R/G/C/V 按键监听
+    // ════════════════════════════════════════════════════════════════
+
+    private void onSkillKeyTick(net.neoforged.neoforge.client.event.ClientTickEvent.Post event) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || mc.level == null) return;
+        if (mc.screen != null) return; // 有 GUI 打开时不响应
+
+        // V：切换下一个小技能槽（1→2→3→1）
+        if (SkillKeyMappings.SWITCH.consumeClick()) {
+            net.minecraft.client.yiz.hud.SkillHud.selectedSmall =
+                (net.minecraft.client.yiz.hud.SkillHud.selectedSmall + 1) % 3;
+        }
+        // Y：释放大槽技能（slot 0）
+        if (SkillKeyMappings.BIG.consumeClick()) {
+            net.minecraft.client.yiz.handler.CastDirectionTracker.capture(mc.player);
+            net.minecraft.client.yiz.network.C2SSkillCastPayload.send(0);
+        }
+        // R：释放当前选中的小槽技能（slot = selectedSmall + 1）
+        if (SkillKeyMappings.SKILL.consumeClick()) {
+            int slot = net.minecraft.client.yiz.hud.SkillHud.selectedSmall + 1;
+            net.minecraft.client.yiz.handler.CastDirectionTracker.capture(mc.player);
+            net.minecraft.client.yiz.network.C2SSkillCastPayload.send(slot);
+        }
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    //  HUD 编辑器：DEL+ALT 边沿触发打开
+    // ════════════════════════════════════════════════════════════════
+
+    private boolean delAltWasDown = false;
+
+    private void onHudKeyTick(net.neoforged.neoforge.client.event.ClientTickEvent.Post event) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null) return;
+        long window = mc.getWindow().getWindow();
+        boolean alt = InputConstants.isKeyDown(window, GLFW.GLFW_KEY_LEFT_ALT)
+                   || InputConstants.isKeyDown(window, GLFW.GLFW_KEY_RIGHT_ALT);
+        boolean del = InputConstants.isKeyDown(window, GLFW.GLFW_KEY_DELETE);
+        boolean both = alt && del;
+        if (both && !delAltWasDown && mc.screen == null) {
+            mc.setScreen(new HudEditorScreen());
+        }
+        delAltWasDown = both;
     }
 }

@@ -1,6 +1,8 @@
 package net.minecraft.client.yiz;
 
 import net.minecraft.client.yiz.api.AttributeBalanceRegistry;
+import net.minecraft.client.yiz.api.StatusEffectAttributeRegistry;
+import net.minecraft.client.yiz.api.StatusEffectAttributeRegistry.StatusEffectType;
 import net.minecraft.client.yiz.api.CritTracker;
 import net.minecraft.client.yiz.api.ProjectileReflectionSystem;
 import net.minecraft.client.yiz.attribute.YizAttributes;
@@ -54,6 +56,12 @@ public class tizMod {
         // 注册属性编辑台方块（阶段 A：方块+物品）
         net.minecraft.client.yiz.editor.AttributeEditorRegistries.register(modEventBus);
 
+        // 注册技能配置界面 Menu
+        net.minecraft.client.yiz.editor.SkillConfigRegistries.register(modEventBus);
+
+        // 注册技能强化物品 + 标签页
+        net.minecraft.client.yiz.editor.EnhanceItemRegistries.register(modEventBus);
+
         // 注册 /yiz abolish / /yiz restore 物品废除 + 背包废除指令
         net.minecraft.client.yiz.tool.abolish.YizAbolishCommand.register();
 
@@ -65,6 +73,22 @@ public class tizMod {
 
         // 注册玩家数据附件
         ModAttachments.register(modEventBus);
+
+        // 注册技能装载槽数据键（技能 HUD 同步用）
+        net.minecraft.client.yiz.api.PlayerDataAPI.register(
+            "yizmodqzk:load_slots", com.mojang.serialization.Codec.STRING, "");
+        // 注册技能冷却数据键
+        net.minecraft.client.yiz.api.PlayerDataAPI.register(
+            "yizmodqzk:skill_cooldowns", com.mojang.serialization.Codec.STRING, "{}");
+        // 注册技能充能数据键（充能式冷却：当前充能数 + 回充时间戳）
+        net.minecraft.client.yiz.api.PlayerDataAPI.register(
+            "yizmodqzk:skill_charges", com.mojang.serialization.Codec.STRING, "{}");
+        // 注册被动充能状态键（攻击计数 + 临时buff态，供 HUD 同步）
+        net.minecraft.client.yiz.api.PlayerDataAPI.register(
+            "yizmodqzk:charge_state", com.mojang.serialization.Codec.STRING, "{}");
+        // 注册技能配置容器持久化键
+        net.minecraft.client.yiz.api.PlayerDataAPI.register(
+            "yizmodqzk:skill_config_slots", com.mojang.serialization.Codec.STRING, "");
 
         // 注册自定义属性（暴击率、暴伤等）
         YizAttributes.ATTRIBUTES.register(modEventBus);
@@ -82,17 +106,36 @@ public class tizMod {
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.SPLASH_RADIUS);
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.SPLASH_DAMAGE);
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.SPLASH_FALLOFF);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.COOLDOWN_REDUCTION);
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.HUIXIN);
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.KEGONG);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.SHIELD_VALUE);
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.DAMAGE_BLOCK);
+                // 蓝条系统
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.MAX_MANA);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.MANA_REGEN);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.MANA_REGEN_PCT);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.MANA_COST_REDUCTION);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.MANA_COST);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.MANA_COST_PER_SEC);
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.GENERIC_DAMAGE);
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.DAMAGE_REDUCTION);
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.ON_HURT);
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.COUNTER_RATE);
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.COUNTER_VALUE);
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.COUNTER_COUNT);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.COMBO_RATE);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.COMBO_VALUE);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.COMBO_COUNT);
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.UNDYING);
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.ARMOR);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.ATTACK_STRENGTH);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.SPELL_DEFENSE);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.SPELL_POWER);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.COOLDOWN_VALUE);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.SKILL_RANGE);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.SKILL_INTERVAL);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.MAX_CHARGES);
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.PROJECTILE_REFLECTION);
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.NO_COLLISION);
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.KNOCKBACK_IMMUNITY);
@@ -130,16 +173,48 @@ public class tizMod {
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.MAX_MINIONS);
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.MAX_SENTRIES);
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.WATER_BREATH_TIME);
-                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.ARROW_DAMAGE);
-                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.ARROW_SPEED);
-                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.ARROW_SAVE_CHANCE);
+                // 状态效果属性
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.STUN_ATTACK);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.SLOW_ATTACK);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.FREEZE_ATTACK);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.SHOCK_ATTACK);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.KNOCKBACK_ATTACK);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.STUN_DEFENSE);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.SLOW_DEFENSE);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.FREEZE_DEFENSE);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.SHOCK_DEFENSE);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.KNOCKBACK_DEFENSE);
+                // 状态效果共享属性
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.STUN_TIME);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.SLOW_TIME);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.FREEZE_TIME);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.SHOCK_TIME);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.SHOCK_RANGE);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.SHOCK_INTERVAL);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.KNOCKBACK_TIME);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.STUN_DAMAGE);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.SLOW_DAMAGE);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.FREEZE_DAMAGE);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.SHOCK_DAMAGE);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.KNOCKBACK_DAMAGE);
             });
 
         // 声明走全槽位汇总的 yizmodqzk 自定义属性（主手/副手/盔甲/饰品槽全部生效）
         // 注：未在此注册的 yizmodqzk 属性仍会被汇总生效，只是卸装时不会被主动清理 modifier
         net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.DAMAGE_REDUCTION);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.SHIELD_VALUE);
         net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.DAMAGE_BLOCK);
+        // 蓝条系统
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.MAX_MANA);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.MANA_REGEN);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.MANA_REGEN_PCT);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.MANA_COST_REDUCTION);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.MANA_COST);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.MANA_COST_PER_SEC);
         net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.ARMOR);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.ATTACK_STRENGTH);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.SPELL_DEFENSE);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.SPELL_POWER);
         net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.GENERIC_DAMAGE);
         net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.MELEE_DAMAGE);
         net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.RANGED_DAMAGE);
@@ -155,6 +230,7 @@ public class tizMod {
         net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.SPLASH_RADIUS);
         net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.SPLASH_DAMAGE);
         net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.SPLASH_FALLOFF);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.COOLDOWN_REDUCTION);
         net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.HUIXIN);
         net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.KEGONG);
         net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.DODGE_CHANCE);
@@ -164,6 +240,9 @@ public class tizMod {
         net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.COUNTER_RATE);
         net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.COUNTER_VALUE);
         net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.COUNTER_COUNT);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.COMBO_RATE);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.COMBO_VALUE);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.COMBO_COUNT);
         net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.UNDYING);
         net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.KNOCKBACK_IMMUNITY);
         net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.PROJECTILE_IMMUNITY);
@@ -176,6 +255,42 @@ public class tizMod {
         net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.LAVA_DAMAGE_REDUCTION_FLAT);
         net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.WATER_BREATH_TIME);
         net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.WATER_BREATH_TIME_FLAT);
+        // 状态效果属性
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.STUN_ATTACK);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.SLOW_ATTACK);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.FREEZE_ATTACK);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.SHOCK_ATTACK);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.KNOCKBACK_ATTACK);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.STUN_DEFENSE);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.SLOW_DEFENSE);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.FREEZE_DEFENSE);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.SHOCK_DEFENSE);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.KNOCKBACK_DEFENSE);
+        // 状态效果共享属性
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.STUN_TIME);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.SLOW_TIME);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.FREEZE_TIME);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.SHOCK_TIME);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.SHOCK_RANGE);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.SHOCK_INTERVAL);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.KNOCKBACK_TIME);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.STUN_DAMAGE);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.SLOW_DAMAGE);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.FREEZE_DAMAGE);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.SHOCK_DAMAGE);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.KNOCKBACK_DAMAGE);
+
+        // 状态效果属性 → 注册表绑定
+        StatusEffectAttributeRegistry.registerAttack(YizAttributes.STUN_ATTACK,      StatusEffectType.STUN);
+        StatusEffectAttributeRegistry.registerAttack(YizAttributes.SLOW_ATTACK,      StatusEffectType.SLOW);
+        StatusEffectAttributeRegistry.registerAttack(YizAttributes.FREEZE_ATTACK,    StatusEffectType.FREEZE);
+        StatusEffectAttributeRegistry.registerAttack(YizAttributes.SHOCK_ATTACK,     StatusEffectType.SHOCK);
+        StatusEffectAttributeRegistry.registerAttack(YizAttributes.KNOCKBACK_ATTACK, StatusEffectType.KNOCKBACK);
+        StatusEffectAttributeRegistry.registerDefense(YizAttributes.STUN_DEFENSE,      StatusEffectType.STUN);
+        StatusEffectAttributeRegistry.registerDefense(YizAttributes.SLOW_DEFENSE,      StatusEffectType.SLOW);
+        StatusEffectAttributeRegistry.registerDefense(YizAttributes.FREEZE_DEFENSE,    StatusEffectType.FREEZE);
+        StatusEffectAttributeRegistry.registerDefense(YizAttributes.SHOCK_DEFENSE,     StatusEffectType.SHOCK);
+        StatusEffectAttributeRegistry.registerDefense(YizAttributes.KNOCKBACK_DEFENSE, StatusEffectType.KNOCKBACK);
 
         // 配置伤害增幅属性的堆叠模式（默认 MULTIPLY → 改为 ADD 防膨胀）
         YizAttributes.setStackMode(YizAttributes.GENERIC_DAMAGE, YizAttributes.StackMode.ADD);
@@ -193,6 +308,10 @@ public class tizMod {
         });
 
         // Register Forge event handlers
+        // 锁定系统（会心/渴攻）——框架内置逻辑
+        NeoForge.EVENT_BUS.addListener(net.minecraft.client.yiz.handler.LockOnHandler::onPlayerTick);
+        NeoForge.EVENT_BUS.addListener(net.minecraft.client.yiz.handler.LockOnHandler::onLivingDamagePre);
+
         NeoForge.EVENT_BUS.addListener(this::onPlayerLogin);
         NeoForge.EVENT_BUS.addListener(this::onPlayerClone);
         NeoForge.EVENT_BUS.addListener(this::onPlayerTick);
@@ -228,6 +347,17 @@ public class tizMod {
     private void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
         if (event.getEntity() instanceof ServerPlayer sp) {
             resetUndying(sp);
+            net.minecraft.client.yiz.handler.PassiveChargeTracker.onLogin(sp);
+            // 加载技能配置存储（被动/技能/装载槽），使 onWornTick 分发器登录后即可读到被动槽内容
+            var skillData = net.minecraft.client.yiz.editor.SkillConfigStorage.getOrCreate(sp.getUUID());
+            net.minecraft.client.yiz.editor.SkillConfigStorage.loadFromPlayerData(sp, skillData);
+            // 初始化技能充能（各槽补满起步）
+            net.minecraft.client.yiz.handler.SkillChargeManager.onLogin(sp);
+            // 攻击强度默认 1 点
+            var atkStr = sp.getAttribute(YizAttributes.ATTACK_STRENGTH);
+            if (atkStr != null && atkStr.getBaseValue() < 1.0) {
+                atkStr.setBaseValue(1.0);
+            }
             LOGGER.debug("Player {} logged in", sp.getGameProfile().getName());
         }
     }
@@ -258,15 +388,96 @@ public class tizMod {
         net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.sync(event.getEntity());
         // ARMOR 镜像：1 点防御 = +1 护甲值 + +1 盔甲韧性
         mirrorArmor(event.getEntity());
+        mirrorSpellDefense(event.getEntity());
         // ATTACK_RANGE 镜像：1 点 = +1 格交互距离
         mirrorAttackRange(event.getEntity());
         // 创造模式自动保护 + 重生无敌过期检查
         CreativeProtectionHandler.onPlayerTick(event.getEntity());
+        // 被动物品 tick 分发（服务端权威）：遍历被动装载槽，调用 IPassiveItem.onWornTick
+        dispatchPassiveTick(event.getEntity());
+        // 技能充能回充（服务端，仅 ServerPlayer）
+        if (event.getEntity() instanceof net.minecraft.server.level.ServerPlayer sp) {
+            net.minecraft.client.yiz.editor.EnhanceTagRegistry.tickLeixiaoshan(sp);
+            net.minecraft.client.yiz.editor.EnhanceTagRegistry.tickBenleixi(sp);
+            net.minecraft.client.yiz.editor.EnhanceTagRegistry.tickLeizhenqianli(sp);
+            net.minecraft.client.yiz.handler.SkillChargeManager.tickRecharge(sp);
+            net.minecraft.client.yiz.handler.TempAttributeHelper.tick(sp);
+            net.minecraft.client.yiz.tool.health.ManaTracker.tickRegen(sp);
+            net.minecraft.client.yiz.handler.ChargedShockTracker.tick(sp);
+        }
     }
+
+    /** 服务端每 tick 遍历被动装载槽，分发 {@link net.minecraft.client.yiz.api.IPassiveItem#onWornTick}（框架契约）。 */
+    private static void dispatchPassiveTick(net.minecraft.world.entity.player.Player player) {
+        if (player.level().isClientSide()) return;
+        var data = net.minecraft.client.yiz.editor.SkillConfigStorage.get(player.getUUID());
+        if (data == null) return;
+        for (int i = 0; i < 3; i++) {
+            net.minecraft.world.item.ItemStack stack = data.passiveLoad().getItem(i);
+            if (!stack.isEmpty() && stack.getItem() instanceof net.minecraft.client.yiz.api.IPassiveItem passive) {
+                passive.onWornTick(player, stack);
+            }
+        }
+    }
+
+    /**
+     * 玩家攻击命中时遍历被动装载槽，分发 {@link net.minecraft.client.yiz.api.IPassiveItem#onAttack}。
+     * <p>由 LivingEntityMixin 在攻击事件中调用。供需要"每次攻击"响应的被动（如天雷引充能）使用。</p>
+     *
+     * @param target 被攻击的实体
+     */
+    public static void dispatchPassiveAttack(net.minecraft.server.level.ServerPlayer player,
+                                             net.minecraft.world.entity.LivingEntity target) {
+        if (player.level().isClientSide()) return;
+        var data = net.minecraft.client.yiz.editor.SkillConfigStorage.get(player.getUUID());
+        if (data == null) return;
+        for (int i = 0; i < 3; i++) {
+            net.minecraft.world.item.ItemStack stack = data.passiveLoad().getItem(i);
+            if (!stack.isEmpty() && stack.getItem() instanceof net.minecraft.client.yiz.api.IPassiveItem passive) {
+                passive.onAttack(player, stack, target);
+            }
+        }
+    }
+
+    /** 攻击冷却缩减（实际逻辑在 PlayerMixin，此处仅触发）。 */
 
     /** 玩家重生 → 3 秒保护态。 */
     private void onCreativeProtectionRespawn(PlayerEvent.PlayerRespawnEvent event) {
         CreativeProtectionHandler.onPlayerRespawn(event.getEntity());
+    }
+
+    /** 法术防御镜像：≤20 提供击退韧性，>20 切换为击退免疫+无碰撞。 */
+    private static void mirrorSpellDefense(net.minecraft.world.entity.LivingEntity entity) {
+        var inst = entity.getAttribute(YizAttributes.SPELL_DEFENSE);
+        if (inst == null) return;
+        double val = inst.getValue();
+        if (val <= 20.0) {
+            net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler.setEntityAttribute(
+                entity, net.minecraft.world.entity.ai.attributes.Attributes.KNOCKBACK_RESISTANCE,
+                "yiz_spell_defense_mirror", val,
+                net.minecraft.world.entity.ai.attributes.AttributeModifier.Operation.ADD_VALUE);
+            net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler.setEntityAttribute(
+                entity, YizAttributes.KNOCKBACK_IMMUNITY,
+                "yiz_spell_defense_ki", 0,
+                net.minecraft.world.entity.ai.attributes.AttributeModifier.Operation.ADD_VALUE);
+            net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler.setEntityAttribute(
+                entity, YizAttributes.NO_COLLISION,
+                "yiz_spell_defense_nc", 0,
+                net.minecraft.world.entity.ai.attributes.AttributeModifier.Operation.ADD_VALUE);
+        } else {
+            net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler.setEntityAttribute(
+                entity, net.minecraft.world.entity.ai.attributes.Attributes.KNOCKBACK_RESISTANCE,
+                "yiz_spell_defense_mirror", 0,
+                net.minecraft.world.entity.ai.attributes.AttributeModifier.Operation.ADD_VALUE);
+            net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler.setEntityAttribute(
+                entity, YizAttributes.KNOCKBACK_IMMUNITY,
+                "yiz_spell_defense_ki", 1,
+                net.minecraft.world.entity.ai.attributes.AttributeModifier.Operation.ADD_VALUE);
+            net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler.setEntityAttribute(
+                entity, YizAttributes.NO_COLLISION,
+                "yiz_spell_defense_nc", 1,
+                net.minecraft.world.entity.ai.attributes.AttributeModifier.Operation.ADD_VALUE);
+        }
     }
 
     /** 防御力镜像：读 yizmodqzk:armor → 1:1 写到原版 ARMOR + ARMOR_TOUGHNESS。 */

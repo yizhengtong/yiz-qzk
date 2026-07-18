@@ -1,0 +1,35 @@
+{
+  "description": {
+    "translate": "enchantment.yizmodqzk.cooldown_reduction",
+    "fallback": "Cooldown Reduction"
+  },
+  "exclusive_set": [],
+  "supported_items": "#minecraft:enchantable/sharp_weapon",
+  "primary_items": "#minecraft:enchantable/sharp_weapon",
+  "weight": 5,
+  "max_level": 5,
+  "min_cost": {
+    "base": 10,
+    "per_level_above_first": 10
+  },
+  "max_cost": {
+    "base": 50,
+    "per_level_above_first": 10
+  },
+  "anvil_cost": 2,
+  "slots": ["mainhand"],
+  "effects": {
+    "minecraft:attributes": [
+      {
+        "attribute": "yizmodqzk:cooldown_reduction",
+        "id": "yizmodqzk:enchantment.cooldown_reduction",
+        "amount": {
+          "type": "minecraft:linear",
+          "base": 20.0,
+          "per_level_above_first": 20.0
+        },
+        "operation": "add_value"
+      }
+    ]
+  }
+}

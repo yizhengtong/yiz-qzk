@@ -1,8 +1,0 @@
-JVM Args:          "-Xmx4g"
-Run Args:          "-log=error", "--decompile-inner", "--remove-bridge", "--decompile-generics", "--ascii-strings", "--remove-synthetic", "--include-classpath", "--variable-renaming=jad", "--ignore-invalid-bytecode", "--bytecode-source-mapping", "--dump-code-lines", "--indent-string=    ", "-cfg", "/mnt/d/ZM/工作区/yiz1.21.1/build/neoForm/neoFormJoined1.21.1-20240808.144430/steps/listLibraries/libraries.txt", "/mnt/d/ZM/工作区/yiz1.21.1/build/neoForm/neoFormJoined1.21.1-20240808.144430/steps/rename/outputs.jar", "/mnt/d/ZM/工作区/yiz1.21.1/build/neoForm/neoFormJoined1.21.1-20240808.144430/steps/decompile/outputs.jar"
-JVM:               /usr/lib/jvm/java-21-openjdk-amd64/bin/java
-Classpath:         /home/yiz/.gradle/caches/modules-2/files-2.1/org.vineflower/vineflower/1.10.1/4f48c5947b21f9ebc743e7c80215ee839d3dc668/vineflower-1.10.1.jar
-Working Dir:       /mnt/d/ZM/工作区/yiz1.21.1/build/neoForm/neoFormJoined1.21.1-20240808.144430/steps/decompile
-Main Class:        org.jetbrains.java.decompiler.main.decompiler.ConsoleDecompiler
-Program log file:  /mnt/d/ZM/工作区/yiz1.21.1/build/neoForm/neoFormJoined1.21.1-20240808.144430/steps/decompile/log.log
-Output file:       /mnt/d/ZM/工作区/yiz1.21.1/build/neoForm/neoFormJoined1.21.1-20240808.144430/steps/decompile/outputs.jar

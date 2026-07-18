@@ -18,7 +18,8 @@
     "CreativeTabIconSafetyMixin",
     "HumanoidArmorLayerStarMixin",
     "ItemRendererStarMixin",
-    "KeyboardInterceptMixin"
+    "KeyboardInterceptMixin",
+    "LivingEntityRendererSurfaceLightningMixin"
   ],
   "injectors": {
     "defaultRequire": 1

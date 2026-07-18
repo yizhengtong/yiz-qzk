@@ -31,6 +31,12 @@ public final class NetworkHandler {
             SyncLockPayload.STREAM_CODEC,
             SyncLockPayload::handle
         );
+        // 感电视觉：S2C 事件包（体表游离电弧 + 链式闪电）
+        registrar.playToClient(
+            S2CShockFxPayload.TYPE,
+            S2CShockFxPayload.STREAM_CODEC,
+            S2CShockFxPayload::handle
+        );
         // 快速重生：C2S 请求 30 秒无敌重生
         registrar.playToServer(
             C2SFastRespawnPayload.TYPE,
@@ -42,6 +48,24 @@ public final class NetworkHandler {
             net.minecraft.client.yiz.editor.C2SAttributeEditorPayload.TYPE,
             net.minecraft.client.yiz.editor.C2SAttributeEditorPayload.STREAM_CODEC,
             net.minecraft.client.yiz.editor.C2SAttributeEditorPayload::handle
+        );
+        // 技能释放：C2S 请求施放
+        registrar.playToServer(
+            C2SSkillCastPayload.TYPE,
+            C2SSkillCastPayload.STREAM_CODEC,
+            C2SSkillCastPayload::handle
+        );
+        // 奔雷袭窗口同步：S2C 通知客户端窗口期间自动攻击
+        registrar.playToClient(
+            S2CBenleixiWindowPayload.TYPE,
+            S2CBenleixiWindowPayload.STREAM_CODEC,
+            S2CBenleixiWindowPayload::handle
+        );
+        // 技能加强：C2S 加减等级
+        registrar.playToServer(
+            net.minecraft.client.yiz.editor.C2SSkillEnhancePayload.TYPE,
+            net.minecraft.client.yiz.editor.C2SSkillEnhancePayload.STREAM_CODEC,
+            net.minecraft.client.yiz.editor.C2SSkillEnhancePayload::handle
         );
     }
 

@@ -54,6 +54,28 @@ public abstract class PlayerMixin implements InvulnerableDataBridge {
         builder.define(yizmodqzk$FE_INVULNERABLE_DATA, false);
     }
 
+    // ==================== 攻击冷却缩减 ====================
+
+    /**
+     * 修改攻击冷却延迟：原值 × (1 - 冷却缩减％/100)。
+     * 100%=0 延迟(立即重置)，50%=一半延迟。
+     */
+    @Inject(method = "getCurrentItemAttackStrengthDelay", at = @At("RETURN"), cancellable = true)
+    private void yizmodqzk$modifyAttackDelay(CallbackInfoReturnable<Float> cir) {
+        Player self = (Player)(Object)this;
+        var inst = self.getAttribute(
+            net.minecraft.client.yiz.attribute.YizAttributes.COOLDOWN_REDUCTION);
+        if (inst == null) return;
+        double reduction = inst.getValue();
+        if (reduction <= 0) return;
+        float original = cir.getReturnValue();
+        if (reduction >= 100.0) {
+            cir.setReturnValue(0f);
+            return;
+        }
+        cir.setReturnValue((float)(original * (1.0 - reduction / 100.0)));
+    }
+
     // ==================== hurt 取消 ====================
 
     /**

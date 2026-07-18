@@ -165,7 +165,7 @@ public final class PanelInteractionManager {
     // ════════════════════════════════════════════
 
     public static boolean onKey(int key, int scancode, int action, int mods) {
-        int toggleKey = net.minecraft.client.yiz.ui.UIConfig.getPanelKeyboardKeyCode();
+        int toggleKey = GLFW.GLFW_KEY_Q; // 面板键盘转发（隐藏功能，未暴露键位绑定）
 
         // 切换键：仅当"准星已在面板上"或"键盘转发已开启"时才接管
         if (key == toggleKey) {

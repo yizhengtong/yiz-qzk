@@ -84,12 +84,24 @@ public record EditableAttribute(
         yiz("splash_falloff",       "溅射衰减",     false, "%"),
         yiz("huixin",               "会心",         false, "格"),
         yiz("kegong",               "渴攻",         false, "tick"),
+        yiz("cooldown_reduction",   "攻击间隔缩减", false, "%"),
 
         // 库 — 点数/次数类
-        yiz("armor",                "防御力",       false, "点"),
-        yiz("damage_block",         "+伤害格挡",    false, "点"),
+        yiz("attack_strength",   "攻击强度",     false, "点"),
+        yiz("spell_defense",       "法术防御",     false, "点"),
+        yiz("spell_power",         "法术强度",     false, "点"),
+        yiz("cooldown_value",      "冷却值",       false, "tick"),
+        yiz("max_charges",         "最大充能数",   false, "次"),
+        yiz("armor", "攻击强度防御",       false, "点"),
+        yiz("shield_value",        "护盾值",       false, "点"),
+        yiz("damage_block",         "格挡",         false, "点"),
+        // 蓝条系统
+        yiz("max_mana",             "蓝量上限",     false, "点"),
+        yiz("mana_regen",           "蓝量回复",     false, ""),
+        yiz("mana_regen_pct",       "百分比回蓝",   false, "%"),
+        yiz("mana_cost_reduction",  "永恒储蓝",     false, "点"),
         // generic_damage: 用户输入 10 → 存 0.1 → 实际 +10%（和其他 % 属性统一 1=1% 约定）
-        new EditableAttribute("generic_damage", "+全伤害", false, "%",
+        new EditableAttribute("generic_damage", "全伤害", false, "%",
             (s, v) -> setAttr(s, ResourceLocation.fromNamespaceAndPath("yizmodqzk", "generic_damage"), "generic_damage", v / 100.0),
             s -> sumAttr(s, ResourceLocation.fromNamespaceAndPath("yizmodqzk", "generic_damage")) * 100.0,
             p -> playerAttr(p, ResourceLocation.fromNamespaceAndPath("yizmodqzk", "generic_damage")) * 100.0),
@@ -97,6 +109,9 @@ public record EditableAttribute(
         yiz("counter_rate",         "反击率",       false, "%"),
         yiz("counter_value",        "反击值",       false, "%"),
         yiz("counter_count",        "反击数",       false, "次"),
+        yiz("combo_rate",           "连击",         false, "%"),
+        yiz("combo_value",          "连击倍率",     false, "%"),
+        yiz("combo_count",          "连击次数",     false, "次"),
         yiz("undying",              "不死",         false, "次"),
 
         // ── 迁移自 EffectTag（28 个新原生属性）──────────────
@@ -110,28 +125,56 @@ public record EditableAttribute(
         yiz("fall_reduce",          "跌落减免",     false, "格"),
         yiz("dodge_chance",         "闪避几率",     false, "%"),
         yiz("invincibility_mult",   "无敌帧倍率",   false, "tick"),
-        yiz("lava_immune_time",     "熔岩免疫时间", true,  "tick"),
-        yiz("lava_damage_reduction","熔岩减伤",     true,  "%"),
+        yiz("lava_immune_time",     "熔岩免疫时间", false, "tick"),
+        yiz("lava_damage_reduction","熔岩减伤",     false, "%"),
         yiz("life_regen_rate",      "生命恢复(定点)",false,"点/tick"),
         yiz("life_regen_pct",       "生命恢复(%)",  false, "%"),
-        yiz("melee_damage",         "近战伤害",     true,  ""),
-        yiz("ranged_damage",        "远程伤害",     true,  ""),
-        yiz("magic_damage",         "魔法伤害",     true,  ""),
-        yiz("summon_damage",        "召唤伤害",     true,  ""),
-        yiz("armor_penetration",        "护甲穿透%",  true,  "%"),
-        yiz("armor_penetration_flat",   "护甲穿透固定", true, "点"),
-        yiz("attack_range",         "攻击距离",     true,  "格"),
-        yiz("jump_speed",           "步高",         true,  "格"),
-        yiz("max_minions",          "最大仆从数",   true,  "次"),
-        yiz("max_sentries",         "最大哨兵数",   true,  "次"),
-        yiz("water_breath_time",    "水下呼吸时间", true,  "秒"),
+        yiz("melee_damage",         "近战伤害",     false, ""),
+        yiz("ranged_damage",        "远程伤害",     false, ""),
+        yiz("magic_damage", "法术提升",       false, "%"),
+        yiz("summon_damage",        "召唤伤害",     false, "%"),
+        yiz("armor_penetration",        "护甲穿透%",  false, "%"),
+        yiz("armor_penetration_flat",   "护甲穿透固定", false, "点"),
+        yiz("attack_range",         "攻击距离",     false, "格"),
+        yiz("jump_speed",           "步高",         false, "格"),
+        yiz("max_minions",          "最大仆从数",   false, "次"),
+        yiz("max_sentries",         "最大哨兵数",   false, "次"),
+        yiz("water_breath_time",    "水下呼吸时间", false, "秒"),
 
         // 库 — 触发器（次数） / 布尔型
-        yiz("on_hurt",              "受伤触发",     true,  "次"),
+        yiz("on_hurt",              "受伤触发",     false, "次"),
         yiz("projectile_reflection","投射物反弹",   false, "格"),
         yiz("no_collision",         "无碰撞",       false, ""),
         yiz("knockback_immunity",   "击退免疫",     false, ""),
-        yiz("projectile_immunity",  "投射物免疫",   false, "")
+        yiz("projectile_immunity",  "投射物免疫",   false, ""),
+
+        // 状态效果 — 攻方
+        yiz("stun_attack",          "眩晕(攻)",     false, "%"),
+        yiz("slow_attack",          "减速(攻)",     false, "%"),
+        yiz("freeze_attack",        "冰冻(攻)",     false, "%"),
+        yiz("shock_attack",         "感电(攻)",     false, "%"),
+        yiz("knockback_attack",     "击飞(攻)",     false, "%"),
+        // 状态效果 — 防方
+        yiz("stun_defense",         "眩晕(防)",     false, "%"),
+        yiz("slow_defense",         "减速(防)",     false, "%"),
+        yiz("freeze_defense",       "冰冻(防)",     false, "%"),
+        yiz("shock_defense",        "感电(防)",     false, "%"),
+        yiz("knockback_defense",    "击飞(防)",     false, "%"),
+
+        // 状态效果共享 — 时间
+        yiz("stun_time",            "眩晕时间",     false, "tick"),
+        yiz("slow_time",            "减速时间",     false, "tick"),
+        yiz("freeze_time",          "冰冻时间",     false, "tick"),
+        yiz("shock_time",           "感电时间",     false, "tick"),
+        yiz("shock_range",         "感电范围",     false, "格"),
+        yiz("shock_interval",      "感电间隔",     false, "tick"),
+        yiz("knockback_time",       "击飞时间",     false, "tick"),
+        // 状态效果共享 — 伤害
+        yiz("stun_damage",          "眩晕伤害",     false, "点"),
+        yiz("slow_damage",          "减速伤害",     false, "点"),
+        yiz("freeze_damage",        "冰冻伤害",     false, "点"),
+        yiz("shock_damage",         "感电伤害",     false, "点"),
+        yiz("knockback_damage",     "击飞伤害",     false, "点")
     );
 
     // ═══════════════════════════════════════════════════════════

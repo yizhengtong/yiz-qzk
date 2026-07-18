@@ -10,18 +10,6 @@ import org.lwjgl.glfw.GLFW;
 public final class UIConfig {
 
     // 快捷键
-    private static final KeyMapping TOGGLE_PANEL_FIX_KEY = new KeyMapping(
-        "key.yizmodqzk.toggle_panel_fix",
-        GLFW.GLFW_KEY_C,
-        "key.categories.yizmodqzk"
-    );
-
-    private static final KeyMapping TOGGLE_PANEL_KEYBOARD_KEY = new KeyMapping(
-        "key.yizmodqzk.toggle_panel_keyboard",
-        GLFW.GLFW_KEY_Q,
-        "key.categories.yizmodqzk"
-    );
-
     private static final KeyMapping TOGGLE_ABOLISH_PANEL_KEY = new KeyMapping(
         "key.yizmodqzk.toggle_abolish_panel",
         GLFW.GLFW_KEY_F7,
@@ -46,31 +34,11 @@ public final class UIConfig {
     // ==================== 快捷检测 ====================
 
     /**
-     * 检测 C 键按下（用于 Ctrl+C 切换面板固定/跟随）。
-     */
-    public static boolean isPanelFixKey(int keyCode, int action) {
-        return action == GLFW.GLFW_PRESS
-            && keyCode == TOGGLE_PANEL_FIX_KEY.getKey().getValue();
-    }
-
-    /**
-     * 检测面板键盘转发开关键（默认 Q）按下。
-     */
-    public static boolean isPanelKeyboardKey(int keyCode, int action) {
-        return action == GLFW.GLFW_PRESS
-            && keyCode == TOGGLE_PANEL_KEYBOARD_KEY.getKey().getValue();
-    }
-
-    /**
      * 检测物品废除面板开关键（默认 B）按下。
      */
     public static boolean isAbolishPanelKey(int keyCode, int action) {
         return action == GLFW.GLFW_PRESS
             && keyCode == TOGGLE_ABOLISH_PANEL_KEY.getKey().getValue();
-    }
-
-    public static int getPanelKeyboardKeyCode() {
-        return TOGGLE_PANEL_KEYBOARD_KEY.getKey().getValue();
     }
 
     // ==================== 物品 UI（始终启用）====================
@@ -143,14 +111,6 @@ public final class UIConfig {
     }
 
     // ==================== 快捷键获取 ====================
-
-    public static KeyMapping getTogglePanelFixKey() {
-        return TOGGLE_PANEL_FIX_KEY;
-    }
-
-    public static KeyMapping getTogglePanelKeyboardKey() {
-        return TOGGLE_PANEL_KEYBOARD_KEY;
-    }
 
     public static KeyMapping getToggleAbolishPanelKey() {
         return TOGGLE_ABOLISH_PANEL_KEY;

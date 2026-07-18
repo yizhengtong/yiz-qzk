@@ -402,4 +402,87 @@ public final class ItemAttributeHandler {
     public static void addProjectileImmunity(ItemStack stack, double value) {
         setVanillaModifier(stack, YizAttributes.PROJECTILE_IMMUNITY, "item_projectile_immunity", value);
     }
+
+    // ═══════════════════════════════════════════════════════════
+    //  状态效果属性 — 攻方
+    // ═══════════════════════════════════════════════════════════
+
+    public static void addStunAttack(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.STUN_ATTACK, "item_stun_attack", value);
+    }
+    public static void addSlowAttack(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.SLOW_ATTACK, "item_slow_attack", value);
+    }
+    public static void addFreezeAttack(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.FREEZE_ATTACK, "item_freeze_attack", value);
+    }
+    public static void addShockAttack(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.SHOCK_ATTACK, "item_shock_attack", value);
+    }
+    public static void addKnockbackAttack(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.KNOCKBACK_ATTACK, "item_knockback_attack", value);
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  状态效果属性 — 防方
+    // ═══════════════════════════════════════════════════════════
+
+    public static void addStunDefense(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.STUN_DEFENSE, "item_stun_defense", value);
+    }
+    public static void addSlowDefense(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.SLOW_DEFENSE, "item_slow_defense", value);
+    }
+    public static void addFreezeDefense(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.FREEZE_DEFENSE, "item_freeze_defense", value);
+    }
+    public static void addShockDefense(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.SHOCK_DEFENSE, "item_shock_defense", value);
+    }
+    public static void addKnockbackDefense(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.KNOCKBACK_DEFENSE, "item_knockback_defense", value);
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  状态效果共享属性 — 时间
+    // ═══════════════════════════════════════════════════════════
+
+    public static void addStunTime(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.STUN_TIME, "item_stun_time", value);
+    }
+    public static void addSlowTime(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.SLOW_TIME, "item_slow_time", value);
+    }
+    public static void addFreezeTime(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.FREEZE_TIME, "item_freeze_time", value);
+    }
+    public static void addShockTime(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.SHOCK_TIME, "item_shock_time", value);
+    }
+    public static void addShockRange(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.SHOCK_RANGE, "item_shock_range", value);
+    }
+    public static void addKnockbackTime(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.KNOCKBACK_TIME, "item_knockback_time", value);
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  状态效果共享属性 — 伤害
+    // ═══════════════════════════════════════════════════════════
+
+    public static void addStunDamage(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.STUN_DAMAGE, "item_stun_damage", value);
+    }
+    public static void addSlowDamage(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.SLOW_DAMAGE, "item_slow_damage", value);
+    }
+    public static void addFreezeDamage(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.FREEZE_DAMAGE, "item_freeze_damage", value);
+    }
+    public static void addShockDamage(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.SHOCK_DAMAGE, "item_shock_damage", value);
+    }
+    public static void addKnockbackDamage(ItemStack stack, double value) {
+        setVanillaModifier(stack, YizAttributes.KNOCKBACK_DAMAGE, "item_knockback_damage", value);
+    }
 }

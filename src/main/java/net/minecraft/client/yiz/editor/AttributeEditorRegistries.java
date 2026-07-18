@@ -64,6 +64,21 @@ public final class AttributeEditorRegistries {
         ITEMS.register("attribute_editor",
             () -> new BlockItem(ATTRIBUTE_EDITOR_BLOCK.get(), new Item.Properties()));
 
+    /** 技能装配台方块：纯媒介，右键打开技能配置界面（与 F10 相同）。 */
+    public static final DeferredHolder<Block, SkillAssemblyBlock> SKILL_ASSEMBLY_BLOCK =
+        BLOCKS.register("skill_assembly",
+            () -> new SkillAssemblyBlock(BlockBehaviour.Properties.of()
+                .mapColor(MapColor.METAL)
+                .strength(3.5f)
+                .sound(SoundType.METAL)
+                .noOcclusion()
+                .requiresCorrectToolForDrops()));
+
+    /** 对应的 BlockItem。 */
+    public static final DeferredHolder<Item, BlockItem> SKILL_ASSEMBLY_ITEM =
+        ITEMS.register("skill_assembly",
+            () -> new BlockItem(SKILL_ASSEMBLY_BLOCK.get(), new Item.Properties()));
+
     // ── 创造标签页 ────────────────────────────────────────────
 
     /** 工作方块标签页（标题走语言文件 itemGroup.yizmodqzk.workbench，图标=属性编辑台）。 */
@@ -72,7 +87,10 @@ public final class AttributeEditorRegistries {
             () -> CreativeModeTab.builder()
                 .title(Component.translatable("itemGroup.yizmodqzk.workbench"))
                 .icon(() -> new ItemStack(ATTRIBUTE_EDITOR_ITEM.get()))
-                .displayItems((params, output) -> output.accept(ATTRIBUTE_EDITOR_ITEM.get()))
+                .displayItems((params, output) -> {
+                    output.accept(ATTRIBUTE_EDITOR_ITEM.get());
+                    output.accept(SKILL_ASSEMBLY_ITEM.get());
+                })
                 .build());
 
     // ── BlockEntity 类型（阶段 B） ────────────────────────────

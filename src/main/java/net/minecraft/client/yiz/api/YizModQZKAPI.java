@@ -131,6 +131,10 @@ public final class YizModQZKAPI {
         if (target == null || amount <= 0) {
             return DamageResult.canceled("invalid parameters");
         }
+        // 自我伤害免疫
+        if (target == source) {
+            return DamageResult.canceled("self-damage immunity");
+        }
 
         DamageEvent event = new DamageEvent(target, amount, DamageType.TRUE, source);
         NeoForge.EVENT_BUS.post(event);
@@ -164,6 +168,10 @@ public final class YizModQZKAPI {
         if (target == null || amount <= 0) {
             return DamageResult.canceled("invalid parameters");
         }
+        // 自我伤害免疫
+        if (target == source) {
+            return DamageResult.canceled("self-damage immunity");
+        }
 
         DamageEvent event = new DamageEvent(target, amount, DamageType.ARMOR_PIERCING, source);
         NeoForge.EVENT_BUS.post(event);
@@ -171,7 +179,7 @@ public final class YizModQZKAPI {
 
         float finalAmount = event.getAmount();
         DamageSource dmgSource = source != null
-            ? source.damageSources().magic()
+            ? target.damageSources().source(net.minecraft.world.damagesource.DamageTypes.MAGIC, source)
             : target.damageSources().generic();
         target.hurt(dmgSource, finalAmount);
         return DamageResult.success(finalAmount, 0);
@@ -193,6 +201,10 @@ public final class YizModQZKAPI {
         if (target == null || amount <= 0) {
             return DamageResult.canceled("invalid parameters");
         }
+        // 自我伤害免疫
+        if (target == source) {
+            return DamageResult.canceled("self-damage immunity");
+        }
 
         DamageEvent event = new DamageEvent(target, amount, DamageType.PIERCE_INVULNERABILITY, source);
         NeoForge.EVENT_BUS.post(event);
@@ -202,7 +214,10 @@ public final class YizModQZKAPI {
         int saved = target.invulnerableTime;
         target.invulnerableTime = 0;
         try {
-            target.hurt(target.damageSources().generic(), finalAmount);
+            DamageSource ds = source != null
+                ? target.damageSources().source(net.minecraft.world.damagesource.DamageTypes.GENERIC, source)
+                : target.damageSources().generic();
+            target.hurt(ds, finalAmount);
         } finally {
             target.invulnerableTime = saved;
         }
@@ -221,6 +236,10 @@ public final class YizModQZKAPI {
         if (target == null || amount <= 0) {
             return DamageResult.canceled("invalid parameters");
         }
+        // 自我伤害免疫：玩家使用技能时伤害来源为自己，防止自伤
+        if (target == source) {
+            return DamageResult.canceled("self-damage immunity");
+        }
 
         DamageEvent event = new DamageEvent(target, amount, DamageType.ARMOR_PIERCING, source);
         NeoForge.EVENT_BUS.post(event);
@@ -231,7 +250,7 @@ public final class YizModQZKAPI {
         target.invulnerableTime = 0;
         try {
             DamageSource dmgSource = source != null
-                ? source.damageSources().magic()
+                ? target.damageSources().source(net.minecraft.world.damagesource.DamageTypes.MAGIC, source)
                 : target.damageSources().generic();
             target.hurt(dmgSource, finalAmount);
         } finally {
@@ -789,6 +808,33 @@ public final class YizModQZKAPI {
      */
     public static int replaceBaseLivingEntityKillMethods() {
         return replaceKillMethods(LivingEntity.class);
+    }
+
+    // ==================== 蓝量系统 ====================
+
+    /** 获取实体当前蓝量。 */
+    public static float getMana(net.minecraft.world.entity.LivingEntity entity) {
+        return net.minecraft.client.yiz.tool.health.ManaTracker.get(entity);
+    }
+
+    /** 设置实体蓝量。 */
+    public static void setMana(net.minecraft.world.entity.LivingEntity entity, float value) {
+        net.minecraft.client.yiz.tool.health.ManaTracker.set(entity, value);
+    }
+
+    /** 增减实体蓝量，返回实际变化量。 */
+    public static float addMana(net.minecraft.world.entity.LivingEntity entity, float delta) {
+        return net.minecraft.client.yiz.tool.health.ManaTracker.add(entity, delta);
+    }
+
+    /** 消耗蓝量，返回是否足够。 */
+    public static boolean consumeMana(net.minecraft.world.entity.LivingEntity entity, float amount) {
+        return net.minecraft.client.yiz.tool.health.ManaTracker.consume(entity, amount);
+    }
+
+    /** 获取实体蓝量上限。 */
+    public static float getMaxMana(net.minecraft.world.entity.LivingEntity entity) {
+        return net.minecraft.client.yiz.tool.health.ManaTracker.getMax(entity);
     }
 
     // ==================== 创造标签页 ====================

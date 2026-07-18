@@ -48,7 +48,7 @@ public final class MeleeWeaponScaling {
     //  倍率表 (index 0 = Lv1 平凡, index 4 = Lv5 传说)
     // ═══════════════════════════════════════════════════════════
 
-    private static final double[] DAMAGE        = {1.0, 1.5, 2.0, 3.0, 5.0};
+    private static final double[] DAMAGE        = {1.0, 1.1, 1.2, 1.4, 1.6};
     private static final double[] SPEED         = {1.0, 1.1, 1.2, 1.3, 1.5};
     private static final double[] CRIT_RATE     = {1.0, 1.25, 1.75, 2.0, 2.5};
     private static final double[] CRIT_DMG      = {1.0, 1.5, 1.75, 2.0, 3.0};
