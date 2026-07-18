@@ -60,7 +60,8 @@ public abstract class AttackInterceptorMixin {
     )
     private float yizmodqzk$captureExpectedDamage(DamageSource source, float amount) {
         Player self = (Player) (Object) this;
-        if (hasPoxianEnchantment(self)) {
+        int poxianLevel = getPoxianLevel(self);
+        if (rollTrigger(self, poxianLevel, net.minecraft.client.yiz.attribute.YizAttributes.POXIAN)) {
             net.minecraft.client.yiz.editor.PoxianDamageTracker.set(amount);
         }
         return amount;
@@ -78,10 +79,14 @@ public abstract class AttackInterceptorMixin {
         // 锁定原始攻击目标（最早时机，供下游模组通过 API 查询）
         AttackTargetLock.captureOnAttack(attacker, target);
 
-        // 破时附魔：激活 Agent 绕过 + 清原版无敌帧
-        if (target instanceof LivingEntity && hasPoshiEnchantment(attacker)) {
-            target.invulnerableTime = 0;
-            net.minecraft.client.yiz.editor.PoshiBypassBridge.beginBypass();
+        // 破时附魔：按等级掷骰子，命中才激活 Agent 绕过 + 清原版无敌帧
+        //   1 级 20% ... 5 级 100%
+        if (target instanceof LivingEntity) {
+            int poshiLevel = getPoshiLevel(attacker);
+            if (rollTrigger(attacker, poshiLevel, net.minecraft.client.yiz.attribute.YizAttributes.POSHI)) {
+                target.invulnerableTime = 0;
+                net.minecraft.client.yiz.editor.PoshiBypassBridge.beginBypass();
+            }
         }
 
         // 非生物目标不处理
@@ -197,34 +202,64 @@ public abstract class AttackInterceptorMixin {
         //    以覆盖玩家横扫、弹射物等全部伤害来源（不再限于 Player.attack() 主目标）
     }
 
-    /** 检查玩家主手武器是否拥有破时附魔（yizmodqzk:poshi） */
+    /** 获取玩家主手武器的破时附魔等级（yizmodqzk:poshi），0 = 无 */
     @Unique
-    private static boolean hasPoshiEnchantment(Player player) {
+    private static int getPoshiLevel(Player player) {
         var enchants = player.getMainHandItem()
             .getOrDefault(net.minecraft.core.component.DataComponents.ENCHANTMENTS,
                 net.minecraft.world.item.enchantment.ItemEnchantments.EMPTY);
         for (var entry : enchants.entrySet()) {
             var key = entry.getKey().getKey();
             if (key != null && key.location().toString().equals("yizmodqzk:poshi")) {
-                return true;
+                int level = entry.getValue();
+                return level <= 0 ? 1 : level;
             }
         }
-        return false;
+        return 0;
     }
 
-    /** 检查玩家主手武器是否拥有破限附魔（yizmodqzk:poxian） */
+    /** 获取玩家主手武器的破限附魔等级（yizmodqzk:poxian），0 = 无 */
     @Unique
-    private static boolean hasPoxianEnchantment(Player player) {
+    private static int getPoxianLevel(Player player) {
         var enchants = player.getMainHandItem()
             .getOrDefault(net.minecraft.core.component.DataComponents.ENCHANTMENTS,
                 net.minecraft.world.item.enchantment.ItemEnchantments.EMPTY);
         for (var entry : enchants.entrySet()) {
             var key = entry.getKey().getKey();
             if (key != null && key.location().toString().equals("yizmodqzk:poxian")) {
-                return true;
+                int level = entry.getValue();
+                return level <= 0 ? 1 : level;
             }
         }
-        return false;
+        return 0;
+    }
+
+    /**
+     * 掷骰子决定是否触发破时/破限。
+     * 总概率 = 附魔等级×20% + 对应属性值%，cap 100%。
+     * <ul>
+     *   <li>附魔 3 级 + 属性 30 → 60% + 30% = 90%</li>
+     *   <li>附魔 0 级 + 属性 50 → 0% + 50% = 50%（纯属性也能触发）</li>
+     *   <li>附魔 5 级 + 属性 0 → 100%（满级必触发）</li>
+     * </ul>
+     * 附魔等级≤0 且属性值≤0 时返回 false。
+     */
+    @Unique
+    private static boolean rollTrigger(Player player, int enchantLevel,
+                                       net.minecraft.core.Holder<net.minecraft.world.entity.ai.attributes.Attribute> attr) {
+        double chance = 0.0;
+        if (enchantLevel > 0) {
+            chance += Math.min(5, enchantLevel) * 20.0;   // 附魔每级 20%，封顶 5 级=100%
+        }
+        if (attr != null) {
+            var inst = player.getAttribute(attr);
+            if (inst != null) {
+                chance += inst.getValue();                 // 属性值直接当百分比
+            }
+        }
+        if (chance <= 0.0) return false;
+        if (chance >= 100.0) return true;
+        return player.getRandom().nextFloat() < (float) (chance / 100.0);
     }
 
     /** 攻击完成时：清理破时/破限状态 */

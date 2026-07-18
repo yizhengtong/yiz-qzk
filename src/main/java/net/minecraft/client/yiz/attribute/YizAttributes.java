@@ -627,6 +627,26 @@ public final class YizAttributes {
             () -> new RangedAttribute("attribute.yizmodqzk.undying", 0.0, 0.0, Double.MAX_VALUE)
                 .setSyncable(true));
 
+    /**
+     * 破时 — 攻击时触发"破时"（清无敌帧 + Agent 绕过 Boss 自定义 hurt）的概率。
+     * <p>值域 0~100，1 = 1%。与破时附魔等级的概率独立叠加：附魔命中后，
+     * 再以本属性的概率决定是否真正激活 PoshiBypassBridge。</p>
+     */
+    public static final Holder<Attribute> POSHI =
+        ATTRIBUTES.register("poshi",
+            () -> new RangedAttribute("attribute.yizmodqzk.poshi", 0.0, 0.0, 100.0)
+                .setSyncable(true));
+
+    /**
+     * 破限 — 攻击时触发"破限"（恢复被 cap 的原始伤害，穿透伤害上限）的概率。
+     * <p>值域 0~100，1 = 1%。与破限附魔等级的概率独立叠加：附魔命中后，
+     * 再以本属性的概率决定是否真正写入 PoxianDamageTracker。</p>
+     */
+    public static final Holder<Attribute> POXIAN =
+        ATTRIBUTES.register("poxian",
+            () -> new RangedAttribute("attribute.yizmodqzk.poxian", 0.0, 0.0, 100.0)
+                .setSyncable(true));
+
     /** 投射物反弹 — 以玩家为中心的反弹半径（格）。值域 ≥0。 */
     public static final Holder<Attribute> PROJECTILE_REFLECTION =
         ATTRIBUTES.register("projectile_reflection",
