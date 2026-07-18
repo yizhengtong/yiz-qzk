@@ -52,7 +52,7 @@ public class LivingHealthTransformer implements ClassFileTransformer {
         if (isExcluded(className)) return null;
 
         boolean isEntity = "net/minecraft/world/entity/Entity".equals(className);
-        if (!isEntity && !isLivingEntitySubclass(classfileBuffer)) return null;
+        if (!isEntity && !isLivingEntitySubclass(classfileBuffer, loader)) return null;
 
         boolean isModClass = isModClass(className, classfileBuffer);
         transformed = true;
@@ -75,12 +75,16 @@ public class LivingHealthTransformer implements ClassFileTransformer {
         try {
             ClassReader cr = new ClassReader(classfileBuffer);
             ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_FRAMES);
+            String superName = cr.getSuperName();
 
-            ClassVisitor cv = new HealthClassVisitor(cw, className, isModClass, isEntity);
-            cr.accept(cv, 0);
+            ClassVisitor cv = new HealthClassVisitor(cw, className, superName, isModClass, isEntity);
+            cr.accept(cv, ClassReader.EXPAND_FRAMES);
             return cw.toByteArray();
-        } catch (Exception e) {
-            // 转换失败则返回原始字节码
+        } catch (Throwable e) {
+            System.err.println("[PoshiAgent] TRANSFORM FAILED for " + className.replace('/', '.')
+                + ": " + e.getClass().getName() + " - " + e.getMessage());
+            if (e instanceof Error) e.printStackTrace(System.err);
+            // 转换失败则返回原始字节码，不崩
             return null;
         }
     }
@@ -138,22 +142,23 @@ public class LivingHealthTransformer implements ClassFileTransformer {
 
     // ==================== 类检测 ====================
 
-    private static boolean isLivingEntitySubclass(byte[] classBuffer) {
+    private static boolean isLivingEntitySubclass(byte[] classBuffer, ClassLoader loader) {
         try {
             ClassReader cr = new ClassReader(classBuffer);
             String superName = cr.getSuperName();
             while (superName != null) {
                 if (LIVING_ENTITY.equals(superName)) return true;
-                superName = getSuperClassOf(superName);
+                superName = getSuperClassOf(superName, loader);
                 if (superName == null) break;
             }
         } catch (Exception ignored) {}
         return false;
     }
 
-    private static String getSuperClassOf(String internalName) {
+    private static String getSuperClassOf(String internalName, ClassLoader loader) {
         try {
-            Class<?> clazz = Class.forName(internalName.replace('/', '.'), false, null);
+            Class<?> clazz = Class.forName(internalName.replace('/', '.'), false,
+                loader != null ? loader : ClassLoader.getSystemClassLoader());
             Class<?> superClazz = clazz.getSuperclass();
             return superClazz != null ? Type.getInternalName(superClazz) : null;
         } catch (ClassNotFoundException e) {
@@ -170,12 +175,14 @@ public class LivingHealthTransformer implements ClassFileTransformer {
 
     private static class HealthClassVisitor extends ClassVisitor {
         private final String className;
+        private final String superName;
         private final boolean isModClass;
         private final boolean isEntityOnly;
 
-        HealthClassVisitor(ClassWriter cw, String className, boolean isModClass, boolean isEntityOnly) {
+        HealthClassVisitor(ClassWriter cw, String className, String superName, boolean isModClass, boolean isEntityOnly) {
             super(Opcodes.ASM9, cw);
             this.className = className;
+            this.superName = superName;
             this.isModClass = isModClass;
             this.isEntityOnly = isEntityOnly;
         }
@@ -184,6 +191,16 @@ public class LivingHealthTransformer implements ClassFileTransformer {
         public MethodVisitor visitMethod(int access, String name, String desc, String signature, String[] exceptions) {
             MethodVisitor mv = super.visitMethod(access, name, desc, signature, exceptions);
             if (mv == null) return null;
+
+            // 破时 Agent 绕过
+            if (!isEntityOnly && isHurtMethod(name, desc)) {
+                System.err.println("[PoshiAgent] HURT " + className.replace('/', '.'));
+                return new HurtBypassMethodVisitor(mv, superName);
+            }
+            if (!isEntityOnly && isInvulnerableToMethod(name, desc)) {
+                System.err.println("[PoshiAgent] INVULN " + className.replace('/', '.'));
+                return new InvulnerableBypassVisitor(mv);
+            }
 
             // die() / remove() / setHealth 保护态拦截
             if (isDieMethod(name, desc)) {
@@ -248,6 +265,15 @@ public class LivingHealthTransformer implements ClassFileTransformer {
 
     private static boolean isSetHealthMethod(String name, String desc) {
         return name.equals("setHealth") && desc.equals("(F)V");
+    }
+
+    private static boolean isHurtMethod(String name, String desc) {
+        return name.equals("hurt") && desc.equals("(Lnet/minecraft/world/damagesource/DamageSource;F)Z");
+    }
+
+    private static boolean isInvulnerableToMethod(String name, String desc) {
+        return name.equals("isInvulnerableTo")
+            && desc.equals("(Lnet/minecraft/world/damagesource/DamageSource;)Z");
     }
 
     // ==================== ASM: setHealth() 生命值纠正 ====================
@@ -339,6 +365,62 @@ public class LivingHealthTransformer implements ClassFileTransformer {
             mv.visitJumpInsn(Opcodes.IFEQ, after);
             mv.visitInsn(Opcodes.RETURN);
             mv.visitLabel(after);
+        }
+    }
+
+    // ==================== ASM: hurt() / isInvulnerableTo() 破时绕过 ====================
+
+    private static class HurtBypassMethodVisitor extends MethodVisitor {
+        private static final String BRIDGE = "net/minecraft/client/yiz/editor/PoshiBypassBridge";
+        private final String superName;
+
+        HurtBypassMethodVisitor(MethodVisitor mv, String superName) {
+            super(Opcodes.ASM9, mv);
+            this.superName = superName;
+        }
+
+        @Override
+        public void visitCode() {
+            super.visitCode();
+            Label notBypass = new Label();
+            mv.visitVarInsn(Opcodes.ALOAD, 1);
+            mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL,
+                    "net/minecraft/world/damagesource/DamageSource", "getEntity",
+                    "()Lnet/minecraft/world/entity/Entity;", false);
+            mv.visitMethodInsn(Opcodes.INVOKESTATIC, BRIDGE, "shouldBypass",
+                    "(Ljava/lang/Object;)Z", false);
+            mv.visitJumpInsn(Opcodes.IFEQ, notBypass);
+            mv.visitVarInsn(Opcodes.ALOAD, 0);
+            mv.visitVarInsn(Opcodes.ALOAD, 1);
+            mv.visitVarInsn(Opcodes.FLOAD, 2);
+            mv.visitMethodInsn(Opcodes.INVOKESPECIAL, superName, "hurt",
+                    "(Lnet/minecraft/world/damagesource/DamageSource;F)Z", false);
+            mv.visitInsn(Opcodes.IRETURN);
+            mv.visitLabel(notBypass);
+        }
+    }
+
+    private static class InvulnerableBypassVisitor extends MethodVisitor {
+        private static final String BRIDGE = "net/minecraft/client/yiz/editor/PoshiBypassBridge";
+
+        InvulnerableBypassVisitor(MethodVisitor mv) {
+            super(Opcodes.ASM9, mv);
+        }
+
+        @Override
+        public void visitCode() {
+            super.visitCode();
+            Label notBypass = new Label();
+            mv.visitVarInsn(Opcodes.ALOAD, 1);
+            mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL,
+                    "net/minecraft/world/damagesource/DamageSource", "getEntity",
+                    "()Lnet/minecraft/world/entity/Entity;", false);
+            mv.visitMethodInsn(Opcodes.INVOKESTATIC, BRIDGE, "shouldBypass",
+                    "(Ljava/lang/Object;)Z", false);
+            mv.visitJumpInsn(Opcodes.IFEQ, notBypass);
+            mv.visitInsn(Opcodes.ICONST_0);
+            mv.visitInsn(Opcodes.IRETURN);
+            mv.visitLabel(notBypass);
         }
     }
 

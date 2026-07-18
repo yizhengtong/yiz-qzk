@@ -45,9 +45,6 @@ public abstract class AttackInterceptorMixin {
     @Unique
     private static final ThreadLocal<Boolean> yizmodqzk$attackIntercepted = ThreadLocal.withInitial(() -> false);
 
-    /** 破时附魔：存目标在攻击前的血量，RETURN 时比较判断是否被硬挡 */
-    @Unique
-    private static final ThreadLocal<Float> yizmodqzk$poshiHealthBefore = new ThreadLocal<>();
 
     /**
      * 破限附魔：capture 传入 hurt() 的原始伤害（在执行所有减伤/cap 之前）。
@@ -81,10 +78,10 @@ public abstract class AttackInterceptorMixin {
         // 锁定原始攻击目标（最早时机，供下游模组通过 API 查询）
         AttackTargetLock.captureOnAttack(attacker, target);
 
-        // 破时附魔：攻击无视目标无敌帧 + 记录攻击前血量用于后续补偿
-        if (target instanceof LivingEntity le && hasPoshiEnchantment(attacker)) {
+        // 破时附魔：激活 Agent 绕过 + 清原版无敌帧
+        if (target instanceof LivingEntity && hasPoshiEnchantment(attacker)) {
             target.invulnerableTime = 0;
-            yizmodqzk$poshiHealthBefore.set(le.getHealth());
+            net.minecraft.client.yiz.editor.PoshiBypassBridge.beginBypass();
         }
 
         // 非生物目标不处理
@@ -230,29 +227,10 @@ public abstract class AttackInterceptorMixin {
         return false;
     }
 
-    /** 攻击完成时：破时补偿 + 破限清理 */
+    /** 攻击完成时：清理破时/破限状态 */
     @Inject(method = "attack", at = @At("RETURN"))
     private void yizmodqzk$poshiAndPoxianCleanup(Entity target, CallbackInfo ci) {
-        // ── 破时补偿：Boss 在 super.hurt() 之前 return false 硬挡 →
-        //    直接绕过覆写，用 invokespecial 调用 LivingEntity.hurt()
-        Player self = (Player) (Object) this;
-        Float healthBefore = yizmodqzk$poshiHealthBefore.get();
-        yizmodqzk$poshiHealthBefore.remove();
-
-        if (healthBefore != null && target instanceof LivingEntity le
-            && le.isAlive() && hasPoshiEnchantment(self)) {
-            float healthAfter = le.getHealth();
-            if (healthAfter >= healthBefore) {
-                // 完全被挡 → 直接用 setHealth 扣血，绕过所有 hurt() 覆写
-                float atk = (float) self.getAttributeValue(
-                    net.minecraft.world.entity.ai.attributes.Attributes.ATTACK_DAMAGE);
-                if (atk > 0) {
-                    le.setHealth(Math.max(0, le.getHealth() - atk));
-                }
-            }
-        }
-
-        // ── 破限清理
+        net.minecraft.client.yiz.editor.PoshiBypassBridge.endBypass();
         net.minecraft.client.yiz.editor.PoxianDamageTracker.clear();
     }
 }
