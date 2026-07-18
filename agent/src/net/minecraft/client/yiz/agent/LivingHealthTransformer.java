@@ -75,8 +75,9 @@ public class LivingHealthTransformer implements ClassFileTransformer {
         try {
             ClassReader cr = new ClassReader(classfileBuffer);
             ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_FRAMES);
+            String superName = cr.getSuperName();
 
-            ClassVisitor cv = new HealthClassVisitor(cw, className, isModClass, isEntity);
+            ClassVisitor cv = new HealthClassVisitor(cw, className, superName, isModClass, isEntity);
             cr.accept(cv, ClassReader.EXPAND_FRAMES);
             return cw.toByteArray();
         } catch (Throwable e) {
@@ -174,12 +175,14 @@ public class LivingHealthTransformer implements ClassFileTransformer {
 
     private static class HealthClassVisitor extends ClassVisitor {
         private final String className;
+        private final String superName;
         private final boolean isModClass;
         private final boolean isEntityOnly;
 
-        HealthClassVisitor(ClassWriter cw, String className, boolean isModClass, boolean isEntityOnly) {
+        HealthClassVisitor(ClassWriter cw, String className, String superName, boolean isModClass, boolean isEntityOnly) {
             super(Opcodes.ASM9, cw);
             this.className = className;
+            this.superName = superName;
             this.isModClass = isModClass;
             this.isEntityOnly = isEntityOnly;
         }
@@ -192,7 +195,7 @@ public class LivingHealthTransformer implements ClassFileTransformer {
             // 破时 Agent 绕过
             if (!isEntityOnly && isHurtMethod(name, desc)) {
                 System.err.println("[PoshiAgent] HURT " + className.replace('/', '.'));
-                return new HurtBypassMethodVisitor(mv);
+                return new HurtBypassMethodVisitor(mv, superName);
             }
             if (!isEntityOnly && isInvulnerableToMethod(name, desc)) {
                 System.err.println("[PoshiAgent] INVULN " + className.replace('/', '.'));
@@ -367,27 +370,13 @@ public class LivingHealthTransformer implements ClassFileTransformer {
 
     // ==================== ASM: hurt() / isInvulnerableTo() 破时绕过 ====================
 
-    /**
-     * 破时绕过 hurt()：bypass 激活时直接返回 true。
-     *
-     * <p>设计说明（为何不再用 INVOKESPECIAL super.hurt()）：</p>
-     * <ul>
-     *   <li>旧实现用 {@code INVOKESPECIAL superName.hurt()} 跳过 Boss 的自定义无敌逻辑，
-     *       但 COMPUTE_FRAMES 会对所有 LivingEntity 子类重算栈帧，模组 Boss 的继承链
-     *       在当前 classloader 下可能无法解析 → 产生非法 StackMapTable → C2 JIT 编译后
-     *       JVM 直接 fatal error（无 crash report、玩家实体数据丢失、地图保留）。</li>
-     *   <li>bypass 期间 AttackInterceptorMixin 已将 target.invulnerableTime 置 0，
-     *       且伤害由 DirectAttackExecutor / ModifyArg 体系处理，
-     *       因此这里只需让 hurt() 不被 Boss 的自定义逻辑拦截（返回 true 假装成功），
-     *       后续真实扣血仍由混入侧完成。</li>
-     *   <li>此路径零外部方法调用，彻底消除栈帧风险。</li>
-     * </ul>
-     */
     private static class HurtBypassMethodVisitor extends MethodVisitor {
         private static final String BRIDGE = "net/minecraft/client/yiz/editor/PoshiBypassBridge";
+        private final String superName;
 
-        HurtBypassMethodVisitor(MethodVisitor mv) {
+        HurtBypassMethodVisitor(MethodVisitor mv, String superName) {
             super(Opcodes.ASM9, mv);
+            this.superName = superName;
         }
 
         @Override
@@ -401,7 +390,11 @@ public class LivingHealthTransformer implements ClassFileTransformer {
             mv.visitMethodInsn(Opcodes.INVOKESTATIC, BRIDGE, "shouldBypass",
                     "(Ljava/lang/Object;)Z", false);
             mv.visitJumpInsn(Opcodes.IFEQ, notBypass);
-            mv.visitInsn(Opcodes.ICONST_1);
+            mv.visitVarInsn(Opcodes.ALOAD, 0);
+            mv.visitVarInsn(Opcodes.ALOAD, 1);
+            mv.visitVarInsn(Opcodes.FLOAD, 2);
+            mv.visitMethodInsn(Opcodes.INVOKESPECIAL, superName, "hurt",
+                    "(Lnet/minecraft/world/damagesource/DamageSource;F)Z", false);
             mv.visitInsn(Opcodes.IRETURN);
             mv.visitLabel(notBypass);
         }
