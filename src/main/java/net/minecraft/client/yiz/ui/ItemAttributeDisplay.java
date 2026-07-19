@@ -142,6 +142,39 @@ public final class ItemAttributeDisplay {
         yiz("freeze_damage",        "冰冻伤害",     "点",  1.0);
         yiz("shock_damage",         "感电伤害",     "点",  1.0);
         yiz("knockback_damage",     "击飞伤害",     "点",  1.0);
+
+        // ── 攻击/法术基础（固定值）────────────────────────
+        yiz("attack_strength",      "攻击强度",     "点",  1.0);
+        yiz("spell_power",          "法术强度",     "点",  1.0);
+        yiz("spell_defense",        "法术防御",     "点",  1.0);
+        yiz("shield_value",         "护盾值",       "点",  1.0);
+
+        // ── 蓝条系统 ────────────────────────────────────
+        yiz("max_mana",             "蓝量上限",     "点",  1.0);
+        yiz("mana_regen",           "固定回蓝",     "点",  1.0);
+        yiz("mana_regen_pct",       "百分比回蓝",   "%",   1.0);
+        yiz("mana_cost_reduction",  "耗蓝降低",     "点",  1.0);
+        yiz("mana_cost",            "单次耗蓝",     "点",  1.0);
+        yiz("mana_cost_per_sec",    "每秒耗蓝",     "点",  1.0);
+
+        // ── 冷却/充能 ──────────────────────────────────
+        yiz("cooldown_reduction",   "冷却缩减",     "%",   1.0);
+        yiz("cooldown_value",       "冷却值",       "tick",1.0);
+        yiz("max_charges",          "最大充能数",   "次",  1.0);
+
+        // ── 技能公式参数 ────────────────────────────────
+        yiz("damage_base",          "基础伤害",     "点",  1.0);
+        yiz("damage_spell_coeff",   "法术伤害系数", "%",   1.0);
+        yiz("damage_type",          "伤害类型",     "",    1.0);
+        yiz("heal_base",            "基础回血",     "点",  1.0);
+        yiz("heal_atk_coeff",       "回血系数(攻)", "%",   1.0);
+        yiz("heal_hp_coeff",        "回血系数(命)", "%",   1.0);
+        yiz("heal_spell_coeff",     "回血系数(法)", "%",   1.0);
+
+        // ── 技能范围/间隔倍率（百分比）─────────────────
+        yiz("skill_range",          "技能范围",     "%",   1.0);
+        yiz("skill_interval",       "技能间隔",     "%",   1.0);
+        yiz("shock_interval",       "感电间隔",     "tick",1.0);
     }
 
     private static void rule(Holder<Attribute> attr, String name, String unit, double scale) {
