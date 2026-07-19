@@ -33,6 +33,8 @@ public final class HealthAgent {
             // 1. 注册 Transformer（canRetransform=true 支持后续 retransform）
             System.err.println("[HealthAgent] Registering LivingHealthTransformer...");
             inst.addTransformer(new LivingHealthTransformer(), true);
+            System.err.println("[HealthAgent] Registering SystemExitBlocker...");
+            inst.addTransformer(new SystemExitBlocker(), true);
 
             // 2. 通过反射将 Instrumentation 存入主模组的 AgentBridge
             storeInstrumentation(inst);
