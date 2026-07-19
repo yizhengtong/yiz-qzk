@@ -11,12 +11,14 @@
     "LivingEntityArmorAbolitionMixin",
     "LivingEntityMixin",
     "NoCollisionMixin",
+    "PlayerJumpMixin",
     "PlayerMixin",
     "PlayerMovementMixin",
     "ProjectileHitMixin",
     "StartupItemRegistryReplaceMixin"
   ],
   "client": [
+    "ClientMultiJumpMixin",
     "CreativeTabIconSafetyMixin",
     "HumanoidArmorLayerStarMixin",
     "ItemRendererStarMixin",

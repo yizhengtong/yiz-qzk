@@ -89,6 +89,8 @@ public class tizMod {
         // 注册技能配置容器持久化键
         net.minecraft.client.yiz.api.PlayerDataAPI.register(
             "yizmodqzk:skill_config_slots", com.mojang.serialization.Codec.STRING, "");
+        // 多段跳剩余次数（服务端权威，自动 S2C 同步）
+        net.minecraft.client.yiz.handler.MultiJumpTracker.register();
 
         // 注册自定义属性（暴击率、暴伤等）
         YizAttributes.ATTRIBUTES.register(modEventBus);
@@ -315,6 +317,9 @@ public class tizMod {
         NeoForge.EVENT_BUS.addListener(this::onPlayerLogin);
         NeoForge.EVENT_BUS.addListener(this::onPlayerClone);
         NeoForge.EVENT_BUS.addListener(this::onPlayerTick);
+        // 多段跳落地充能：LivingFallEvent + PlayerTickEvent.Post
+        NeoForge.EVENT_BUS.addListener(net.minecraft.client.yiz.handler.MultiJumpRechargeHandler::onLivingFall);
+        NeoForge.EVENT_BUS.addListener(net.minecraft.client.yiz.handler.MultiJumpRechargeHandler::onPlayerTick);
         // onLevelLoad/onLevelSave removed (UnlockSavedData deleted)
 
         // 延迟加载 ASM Agent（此时 Mixin 已完成，不会与 geckolib 等模组冲突）

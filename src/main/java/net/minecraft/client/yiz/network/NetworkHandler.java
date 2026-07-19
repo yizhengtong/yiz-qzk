@@ -55,6 +55,12 @@ public final class NetworkHandler {
             C2SSkillCastPayload.STREAM_CODEC,
             C2SSkillCastPayload::handle
         );
+        // 多段跳：C2S 请求消耗一次空中跳
+        registrar.playToServer(
+            C2SMultiJumpPayload.TYPE,
+            C2SMultiJumpPayload.STREAM_CODEC,
+            C2SMultiJumpPayload::handle
+        );
         // 奔雷袭窗口同步：S2C 通知客户端窗口期间自动攻击
         registrar.playToClient(
             S2CBenleixiWindowPayload.TYPE,
