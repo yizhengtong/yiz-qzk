@@ -1,6 +1,5 @@
 package net.minecraft.client.yiz.core.sync;
 
-import net.minecraft.client.yiz.core.AccessorySlotProvider;
 import net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler;
 import net.minecraft.core.Holder;
 import net.minecraft.resources.ResourceLocation;
@@ -47,23 +46,23 @@ public final class EquipmentAttributeSync {
     /**
      * 同步玩家<b>饰品槽</b>的 yizmodqzk 自定义属性。每 tick 调用。
      *
-     * <p><b>只处理饰品槽</b>，不处理原版装备槽（主手/副手/盔甲）。原因：原版 Minecraft 对
-     * 通过 {@code EquipmentSlotGroup} 挂载的物品 modifier 会<b>自动</b>累加到玩家属性值
-     * （{@code getAttributeValue}），无论该属性是否原版。若同步器再汇总一次原版槽位，
-     * 会导致主手/盔甲属性<b>双倍计算</b>。</p>
+     * <p>统一支持<b>主手 / 副手 / 4 盔甲槽 / 技能装载槽</b>的 yizmodqzk 自定义属性汇总。</p>
      *
-     * <p>饰品槽是下游自定义容器，不在原版装备槽系统内，原版不会自动生效，必须由本同步器补齐。
-     * 分工：原版槽位靠原版自动生效；饰品槽靠本同步器。</p>
+     * <p>原版 Minecraft 只对<b>原版注册的属性</b>（generic.armor 等）自动累加装备槽 modifier
+     * 到玩家属性值；yizmodqzk 自定义属性原版不认识，装备槽 modifier 不会自动生效，必须由本
+     * 同步器补齐。技能装载槽是下游自定义容器，同样由本同步器处理。</p>
+     *
+     * <p><b>不会双倍</b>：collectYizAttributes 只统计 yizmodqzk 命名空间属性（isYizAttribute
+     * 过滤），原版属性完全不参与，因此与原版的自动累加互不干扰。</p>
+     *
+     * <p><b>饰品槽系统已废弃移除</b>：不再收集饰品槽物品，属性生效槽位统一为
+     * 主手/副手/装备槽/技能装载槽。</p>
      */
     public static void sync(Player player) {
-        // 收集饰品槽物品
         List<ItemStack> stacks = new ArrayList<>();
-        AccessorySlotProvider provider = AccessorySlotProvider.get();
-        if (provider != null) {
-            for (ItemStack s : provider.getAccessoryStacks(player)) {
-                if (s != null && !s.isEmpty()) stacks.add(s);
-            }
-        }
+
+        // 收集主手 / 副手 / 4 盔甲槽物品
+        addVanillaEquipmentStacks(player, stacks);
 
         // 收集技能装载槽物品（从 PlayerDataAPI 同步的 load_slots）
         collectLoadSlots(player, stacks);
@@ -73,6 +72,29 @@ public final class EquipmentAttributeSync {
 
         // 写入玩家属性（值=0 则移除）
         applyToPlayer(player, sum);
+    }
+
+    /**
+     * 收集主手 / 副手 / 4 盔甲槽物品加入列表。
+     *
+     * <p>原版 Minecraft 只对<b>原版注册的属性</b>（generic.armor 等）自动累加装备槽 modifier 到
+     * 玩家属性值；yizmodqzk 自定义属性原版不认识，装备槽 modifier 不会自动生效。本方法把这些
+     * 槽位的物品也纳入收集，由 collectYizAttributes 统一汇总（仅 yiz 属性，不会与原版双倍）。</p>
+     */
+    private static void addVanillaEquipmentStacks(Player player, List<ItemStack> stacks) {
+        // 主手 / 副手
+        addIfPresent(player.getMainHandItem(), stacks);
+        addIfPresent(player.getOffhandItem(), stacks);
+        // 4 盔甲槽
+        for (net.minecraft.world.entity.EquipmentSlot slot : net.minecraft.world.entity.EquipmentSlot.values()) {
+            if (slot.getType() == net.minecraft.world.entity.EquipmentSlot.Type.HUMANOID_ARMOR) {
+                addIfPresent(player.getItemBySlot(slot), stacks);
+            }
+        }
+    }
+
+    private static void addIfPresent(ItemStack stack, List<ItemStack> stacks) {
+        if (stack != null && !stack.isEmpty()) stacks.add(stack);
     }
 
     /** 从 PlayerDataAPI 读取装载槽物品加入收集列表。 */
