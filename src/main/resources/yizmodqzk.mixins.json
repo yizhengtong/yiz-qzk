@@ -5,12 +5,14 @@
   "compatibilityLevel": "JAVA_21",
   "mixins": [
     "AttackInterceptorMixin",
+    "FallDamageMixin",
     "FlightOptimizationMixin",
     "ItemAbolitionMixin",
     "LivingEntityArmorAbolitionMixin",
     "LivingEntityMixin",
     "NoCollisionMixin",
     "PlayerMixin",
+    "PlayerMovementMixin",
     "ProjectileHitMixin",
     "StartupItemRegistryReplaceMixin"
   ],

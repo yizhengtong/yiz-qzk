@@ -347,6 +347,7 @@ public class tizMod {
     private void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
         if (event.getEntity() instanceof ServerPlayer sp) {
             resetUndying(sp);
+            net.minecraft.client.yiz.handler.AttackInvulnerabilityTracker.clear(sp);
             net.minecraft.client.yiz.handler.PassiveChargeTracker.onLogin(sp);
             // 加载技能配置存储（被动/技能/装载槽），使 onWornTick 分发器登录后即可读到被动槽内容
             var skillData = net.minecraft.client.yiz.editor.SkillConfigStorage.getOrCreate(sp.getUUID());
@@ -403,7 +404,10 @@ public class tizMod {
             net.minecraft.client.yiz.handler.SkillChargeManager.tickRecharge(sp);
             net.minecraft.client.yiz.handler.TempAttributeHelper.tick(sp);
             net.minecraft.client.yiz.tool.health.ManaTracker.tickRegen(sp);
+            net.minecraft.client.yiz.tool.health.AttributeEffectTicker.tick(sp);
             net.minecraft.client.yiz.handler.ChargedShockTracker.tick(sp);
+            // 受击无敌过期检查（INVINCIBILITY_MULT 限时态）
+            net.minecraft.client.yiz.handler.AttackInvulnerabilityTracker.onPlayerTick(sp, sp.level().getGameTime());
         }
     }
 

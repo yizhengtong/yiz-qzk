@@ -79,15 +79,44 @@ public abstract class PlayerMixin implements InvulnerableDataBridge {
     // ==================== hurt 取消 ====================
 
     /**
-     * 无敌时取消伤害。
+     * hurt HEAD：闪避掷骰 + 无敌帧免疫 + 手动 th 持续免疫。
      * Player 覆写了 hurt()，因此此注入可以找到目标方法。
+     *
+     * <p>{@link net.minecraft.client.yiz.handler.AttackInvulnerabilityTracker#onPlayerHurtHead} 返回：
+     * <ul>
+     *   <li>CANCEL — cancel 本次（闪避挡住 / 无敌帧免疫）</li>
+     *   <li>PASS — 放行本次（闪避未中挨一下）；但若手动 th/创造/重生仍挂着持续无敌字段也 cancel</li>
+     * </ul>
+     * 服务端权威判定。</p>
      */
     @Inject(method = "hurt", at = @At("HEAD"), cancellable = true)
     private void yizmodqzk$onHurt(DamageSource source, float amount,
             CallbackInfoReturnable<Boolean> cir) {
         Player self = (Player) (Object) this;
-        if (self.getEntityData().get(yizmodqzk$FE_INVULNERABLE_DATA)) {
-            cir.setReturnValue(false); // 取消伤害
+        if (self.level().isClientSide()) return; // 服务端权威判定
+
+        var r = net.minecraft.client.yiz.handler.AttackInvulnerabilityTracker.onPlayerHurtHead(self);
+        if (r == net.minecraft.client.yiz.handler.AttackInvulnerabilityTracker.HurtHeadResult.CANCEL) {
+            cir.setReturnValue(false); // 闪避挡住 / 无敌帧免疫
+            return;
         }
+        // PASS：闪避未中放行；但手动 th/创造/重生的持续无敌仍生效（字段为 true 则 cancel）
+        if (self.getEntityData().get(yizmodqzk$FE_INVULNERABLE_DATA)) {
+            cir.setReturnValue(false);
+        }
+    }
+
+    /**
+     * hurt 成功（确实受伤、未被 cancel）后：激活 INVINCIBILITY_MULT（N tick 完全无敌）。
+     * <p>仅当 hurt 返回 true 时触发。被闪避/无敌帧挡掉的（return false）不会进入此处。</p>
+     */
+    @Inject(method = "hurt", at = @At("RETURN"))
+    private void yizmodqzk$onHurtReturn(DamageSource source, float amount,
+            CallbackInfoReturnable<Boolean> cir) {
+        if (!cir.getReturnValue()) return; // 未实际受伤
+        Player self = (Player) (Object) this;
+        if (self.level().isClientSide()) return;
+        net.minecraft.client.yiz.handler.AttackInvulnerabilityTracker.onHurtSuccess(
+            self, self.level().getGameTime());
     }
 }
