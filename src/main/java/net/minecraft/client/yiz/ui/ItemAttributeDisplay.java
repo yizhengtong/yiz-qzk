@@ -80,6 +80,8 @@ public final class ItemAttributeDisplay {
         yiz("combo_value",          "连击倍率",     "%",   1.0);
         yiz("combo_count",          "连击次数",     "次",   1.0);
         yiz("undying",              "不死",         "次",   1.0);
+        yiz("poshi",                "破时",         "%",   1.0);
+        yiz("poxian",               "破限",         "%",   1.0);
         yiz("projectile_reflection","投射物反弹",   "格",   1.0);
         yiz("no_collision",         "无碰撞",       "",    1.0);
         yiz("knockback_immunity",   "击退免疫",     "",    1.0);

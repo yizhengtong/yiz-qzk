@@ -87,6 +87,10 @@ public class tizModClient {
     private void onClientSetup(FMLClientSetupEvent event) {
         tizMod.LOGGER.info("YizMod QZK Client initialized");
 
+        // 屏蔽本模组自定义属性在原版 tooltip 的属性行（顶部面板已统一显示，避免重复）
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.register(
+                net.minecraft.client.yiz.ui.VanillaAttributeTooltipHider.class);
+
         // 注册着色器预设 (1=星芒, 2=图标贴图, 3=曲速穿越)
         ShaderManager.registerPreset("1", new ShaderManager.ShaderDescriptor(
                 tizMod.MODID, "rendertype_cosmic2", "rendertype_cosmic2_armor", true
