@@ -1,5 +1,6 @@
 package net.minecraft.client.yiz.mixin;
 
+import net.minecraft.client.yiz.api.ComboAttackHelper;
 import net.minecraft.client.yiz.api.DamageReductionRegistry;
 import net.minecraft.client.yiz.api.DamageValueModifierRegistry;
 import net.minecraft.client.yiz.attribute.YizAttributes;
@@ -592,30 +593,12 @@ public abstract class LivingEntityMixin implements HealthDataBridge, ControlData
             }
         }
 
-        // ── 连击：玩家攻击时触发（玩家是伤害来源，目标非玩家）──
-        if (srcEntity instanceof net.minecraft.server.level.ServerPlayer cPlayer && !(self instanceof Player)) {
+        // ── 连击：走 Player.attack() 管道，可触发暴击 ──
+        if (srcEntity instanceof net.minecraft.server.level.ServerPlayer cPlayer && !(self instanceof Player)
+            && !ComboAttackHelper.isComboAttacking()) {
             double cRate = cPlayer.getAttributeValue(YizAttributes.COMBO_RATE);
             if (cRate > 0 && Math.random() < cRate / 100.0) {
-                net.minecraft.nbt.CompoundTag pd = self.getPersistentData();
-                if (!pd.getBoolean("yiz:combo_hitting")) {
-                    pd.putBoolean("yiz:combo_hitting", true);
-                    try {
-                        double cValue = cPlayer.getAttributeValue(YizAttributes.COMBO_VALUE);
-                        if (cValue <= 0) cValue = 100.0;
-                        double cCount = cPlayer.getAttributeValue(YizAttributes.COMBO_COUNT);
-                        if (cCount < 1) cCount = 1;
-
-                        double baseAtk = cPlayer.getAttributeValue(net.minecraft.world.entity.ai.attributes.Attributes.ATTACK_DAMAGE);
-                        float comboDmg = (float) (baseAtk * cValue / 100.0);
-
-                        for (int j = 0; j < (int) cCount; j++) {
-                            self.invulnerableTime = 0;
-                            self.hurt(cPlayer.damageSources().mobAttack(cPlayer), comboDmg);
-                        }
-                    } finally {
-                        pd.putBoolean("yiz:combo_hitting", false);
-                    }
-                }
+                ComboAttackHelper.executeCombo(cPlayer, self);
             }
         }
     }

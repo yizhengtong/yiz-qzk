@@ -87,7 +87,7 @@ public class SkillAssemblyBlock extends HorizontalDirectionalBlock {
                     new SkillConfigMenu(containerId, playerInv,
                         data.skillUpgrade(), data.bigLoad(),
                         data.skillLoad(), data.passiveLoad(),
-                        data.skillLibrary()),
+                        data.skillLibrary(), data.equipment()),
                 TITLE));
         }
         return ItemInteractionResult.sidedSuccess(level.isClientSide);

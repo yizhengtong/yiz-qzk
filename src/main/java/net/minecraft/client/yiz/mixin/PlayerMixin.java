@@ -119,4 +119,5 @@ public abstract class PlayerMixin implements InvulnerableDataBridge {
         net.minecraft.client.yiz.handler.AttackInvulnerabilityTracker.onHurtSuccess(
             self, self.level().getGameTime());
     }
+
 }

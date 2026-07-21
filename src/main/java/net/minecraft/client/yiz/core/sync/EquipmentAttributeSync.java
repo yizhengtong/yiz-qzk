@@ -61,10 +61,10 @@ public final class EquipmentAttributeSync {
     public static void sync(Player player) {
         List<ItemStack> stacks = new ArrayList<>();
 
-        // 收集主手 / 副手 / 4 盔甲槽物品
-        addVanillaEquipmentStacks(player, stacks);
+        // 主手/副手/盔甲槽 已由原版 detectEquipmentUpdates() 自动处理
+        // 不再重复收集，避免属性双倍叠加
 
-        // 收集技能装载槽物品（从 PlayerDataAPI 同步的 load_slots）
+        // 收集技能装载槽物品（原版不认识的容器，需手动同步）
         collectLoadSlots(player, stacks);
 
         // 按 yizmodqzk 自定义属性累加 modifier 值

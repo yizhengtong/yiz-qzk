@@ -14,16 +14,15 @@ public class SkillConfigScreen extends AbstractContainerScreen<SkillConfigMenu> 
 
     private static final ResourceLocation GUI_TEXTURE =
         ResourceLocation.fromNamespaceAndPath("yizmodqzk", "textures/gui/skill_config.png");
-    public static final int GUI_WIDTH = 430, GUI_HEIGHT = 200;
+    public static final int GUI_WIDTH = 630, GUI_HEIGHT = 300;
     private static final int XP_COST_PER_LEVEL = 100;
 
-    private static final int UPGRADE_SLOT_X = 182, UPGRADE_SLOT_Y = 36;
-    private static final int[][] ENHANCE_SLOTS = {{221,18},{257,18},{297,18},{221,56},{257,56},{297,56}};
+    private static final int UPGRADE_SLOT_X = 262, UPGRADE_SLOT_Y = 84;
+    private static final int[][] ENHANCE_SLOTS = {{302,67},{338,67},{378,67},{302,105},{338,105},{378,105}};
     private static final int ENHANCE_SIZE = 14;
-    private static final int BTN_PLUS_X1=310,BTN_PLUS_Y1=89,BTN_PLUS_X2=321,BTN_PLUS_Y2=99;
-    private static final int BTN_MINUS_X1=311,BTN_MINUS_Y1=102,BTN_MINUS_X2=320,BTN_MINUS_Y2=110;
-    private static final int PREVIEW_X=22,PREVIEW_Y=34,PREVIEW_W=90,PREVIEW_H=133;
-    private static final int INFO_X=332,INFO_Y=36;
+    private static final int PREVIEW_X=51,PREVIEW_Y=45,PREVIEW_W=124,PREVIEW_H=178;
+    private static final int INFO_X=450,INFO_Y=85;
+    private static final int CLOSE_X1=576,CLOSE_Y1=48,CLOSE_X2=589,CLOSE_Y2=61;
 
     private int selectedEnhance = -1;
     private int previewScroll = 0;
@@ -39,7 +38,7 @@ public class SkillConfigScreen extends AbstractContainerScreen<SkillConfigMenu> 
     @Override
     protected void init() {
         super.init();
-        this.leftPos = this.width / 2 - 237;
+        this.leftPos = this.width / 2 - 316;
     }
 
     private String getSkillRegName() {
@@ -225,32 +224,35 @@ public class SkillConfigScreen extends AbstractContainerScreen<SkillConfigMenu> 
 
     @Override
     public boolean mouseClicked(double mx, double my, int btn) {
-        if (btn == 0) {
-            // 点击加强槽 → 选中（属性或标签均选中，不直接触发操作）
-            for (int i = 0; i < ENHANCE_SLOTS.length; i++) {
-                if (isEnh(mx, my, i)) {
-                    if (i >= enhanceEntries.size()) return true; // 空槽
+        // 关闭按钮
+        if (isClose(mx, my)) { this.onClose(); return true; }
+
+        // 加强槽：左键加点/激活，右键选中预览，Shift+左键取消
+        for (int i = 0; i < ENHANCE_SLOTS.length; i++) {
+            if (isEnh(mx, my, i)) {
+                if (i >= enhanceEntries.size()) return true;
+                var entry = enhanceEntries.get(i);
+                boolean shift = hasShiftDown();
+
+                if (btn == 0) {
+                    if (shift) {
+                        // Shift+左键：取消强化
+                        if (entry instanceof EnhanceEntry.Tag) deactivateTag(i);
+                        else resetEnhance(i);
+                    } else {
+                        // 左键：加点强化
+                        if (entry instanceof EnhanceEntry.Tag) activateTag(i);
+                        else onPlus(i);
+                    }
+                } else if (btn == 1) {
+                    // 右键：选中预览
                     selectedEnhance = i;
                     upgradeSlotSelected = false;
-                    return true;
                 }
+                return true;
             }
-            // +/- 按钮：对选中的条目执行操作
-            if (selectedEnhance >= 0 && selectedEnhance < enhanceEntries.size()) {
-                var entry = enhanceEntries.get(selectedEnhance);
-                if (isPlus(mx, my)) {
-                    if (entry instanceof EnhanceEntry.Tag) activateTag(selectedEnhance);
-                    else onPlus();
-                    return true;
-                }
-                if (isMinus(mx, my)) {
-                    if (entry instanceof EnhanceEntry.Tag) deactivateTag(selectedEnhance);
-                    else onMinus();
-                    return true;
-                }
-            }
-            if (isUpgrade(mx, my)) { upgradeSlotSelected = true; selectedEnhance = -1; }
         }
+        if (btn == 0 && isUpgrade(mx, my)) { upgradeSlotSelected = true; selectedEnhance = -1; }
         return super.mouseClicked(mx, my, btn);
     }
 
@@ -268,40 +270,39 @@ public class SkillConfigScreen extends AbstractContainerScreen<SkillConfigMenu> 
     // ── 标签激活/停用 ─────────────────────────────────────────
 
     private void activateTag(int i) {
-        if (enhanceLevels[i] > 0) return; // 已激活
+        if (enhanceLevels[i] > 0) return;
         var mc = Minecraft.getInstance();
         if (mc.player == null) return;
         int totalXp = C2SSkillEnhancePayload.getTotalXp(mc.player);
         if (totalXp < XP_COST_PER_LEVEL) return;
         enhanceLevels[i] = 1;
-        C2SSkillEnhancePayload.send(skillRegName,i, 1);
+        C2SSkillEnhancePayload.send(skillRegName, i, 1);
     }
 
     private void deactivateTag(int i) {
-        if (enhanceLevels[i] <= 0) return; // 未激活
+        if (enhanceLevels[i] <= 0) return;
         enhanceLevels[i] = 0;
-        C2SSkillEnhancePayload.send(skillRegName,i, 0);
+        C2SSkillEnhancePayload.send(skillRegName, i, 0);
     }
 
-    // ── +/- 逻辑（属性型） ────────────────────────────────────
+    // ── 属性强化 / 重置 ────────────────────────────────────
 
-    private void onPlus() {
-        if (selectedEnhance < 0 || selectedEnhance >= enhanceEntries.size()) return;
-        if (!(enhanceEntries.get(selectedEnhance) instanceof EnhanceEntry.Attribute)) return;
+    private void onPlus(int i) {
+        if (i < 0 || i >= enhanceEntries.size()) return;
+        if (!(enhanceEntries.get(i) instanceof EnhanceEntry.Attribute)) return;
         var mc = Minecraft.getInstance();
         if (mc.player == null) return;
         int totalXp = C2SSkillEnhancePayload.getTotalXp(mc.player);
         if (totalXp < XP_COST_PER_LEVEL) return;
-        enhanceLevels[selectedEnhance]++;
-        C2SSkillEnhancePayload.send(skillRegName,selectedEnhance, enhanceLevels[selectedEnhance]);
+        enhanceLevels[i]++;
+        C2SSkillEnhancePayload.send(skillRegName, i, enhanceLevels[i]);
     }
 
-    private void onMinus() {
-        if (selectedEnhance < 0 || selectedEnhance >= enhanceEntries.size()) return;
-        if (!(enhanceEntries.get(selectedEnhance) instanceof EnhanceEntry.Attribute)) return;
-        if (enhanceLevels[selectedEnhance] <= 0) return;
-        enhanceLevels[selectedEnhance]--;
-        C2SSkillEnhancePayload.send(skillRegName,selectedEnhance, enhanceLevels[selectedEnhance]);
+    private void resetEnhance(int i) {
+        if (i < 0 || i >= enhanceEntries.size()) return;
+        if (enhanceLevels[i] <= 0) return;
+        enhanceLevels[i] = 0;
+        C2SSkillEnhancePayload.send(skillRegName, i, 0);
     }
 
     // ── 命中检测 ────────────────────────────────────────────
@@ -314,13 +315,9 @@ public class SkillConfigScreen extends AbstractContainerScreen<SkillConfigMenu> 
         int x = leftPos + ENHANCE_SLOTS[i][0], y = topPos + ENHANCE_SLOTS[i][1];
         return mx >= x && mx < x + ENHANCE_SIZE && my >= y && my < y + ENHANCE_SIZE;
     }
-    private boolean isPlus(double mx, double my) {
-        return mx >= leftPos + BTN_PLUS_X1 && mx <= leftPos + BTN_PLUS_X2
-            && my >= topPos + BTN_PLUS_Y1 && my <= topPos + BTN_PLUS_Y2;
-    }
-    private boolean isMinus(double mx, double my) {
-        return mx >= leftPos + BTN_MINUS_X1 && mx <= leftPos + BTN_MINUS_X2
-            && my >= topPos + BTN_MINUS_Y1 && my <= topPos + BTN_MINUS_Y2;
+    private boolean isClose(double mx, double my) {
+        return mx >= leftPos + CLOSE_X1 && mx <= leftPos + CLOSE_X2
+            && my >= topPos + CLOSE_Y1 && my <= topPos + CLOSE_Y2;
     }
 
     // ── 工具方法 ─────────────────────────────────────────────
@@ -335,32 +332,18 @@ public class SkillConfigScreen extends AbstractContainerScreen<SkillConfigMenu> 
     public void render(GuiGraphics g, int mx, int my, float pt) {
         super.render(g, mx, my, pt);
         this.renderTooltip(g, mx, my);
-        // 按钮 tooltip
-        if (selectedEnhance >= 0 && selectedEnhance < enhanceEntries.size()) {
-            var entry = enhanceEntries.get(selectedEnhance);
-            if (isPlus(mx, my)) {
-                if (entry instanceof EnhanceEntry.Tag)
-                    g.renderTooltip(font, Component.literal("激活标签 (消耗" + XP_COST_PER_LEVEL + "经验)"), mx, my);
-                else
-                    g.renderTooltip(font, Component.literal("+1 级 (消耗" + XP_COST_PER_LEVEL + "经验)"), mx, my);
-            }
-            if (isMinus(mx, my)) {
-                if (entry instanceof EnhanceEntry.Tag)
-                    g.renderTooltip(font, Component.literal("停用标签"), mx, my);
-                else
-                    g.renderTooltip(font, Component.literal("-1 级"), mx, my);
-            }
-        }
-        // 加强槽 hover
+        // 加强槽 hover tooltip
         for (int i = 0; i < ENHANCE_SLOTS.length; i++) {
             if (isEnh(mx, my, i) && i < enhanceEntries.size()) {
                 var entry = enhanceEntries.get(i);
                 if (entry instanceof EnhanceEntry.Tag tag) {
-                    String tip = tag.displayName() + (enhanceLevels[i] > 0 ? " [已激活]" : " [未激活]") +
-                        "\n" + tag.description() + "\n点击选中, 按+激活 按-停用";
+                    String status = enhanceLevels[i] > 0 ? " [已激活]" : " [未激活]";
+                    String tip = tag.displayName() + status + "\n" + tag.description()
+                        + "\n左键激活/停用 | 右键预览 | Shift+左键取消";
                     g.renderTooltip(font, Component.literal(tip), mx, my);
                 } else {
-                    String tip = entry.displayName() + " Lv." + enhanceLevels[i];
+                    String tip = entry.displayName() + " Lv." + enhanceLevels[i]
+                        + "\n左键+1 | 右键预览 | Shift+左键归零";
                     g.renderTooltip(font, Component.literal(tip), mx, my);
                 }
                 break;

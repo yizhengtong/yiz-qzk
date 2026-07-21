@@ -29,7 +29,8 @@ public final class SkillConfigStorage {
         SimpleContainer bigLoad,        // F: 大装载槽 ×1
         SimpleContainer skillLoad,      // F: 技能装载槽 ×3
         SimpleContainer passiveLoad,    // F: 被动装载槽 ×3
-        SimpleContainer skillLibrary    // G: 技能库 ×20
+        SimpleContainer skillLibrary,   // G: 技能库 ×20
+        SimpleContainer equipment       // H: 装备槽 ×6
     ) {}
 
     private static final String PERSIST_KEY = "yizmodqzk:skill_config_slots";
@@ -64,7 +65,7 @@ public final class SkillConfigStorage {
         return STORE.computeIfAbsent(playerId, k -> new Data(
             new SimpleContainer(1), new SimpleContainer(1),
             new SimpleContainer(3), new SimpleContainer(3),
-            new SimpleContainer(20)));
+            new SimpleContainer(20), new SimpleContainer(6)));
     }
 
     public static Data get(UUID playerId) { return STORE.get(playerId); }
@@ -79,7 +80,7 @@ public final class SkillConfigStorage {
         root.add("skill_load", serializeContainer(data.skillLoad, 3, player));
         root.add("passive_load", serializeContainer(data.passiveLoad, 3, player));
         root.add("library", serializeContainer(data.skillLibrary, 20, player));
-        // 加强等级现已存储在物品 NBT 中，随容器自动持久化
+        root.add("equipment", serializeContainer(data.equipment, 6, player));
         PlayerDataAPI.set(player, PERSIST_KEY, root.toString());
     }
 
@@ -94,7 +95,7 @@ public final class SkillConfigStorage {
             deserializeContainerInto(root, "skill_load", data.skillLoad, 3, player);
             deserializeContainerInto(root, "passive_load", data.passiveLoad, 3, player);
             deserializeContainerInto(root, "library", data.skillLibrary, 20, player);
-            // 加强等级已随物品 NBT 自动恢复
+            deserializeContainerInto(root, "equipment", data.equipment, 6, player);
         } catch (Exception ignored) {}
     }
 

@@ -357,6 +357,8 @@ public class tizMod {
             // 加载技能配置存储（被动/技能/装载槽），使 onWornTick 分发器登录后即可读到被动槽内容
             var skillData = net.minecraft.client.yiz.editor.SkillConfigStorage.getOrCreate(sp.getUUID());
             net.minecraft.client.yiz.editor.SkillConfigStorage.loadFromPlayerData(sp, skillData);
+            // 登录时应用装备属性
+            net.minecraft.client.yiz.editor.SkillConfigMenu.applyEquipmentFromStorage(sp, skillData);
             // 初始化技能充能（各槽补满起步）
             net.minecraft.client.yiz.handler.SkillChargeManager.onLogin(sp);
             // 攻击强度默认 1 点
@@ -375,6 +377,10 @@ public class tizMod {
             int max = oldInst != null ? (int) oldInst.getValue() : 0;
             if (max > 0) net.minecraft.client.yiz.tool.health.EntityASMUtil
                 .resetUndyingCharges(sp.getUUID(), max);
+            // 重生后重新应用装备属性
+            var data = net.minecraft.client.yiz.editor.SkillConfigStorage.get(sp.getUUID());
+            if (data != null)
+                net.minecraft.client.yiz.editor.SkillConfigMenu.applyEquipmentFromStorage(sp, data);
         }
     }
 
@@ -416,7 +422,7 @@ public class tizMod {
         }
     }
 
-    /** 服务端每 tick 遍历被动装载槽，分发 {@link net.minecraft.client.yiz.api.IPassiveItem#onWornTick}（框架契约）。 */
+    /** 服务端每 tick 遍历被动装载槽 + 装备槽，分发 {@link net.minecraft.client.yiz.api.IPassiveItem#onWornTick}。 */
     private static void dispatchPassiveTick(net.minecraft.world.entity.player.Player player) {
         if (player.level().isClientSide()) return;
         var data = net.minecraft.client.yiz.editor.SkillConfigStorage.get(player.getUUID());
@@ -427,13 +433,20 @@ public class tizMod {
                 passive.onWornTick(player, stack);
             }
         }
+        // 装备槽 tick 分发
+        for (int i = 0; i < 6; i++) {
+            net.minecraft.world.item.ItemStack stack = data.equipment().getItem(i);
+            if (!stack.isEmpty() && stack.getItem() instanceof net.minecraft.client.yiz.api.IPassiveItem passive) {
+                passive.onWornTick(player, stack);
+            }
+        }
+        // 特殊装备引擎 tick
+        net.minecraft.client.yiz.handler.SpecialMechanismEngine.onPlayerTick(player, data.equipment());
     }
 
     /**
-     * 玩家攻击命中时遍历被动装载槽，分发 {@link net.minecraft.client.yiz.api.IPassiveItem#onAttack}。
+     * 玩家攻击命中时遍历被动装载槽 + 装备槽，分发 {@link net.minecraft.client.yiz.api.IPassiveItem#onAttack}。
      * <p>由 LivingEntityMixin 在攻击事件中调用。供需要"每次攻击"响应的被动（如天雷引充能）使用。</p>
-     *
-     * @param target 被攻击的实体
      */
     public static void dispatchPassiveAttack(net.minecraft.server.level.ServerPlayer player,
                                              net.minecraft.world.entity.LivingEntity target) {
@@ -446,6 +459,15 @@ public class tizMod {
                 passive.onAttack(player, stack, target);
             }
         }
+        // 装备槽攻击分发
+        for (int i = 0; i < 6; i++) {
+            net.minecraft.world.item.ItemStack stack = data.equipment().getItem(i);
+            if (!stack.isEmpty() && stack.getItem() instanceof net.minecraft.client.yiz.api.IPassiveItem passive) {
+                passive.onAttack(player, stack, target);
+            }
+        }
+        // 特殊装备引擎攻击调度
+        net.minecraft.client.yiz.handler.SpecialMechanismEngine.onPlayerAttack(player, target, data.equipment());
     }
 
     /** 攻击冷却缩减（实际逻辑在 PlayerMixin，此处仅触发）。 */
