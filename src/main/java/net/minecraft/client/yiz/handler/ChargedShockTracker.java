@@ -33,7 +33,7 @@ public final class ChargedShockTracker {
         if (targets == null || targets.isEmpty()) return;
 
         double spellPow = YizAttributes.getEffectiveSpellPower(player);
-        float dmg = (float)(0.85 + spellPow * 0.225);
+        float dmg = (float)(0.85 * spellPow / 100.0);
 
         for (LivingEntity t : targets) {
             if (!t.isAlive()) continue;

@@ -37,6 +37,12 @@ public final class NetworkHandler {
             S2CShockFxPayload.STREAM_CODEC,
             S2CShockFxPayload::handle
         );
+        // 卢登激荡溅射视觉：S2C（死亡目标体表 + center→victim 闪电链 + victim 体表）
+        registrar.playToClient(
+            S2CLudenFxPayload.TYPE,
+            S2CLudenFxPayload.STREAM_CODEC,
+            S2CLudenFxPayload::handle
+        );
         // 快速重生：C2S 请求 30 秒无敌重生
         registrar.playToServer(
             C2SFastRespawnPayload.TYPE,
@@ -86,5 +92,18 @@ public final class NetworkHandler {
                 PacketDistributor.sendToPlayer(serverPlayer, payload);
             }
         });
+    }
+
+    /** 卢登激荡溅射视觉：向 center 附近 64 格内玩家广播特效包。 */
+    public static void sendLudenFx(net.minecraft.server.level.ServerLevel level,
+                                    net.minecraft.world.phys.Vec3 center, int centerId,
+                                    java.util.List<Integer> victimIds) {
+        var pkt = new S2CLudenFxPayload(centerId, center.x, center.y, center.z, victimIds);
+        double maxDistSq = 64.0 * 64.0;
+        for (var sp : level.players()) {
+            if (sp.distanceToSqr(center) <= maxDistSq) {
+                PacketDistributor.sendToPlayer(sp, pkt);
+            }
+        }
     }
 }

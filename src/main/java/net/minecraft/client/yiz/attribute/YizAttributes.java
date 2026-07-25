@@ -43,6 +43,15 @@ public final class YizAttributes {
                 .setSyncable(true));
 
     /**
+     * 精准 — 持有该属性时，所有以玩家为来源的伤害均可暴击。
+     * <p>值 > 0 即生效（二元开关），具体暴击率/暴伤走 CRIT_RATE / CRIT_DAMAGE。</p>
+     */
+    public static final Holder<Attribute> PRECISION =
+        ATTRIBUTES.register("precision",
+            () -> new RangedAttribute("attribute.yizmodqzk.precision", 0.0, 0.0, 1.0)
+                .setSyncable(true));
+
+    /**
      * 吸血 — 造成伤害时回复自身生命的比例。
      * <p>值域 ≥0，无上限。</p>
      */
@@ -202,8 +211,8 @@ public final class YizAttributes {
                 .setSyncable(true));
 
     /**
-     * 攻击强度 — 独立攻击数值，每点超出 1 的部分直接加算到伤害。
-     * <p>不受原版攻击力影响，玩家默认拥有 1 点。</p>
+     * 攻击强度 — 按百分比增幅最终伤害（值 = 百分比，30 表示 +30%）。
+     * <p>不影响原版攻击力基础值，仅在伤害结算时 {@code amount *= (1 + 值/100)}。默认 0。</p>
      */
     public static final Holder<Attribute> ATTACK_STRENGTH =
         ATTRIBUTES.register("attack_strength",
@@ -220,12 +229,14 @@ public final class YizAttributes {
                 .setSyncable(true));
 
     /**
-     * 法术强度 — 每次攻击附加 0.1×值 的伤害（伤害类型=魔法）。
-     * <p>与攻击强度同为后续全部技能的基础计算属性。</p>
+     * 法术强度 — 百分比属性（值 = 百分比，100 表示 100%）。
+     * <p>作为所有法术伤害/护盾的统一加成系数：技能效果 = 基础值 × 法强/100。
+     * 不再直接附加到普攻伤害。默认 100（=100%），可由 {@link #getEffectiveSpellPower}
+     * 经 MAGIC_DAMAGE 进一步放大。</p>
      */
     public static final Holder<Attribute> SPELL_POWER =
         ATTRIBUTES.register("spell_power",
-            () -> new RangedAttribute("attribute.yizmodqzk.spell_power", 0.0, 0.0, Double.MAX_VALUE)
+            () -> new RangedAttribute("attribute.yizmodqzk.spell_power", 100.0, 0.0, Double.MAX_VALUE)
                 .setSyncable(true));
 
     /**
@@ -426,10 +437,18 @@ public final class YizAttributes {
     public static final Holder<Attribute> ARMOR_PENETRATION_FLAT =
         ATTRIBUTES.register("armor_penetration_flat",
             () -> new RangedAttribute("attribute.yizmodqzk.armor_penetration_flat", 0.0, 0.0, Double.MAX_VALUE).setSyncable(true));
-    /** 攻击距离 — 值域 ≥0，格。 */
+    /** 交互距离 — 值域 ≥0，格。 */
     public static final Holder<Attribute> ATTACK_RANGE =
         ATTRIBUTES.register("attack_range",
             () -> new RangedAttribute("attribute.yizmodqzk.attack_range", 0.0, 0.0, Double.MAX_VALUE).setSyncable(true));
+
+    /**
+     * 自动攻击 — 值 > 0 时，按住攻击键 + 冷却满即自动攻击，无需 {@code yizmodqzk:auto_attack} 附魔。
+     * <p>由装备（如疾射火炮）授予。值域 0~1（二元开关，>0 即生效）。</p>
+     */
+    public static final Holder<Attribute> AUTO_ATTACK =
+        ATTRIBUTES.register("auto_attack",
+            () -> new RangedAttribute("attribute.yizmodqzk.auto_attack", 0.0, 0.0, 1.0).setSyncable(true));
 
     // ═══════════════════════════════════════════════════════════
     //  特殊属性（迁自 EffectTag）
@@ -669,6 +688,74 @@ public final class YizAttributes {
     public static final Holder<Attribute> PROJECTILE_IMMUNITY =
         ATTRIBUTES.register("projectile_immunity",
             () -> new RangedAttribute("attribute.yizmodqzk.projectile_immunity", 0.0, 0.0, Double.MAX_VALUE)
+                .setSyncable(true));
+
+    // ═══════════════════════════════════════════════════════════
+    //  挖掘属性
+    // ═══════════════════════════════════════════════════════════
+
+    /**
+     * 挖掘等级 — 决定可挖掘方块是否掉落。
+     * <p>值域 ≥0。0=木, 1=石, 2=铁, 3=钻石, 4=下界合金。</p>
+     */
+    public static final Holder<Attribute> MINING_LEVEL =
+        ATTRIBUTES.register("mining_level",
+            () -> new RangedAttribute("attribute.yizmodqzk.mining_level", 0.0, 0.0, Double.MAX_VALUE)
+                .setSyncable(true));
+
+    /**
+     * 挖掘类：镐 — 1=可挖掘镐类方块（石/矿等），无视手持物品。
+     * <p>值域 0~1，二元开关。</p>
+     */
+    public static final Holder<Attribute> MINING_PICKAXE =
+        ATTRIBUTES.register("mining_pickaxe",
+            () -> new RangedAttribute("attribute.yizmodqzk.mining_pickaxe", 0.0, 0.0, 1.0)
+                .setSyncable(true));
+
+    /**
+     * 挖掘类：斧 — 1=可挖掘斧类方块（原木/木板等），无视手持物品。
+     * <p>值域 0~1，二元开关。</p>
+     */
+    public static final Holder<Attribute> MINING_AXE =
+        ATTRIBUTES.register("mining_axe",
+            () -> new RangedAttribute("attribute.yizmodqzk.mining_axe", 0.0, 0.0, 1.0)
+                .setSyncable(true));
+
+    /**
+     * 挖掘类：铲 — 1=可挖掘铲类方块（泥土/沙子等），无视手持物品。
+     * <p>值域 0~1，二元开关。</p>
+     */
+    public static final Holder<Attribute> MINING_SHOVEL =
+        ATTRIBUTES.register("mining_shovel",
+            () -> new RangedAttribute("attribute.yizmodqzk.mining_shovel", 0.0, 0.0, 1.0)
+                .setSyncable(true));
+
+    /**
+     * 挖掘类：全 — 1=可挖掘所有方块类别（含锄/剪刀等），无视手持物品。
+     * <p>值域 0~1，二元开关。覆盖镐/斧/铲之外的所有类型。</p>
+     */
+    public static final Holder<Attribute> MINING_ALL =
+        ATTRIBUTES.register("mining_all",
+            () -> new RangedAttribute("attribute.yizmodqzk.mining_all", 0.0, 0.0, 1.0)
+                .setSyncable(true));
+
+    /**
+     * 免疫挖掘惩罚 — 1=免疫所有挖掘速度负面效果。
+     * <p>包括：空中挖掘减速、水中挖掘减速、挖掘疲劳效果。
+     * 值域 0~1，二元开关。</p>
+     */
+    public static final Holder<Attribute> MINING_PENALTY_IMMUNITY =
+        ATTRIBUTES.register("mining_penalty_immunity",
+            () -> new RangedAttribute("attribute.yizmodqzk.mining_penalty_immunity", 0.0, 0.0, 1.0)
+                .setSyncable(true));
+
+    /**
+     * 挖掘效率 — 百分比加快挖掘速度。
+     * <p>值域 ≥0，1 = 1%。100 = 速度翻倍。</p>
+     */
+    public static final Holder<Attribute> MINING_EFFICIENCY =
+        ATTRIBUTES.register("mining_efficiency",
+            () -> new RangedAttribute("attribute.yizmodqzk.mining_efficiency", 0.0, 0.0, Double.MAX_VALUE)
                 .setSyncable(true));
 
     // ═══════════════════════════════════════════════════════════

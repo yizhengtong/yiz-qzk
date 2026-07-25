@@ -46,6 +46,13 @@ public final class CritTracker {
     }
 
     /**
+     * 只读不删。供 modifyHurtAmount 判断当前攻击是否已被近战暴击处理过。
+     */
+    public static boolean isMarked(Player player) {
+        return VANILLA_CRIT_FLAG.contains(player.getUUID());
+    }
+
+    /**
      * 读取并清除标记。
      * 在 {@code LivingDamageEvent.Pre} 中调用。
      * @return true = 原版暴击已发生（originalDamage 已含 1.5x）

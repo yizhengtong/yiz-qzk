@@ -136,7 +136,7 @@ public final class PassiveChargeTracker {
 
     // ── 被动伤害公式 ──
 
-    /** 读取被动槽首个带伤害公式的物品，算 damage_base + spell_power × damage_spell_coeff/100。 */
+    /** 读取被动槽首个带伤害公式的物品，算 damage_base × 法强/100。 */
     private static float computePassiveDamage(Player player) {
         var data = net.minecraft.client.yiz.editor.SkillConfigStorage.get(player.getUUID());
         if (data == null) return 0;
@@ -147,9 +147,8 @@ public final class PassiveChargeTracker {
         }
         if (passive.isEmpty()) return 0;
         double base = readItemAttr(passive, net.minecraft.client.yiz.attribute.YizAttributes.DAMAGE_BASE);
-        double coeff = readItemAttr(passive, net.minecraft.client.yiz.attribute.YizAttributes.DAMAGE_SPELL_COEFF);
         double spellPow = net.minecraft.client.yiz.attribute.YizAttributes.getEffectiveSpellPower(player);
-        return (float) (base + spellPow * coeff / 100.0);
+        return (float) (base * spellPow / 100.0);
     }
 
     private static double readItemAttr(net.minecraft.world.item.ItemStack stack,

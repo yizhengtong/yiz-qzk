@@ -35,7 +35,6 @@ public class SkillConfigMenu extends AbstractContainerMenu {
     private final Container passiveLoad;
     private final Container skillLibrary;
     private final Container equipment;
-    private final net.minecraft.world.ContainerListener equipListener;
 
     /** 打开界面时各装载槽的物品快照（服务端），用于 removed() 对比检测卸载并清理 transient 效果。 */
     private final ItemStack[] loadSnapshot;
@@ -60,12 +59,6 @@ public class SkillConfigMenu extends AbstractContainerMenu {
         this.passiveLoad = passiveLoad;
         this.skillLibrary = skillLibrary;
         this.equipment = equipment;
-        // 装备槽实时监听：物品变动立刻刷新属性 + 重编译机制上下文
-        this.equipListener = c -> {
-            applyEquipmentAttributes(playerInv.player);
-            net.minecraft.client.yiz.handler.SpecialGearRouter.compile(playerInv.player, equipment);
-        };
-        ((net.minecraft.world.SimpleContainer) equipment).addListener(equipListener);
 
         // B: 技能升级槽 18×18，左上 (262,84)
         this.addSlot(new Slot(skillUpgrade, 0, 262, 84));
@@ -170,7 +163,6 @@ public class SkillConfigMenu extends AbstractContainerMenu {
     @Override
     public void removed(Player player) {
         super.removed(player);
-        ((net.minecraft.world.SimpleContainer) equipment).removeListener(equipListener);
         if (!player.level().isClientSide()) {
             cleanupUnequippedSources(player);
             applyEquipmentAttributes(player);
@@ -201,22 +193,29 @@ public class SkillConfigMenu extends AbstractContainerMenu {
 
     /** 应用装备属性 → 先清全部旧修饰符，再逐物品添加。 */
     private void applyEquipmentAttributes(Player player) {
-        // 收集当前装备槽涉及的所有属性 key
-        var toClean = new java.util.HashSet<net.minecraft.resources.ResourceLocation>();
-        for (int i = 0; i < 6; i++) {
-            ItemStack stack = equipment.getItem(i);
-            if (stack.isEmpty()) continue;
-            for (var entry : stack.getAttributeModifiers().modifiers())
-                toClean.add(net.minecraft.core.registries.BuiltInRegistries.ATTRIBUTE.getKey(entry.attribute().value()));
+        // 1) 清除所有已应用的装备修饰符
+        // 先清 vanilla 属性（ATTACK_DAMAGE/ARMOR 等不在 getSyncableAttributes 里）
+        var vanillaList = java.util.List.of(
+            net.minecraft.world.entity.ai.attributes.Attributes.ATTACK_DAMAGE,
+            net.minecraft.world.entity.ai.attributes.Attributes.ARMOR,
+            net.minecraft.world.entity.ai.attributes.Attributes.ARMOR_TOUGHNESS,
+            net.minecraft.world.entity.ai.attributes.Attributes.MAX_HEALTH,
+            net.minecraft.world.entity.ai.attributes.Attributes.ATTACK_SPEED,
+            net.minecraft.world.entity.ai.attributes.Attributes.MOVEMENT_SPEED,
+            net.minecraft.world.entity.ai.attributes.Attributes.KNOCKBACK_RESISTANCE
+        );
+        for (var h : vanillaList) {
+            var inst = player.getAttribute(h);
+            if (inst != null)
+                for (var mod : new java.util.ArrayList<>(inst.getModifiers()))
+                    if (mod.id().getNamespace().equals("yizmodqzk") && mod.id().getPath().startsWith("equip_"))
+                        inst.removeModifier(mod);
         }
-        // 1) 清除旧修饰符
-        for (var attrKey : toClean) {
-            var holder = net.minecraft.core.registries.BuiltInRegistries.ATTRIBUTE.getHolder(attrKey);
-            if (holder.isEmpty()) continue;
-            var inst = player.getAttribute(holder.get());
-            if (inst == null) continue;
-            for (int i = 0; i < 6; i++) {
-                inst.removeModifier(equipModId(i, attrKey));
+        // 再清 yiz 自定义属性
+        for (var inst : player.getAttributes().getSyncableAttributes()) {
+            for (var mod : new java.util.ArrayList<>(inst.getModifiers())) {
+                if (mod.id().getNamespace().equals("yizmodqzk") && mod.id().getPath().startsWith("equip_"))
+                    inst.removeModifier(mod);
             }
         }
         // 2) 重新应用

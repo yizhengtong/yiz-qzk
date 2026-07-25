@@ -4,6 +4,8 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.yiz.attribute.YizAttributes;
 import net.minecraft.client.yiz.handler.SkillChargeManager;
+import net.minecraft.client.yiz.tool.icon.AttributeIconRegistry;
+import net.minecraft.client.yiz.tool.icon.IconBlitHelper;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
@@ -20,7 +22,7 @@ public class SkillInfoHud extends HudElement {
     private static final int COL_W = 120;
 
     public SkillInfoHud() {
-        super("skill_info", 200, 430, 1.0f);
+        super("skill_info", 117, 437, 0.9f);
     }
 
     @Override public int getLogicalWidth()  { return COL_W; }
@@ -73,13 +75,19 @@ public class SkillInfoHud extends HudElement {
         float manaPerSec = readAttr(item, YizAttributes.MANA_COST_PER_SEC);
         String costText;
         if (manaPerSec > 0) {
-            costText = "§7蓝耗: §9" + manaPerSec + " /s";
+            costText = "§7法力消耗: §9" + manaPerSec + " /s";
         } else if (manaCost > 0) {
-            costText = "§7蓝耗: §9" + (int) manaCost;
+            costText = "§7法力消耗: §9" + (int) manaCost;
         } else {
-            costText = "§7蓝耗: §8无";
+            costText = "§7法力消耗: §8无";
         }
-        g.drawString(mc.font, costText, 4, y, 0xFFFFFFFF);
+        int costX = 4;
+        var manaIcon = AttributeIconRegistry.get(manaPerSec > 0 ? "mana_cost_per_sec" : "mana_cost");
+        if (manaIcon != null) {
+            IconBlitHelper.blit(g, manaIcon, costX, y + (LINE_H - 9) / 2, 9);
+            costX += 9 + 1;
+        }
+        g.drawString(mc.font, costText, costX, y, 0xFFFFFFFF);
         y += LINE_H;
 
         // Row 3: 冷却/状态
@@ -101,16 +109,30 @@ public class SkillInfoHud extends HudElement {
                 statusText = "§7可用: §90";
             }
         }
-        g.drawString(mc.font, statusText, 4, y, 0xFFFFFFFF);
+        int statusX = 4;
+        var cdIcon = AttributeIconRegistry.get("cooldown_value");
+        if (cdIcon != null) {
+            IconBlitHelper.blit(g, cdIcon, statusX, y + (LINE_H - 9) / 2, 9);
+            statusX += 9 + 1;
+        }
+        g.drawString(mc.font, statusText, statusX, y, 0xFFFFFFFF);
         y += LINE_H;
 
-        // Row 4: 伤害（实时计算，同物品面板）
+        // Row 4: 伤害（实时计算：基础值 × 法强/100）
         double sp = YizAttributes.getEffectiveSpellPower(mc.player);
         float base = readAttr(item, YizAttributes.DAMAGE_BASE);
-        float coeff = readAttr(item, YizAttributes.DAMAGE_SPELL_COEFF);
-        int dmg = (int)(base + sp * coeff / 100.0);
+        int dmg = (int)(base * sp / 100.0);
         if (dmg > 0) {
-            g.drawString(mc.font, "§7伤害: §9" + dmg, 4, y, 0xFFFFFFFF);
+            // damage_type: 0=物理(通用伤害)→攻击强度图标；1-5=元素(法术)→法强图标
+            int dmgType = (int) readAttr(item, YizAttributes.DAMAGE_TYPE);
+            String dmgIconId = (dmgType == 0) ? "attack_strength" : "spell_power";
+            int dmgX = 4;
+            var dmgIcon = AttributeIconRegistry.get(dmgIconId);
+            if (dmgIcon != null) {
+                IconBlitHelper.blit(g, dmgIcon, dmgX, y + (LINE_H - 9) / 2, 9);
+                dmgX += 9 + 1;
+            }
+            g.drawString(mc.font, "§7伤害: §9" + dmg, dmgX, y, 0xFFFFFFFF);
         }
         y += LINE_H;
 

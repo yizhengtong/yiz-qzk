@@ -56,7 +56,7 @@ public final class MeleeWeaponScaling {
     private static final double[] SPLASH_RADIUS = {1.0, 1.1, 1.3, 1.5, 2.0};
     private static final double[] SPLASH_DMG    = {1.0, 1.2, 1.4, 1.6, 2.0};
     private static final double[] SPLASH_FALLOFF= {1.0, 1.2, 1.4, 1.6, 2.0};
-    /** 实体交互距离（攻击距离）Lv1→Lv5 倍率 */
+    /** 实体交互距离 Lv1→Lv5 倍率 */
     private static final double[] INTERACTION_RANGE_PCT = {1.0, 1.2, 1.3, 1.4, 1.5};
 
     // ═══════════════════════════════════════════════════════════
@@ -76,7 +76,7 @@ public final class MeleeWeaponScaling {
         double splashRadius,
         double splashDmg,
         double splashFalloff,
-        double interactionRange  // 实体交互距离 Lv1（=0 时不修改默认攻击距离）
+        double interactionRange  // 实体交互距离 Lv1（=0 时不修改默认交互距离）
     ) {
         public static final BaseStats ZERO = new BaseStats(0, 0, 0, 0, 0, 0, 0, 0, 0);
     }

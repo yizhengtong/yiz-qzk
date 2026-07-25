@@ -5,6 +5,8 @@
   "compatibilityLevel": "JAVA_21",
   "mixins": [
     "AttackInterceptorMixin",
+    "BlockDestroyProgressMixin",
+    "BlockPlayerDestroyMixin",
     "FallDamageMixin",
     "FlightOptimizationMixin",
     "ItemAbolitionMixin",
@@ -12,14 +14,17 @@
     "LivingEntityMixin",
     "NoCollisionMixin",
     "PlayerJumpMixin",
+    "PlayerMiningMixin",
     "PlayerMixin",
     "PlayerMovementMixin",
     "ProjectileHitMixin",
+    "ServerDestroyBlockMixin",
     "StartupItemRegistryReplaceMixin"
   ],
   "client": [
     "ClientMultiJumpMixin",
     "CreativeTabIconSafetyMixin",
+    "LiquidBlockShapeMixin",
     "HumanoidArmorLayerStarMixin",
     "ItemRendererStarMixin",
     "KeyboardInterceptMixin",

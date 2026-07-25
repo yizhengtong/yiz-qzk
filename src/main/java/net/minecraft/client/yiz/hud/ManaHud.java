@@ -19,7 +19,7 @@ public class ManaHud extends HudElement {
     private static final int TEXT_COLOR = 0xFF55FFFF; // 淡蓝
 
     public ManaHud() {
-        super("mana_bar", 200, 400, 1.0f);
+        super("mana_bar", 486, 478, 1.0f);
     }
 
     @Override public int getLogicalWidth()  { return BAR_W; }

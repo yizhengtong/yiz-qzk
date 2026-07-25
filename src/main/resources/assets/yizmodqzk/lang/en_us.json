@@ -125,7 +125,8 @@
   "attribute.yizmodqzk.summon_damage": "Summon Damage",
   "attribute.yizmodqzk.armor_penetration": "Armor Penetration (%)",
   "attribute.yizmodqzk.armor_penetration_flat": "Armor Penetration (Flat)",
-  "attribute.yizmodqzk.attack_range": "Attack Range",
+  "attribute.yizmodqzk.attack_range": "Interaction Range",
+  "attribute.yizmodqzk.auto_attack": "Auto Attack",
   "attribute.yizmodqzk.flight_time": "Flight Time",
   "attribute.yizmodqzk.jump_speed": "Jump Speed",
   "attribute.yizmodqzk.max_minions": "Max Minions",
@@ -161,5 +162,13 @@
   "attribute.yizmodqzk.heal_hp_coeff": "Heal Coefficient (HP)",
   "attribute.yizmodqzk.damage_base": "Base Damage",
   "attribute.yizmodqzk.damage_spell_coeff": "Spell Damage Coefficient",
-  "attribute.yizmodqzk.heal_base": "Base Heal"
+  "attribute.yizmodqzk.heal_base": "Base Heal",
+
+  "attribute.yizmodqzk.mining_level": "Mining Level",
+  "attribute.yizmodqzk.mining_pickaxe": "Mining: Pickaxe",
+  "attribute.yizmodqzk.mining_axe": "Mining: Axe",
+  "attribute.yizmodqzk.mining_shovel": "Mining: Shovel",
+  "attribute.yizmodqzk.mining_all": "Mining: All",
+  "attribute.yizmodqzk.mining_penalty_immunity": "Mining Penalty Immunity",
+  "attribute.yizmodqzk.mining_efficiency": "Mining Efficiency"
 }

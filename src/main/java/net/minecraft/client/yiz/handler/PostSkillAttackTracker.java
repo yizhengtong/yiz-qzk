@@ -47,9 +47,8 @@ public final class PostSkillAttackTracker {
 
     private static float computeDamage(Player player, ItemStack item) {
         float base = (float) readAttr(item, YizAttributes.DAMAGE_BASE);
-        float coeff = (float) readAttr(item, YizAttributes.DAMAGE_SPELL_COEFF);
-        float spellPow = readPlayerAttr(player, YizAttributes.SPELL_POWER);
-        return base + spellPow * coeff / 100f;
+        double spellPow = YizAttributes.getEffectiveSpellPower(player);
+        return (float)(base * spellPow / 100.0);
     }
 
     private static float computeHeal(Player player, ItemStack item) {

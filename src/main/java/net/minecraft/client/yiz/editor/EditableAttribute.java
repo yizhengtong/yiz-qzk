@@ -78,7 +78,7 @@ public record EditableAttribute(
         // ── 库 22 个 (百分比类 1=1%) ─────────────────────────
         yiz("crit_rate",            "暴击率",       false, "%"),
         yiz("crit_damage",          "暴击伤害",     false, "%"),
-        yiz("life_steal",           "吸血",         false, "%"),
+        yiz("life_steal",           "全能吸血",         false, "%"),
         yiz("splash_radius",        "溅射半径",     false, "格"),
         yiz("splash_damage",        "溅射伤害",     false, "%"),
         yiz("splash_falloff",       "溅射衰减",     false, "%"),
@@ -87,19 +87,19 @@ public record EditableAttribute(
         yiz("cooldown_reduction",   "攻击间隔缩减", false, "%"),
 
         // 库 — 点数/次数类
-        yiz("attack_strength",   "攻击强度",     false, "点"),
-        yiz("spell_defense",       "法术防御",     false, "点"),
+        yiz("attack_strength",   "攻击加成",     false, "%"),
+        yiz("spell_defense",       "魔法抗性",     false, "点"),
         yiz("spell_power",         "法术强度",     false, "点"),
-        yiz("cooldown_value",      "冷却值",       false, "tick"),
+        yiz("cooldown_value",      "技能冷却值",       false, "tick"),
         yiz("max_charges",         "最大充能数",   false, "次"),
-        yiz("armor", "攻击强度防御",       false, "点"),
+        yiz("armor", "护甲抗性",       false, "点"),
         yiz("shield_value",        "护盾值",       false, "点"),
         yiz("damage_block",         "格挡",         false, "点"),
         // 蓝条系统
-        yiz("max_mana",             "蓝量上限",     false, "点"),
-        yiz("mana_regen",           "蓝量回复",     false, ""),
-        yiz("mana_regen_pct",       "百分比回蓝",   false, "%"),
-        yiz("mana_cost_reduction",  "永恒储蓝",     false, "点"),
+        yiz("max_mana",             "最大法力值",     false, "点"),
+        yiz("mana_regen",           "定量法力回复",     false, ""),
+        yiz("mana_regen_pct",       "每秒百分比法力恢复",   false, "%"),
+        yiz("mana_cost_reduction",  "法力值消耗降低",     false, "点"),
         // generic_damage: 用户输入 10 → 存 0.1 → 实际 +10%（和其他 % 属性统一 1=1% 约定）
         new EditableAttribute("generic_damage", "全伤害", false, "%",
             (s, v) -> setAttr(s, ResourceLocation.fromNamespaceAndPath("yizmodqzk", "generic_damage"), "generic_damage", v / 100.0),
@@ -127,15 +127,15 @@ public record EditableAttribute(
         yiz("invincibility_mult",   "无敌帧倍率",   false, "tick"),
         yiz("lava_immune_time",     "熔岩免疫时间", false, "tick"),
         yiz("lava_damage_reduction","熔岩减伤",     false, "%"),
-        yiz("life_regen_rate",      "生命恢复(定点)",false,"点/tick"),
-        yiz("life_regen_pct",       "生命恢复(%)",  false, "%"),
+        yiz("life_regen_rate",      "定量生命回复",false,"点/tick"),
+        yiz("life_regen_pct",       "百分比生命回复",  false, "%"),
         yiz("melee_damage",         "近战伤害",     false, ""),
         yiz("ranged_damage",        "远程伤害",     false, ""),
-        yiz("magic_damage", "法术提升",       false, "%"),
+        yiz("magic_damage", "法术加成",       false, "%"),
         yiz("summon_damage",        "召唤伤害",     false, "%"),
         yiz("armor_penetration",        "护甲穿透%",  false, "%"),
         yiz("armor_penetration_flat",   "护甲穿透固定", false, "点"),
-        yiz("attack_range",         "攻击距离",     false, "格"),
+        yiz("attack_range",         "交互距离",     false, "格"),
         yiz("jump_speed",           "步高",         false, "格"),
         yiz("max_minions",          "最大仆从数",   false, "次"),
         yiz("max_sentries",         "最大哨兵数",   false, "次"),
@@ -174,7 +174,16 @@ public record EditableAttribute(
         yiz("slow_damage",          "减速伤害",     false, "点"),
         yiz("freeze_damage",        "冰冻伤害",     false, "点"),
         yiz("shock_damage",         "感电伤害",     false, "点"),
-        yiz("knockback_damage",     "击飞伤害",     false, "点")
+        yiz("knockback_damage",     "击飞伤害",     false, "点"),
+
+        // ── 挖掘属性 ──────────────────────────────────
+        yiz("mining_level",             "挖掘等级",     false, "点"),
+        yiz("mining_pickaxe",           "挖掘类：镐",   false, ""),
+        yiz("mining_axe",              "挖掘类：斧",   false, ""),
+        yiz("mining_shovel",           "挖掘类：铲",   false, ""),
+        yiz("mining_all",              "挖掘类：全",   false, ""),
+        yiz("mining_penalty_immunity",  "免疫挖掘惩罚", false, ""),
+        yiz("mining_efficiency",        "挖掘效率",     false, "%")
     );
 
     // ═══════════════════════════════════════════════════════════

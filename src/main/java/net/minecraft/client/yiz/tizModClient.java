@@ -10,6 +10,7 @@ import net.minecraft.client.yiz.api.ShaderProtectionRegistry;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.yiz.handler.SkillKeyMappings;
 import net.minecraft.client.yiz.hud.BlockHud;
+import net.minecraft.client.yiz.hud.BuffHud;
 import net.minecraft.client.yiz.hud.ChargeHud;
 import net.minecraft.client.yiz.hud.HudEditorScreen;
 import net.minecraft.client.yiz.hud.HudManager;
@@ -52,6 +53,7 @@ public class tizModClient {
         modBus.addListener(ShaderManager::onRegisterShaders);
         modBus.addListener(net.minecraft.client.yiz.lightning.render.LightningShaders::onRegisterShaders);
         modBus.addListener(this::onAtlasStitched);
+        modBus.addListener(this::onRegisterTooltipComponents);
 
         // 注册属性编辑台 Screen（阶段 B）
         modBus.addListener(net.neoforged.neoforge.client.event.RegisterMenuScreensEvent.class, event -> {
@@ -71,6 +73,7 @@ public class tizModClient {
         HudManager.register(new BlockHud());
         HudManager.register(new ManaHud());
         HudManager.register(new SkillInfoHud());
+        HudManager.register(new BuffHud());
         NeoForge.EVENT_BUS.addListener(HudManager::onRenderGui);
         NeoForge.EVENT_BUS.addListener(this::onSkillKeyTick);
 
@@ -267,12 +270,50 @@ public class tizModClient {
             lines.add(insertAt++, net.minecraft.network.chat.Component.literal("在装备时：")
                 .withStyle(net.minecraft.ChatFormatting.GRAY));
             for (var attr : attrs) {
+                // 属性行用纯文字 Component（图标由 GatherComponents 替换为 AttributeLineTooltipComponent 渲染）
                 var line = net.minecraft.network.chat.Component.literal("  " + attr.name() + "：");
                 line.append(net.minecraft.network.chat.Component.literal(attr.value())
                     .withStyle(net.minecraft.ChatFormatting.BLUE));
                 lines.add(insertAt++, line);
             }
             lines.add(insertAt, net.minecraft.network.chat.Component.empty());
+        }
+    }
+
+    /** 注册属性图标 tooltip 组件工厂（mod bus）。 */
+    private void onRegisterTooltipComponents(
+            net.neoforged.neoforge.client.event.RegisterClientTooltipComponentFactoriesEvent event) {
+        event.register(
+            net.minecraft.client.yiz.ui.AttributeLineTooltipComponent.class,
+            net.minecraft.client.yiz.ui.AttributeLineClientComponent::new);
+    }
+
+    /**
+     * 把属性行 Component 替换为 AttributeLineTooltipComponent（图标+文字一行，行高自适应不溢出）。
+     * GatherComponents 在 tooltip 渲染前触发，tooltipElements 是 Either&lt;FormattedText, TooltipComponent&gt; 列表。
+     */
+    @SubscribeEvent
+    public void onGatherTooltip(net.neoforged.neoforge.client.event.RenderTooltipEvent.GatherComponents event) {
+        net.minecraft.world.item.ItemStack stack = event.getItemStack();
+        if (stack.isEmpty()) return;
+        var elements = event.getTooltipElements();
+
+        // 属性行替换
+        var attrs = net.minecraft.client.yiz.ui.ItemAttributeDisplay.getAvailableAttributes(stack);
+        if (attrs.isEmpty()) return;
+        for (int i = 0; i < elements.size(); i++) {
+            var either = elements.get(i);
+            if (either.left().isEmpty()) continue;
+            if (!(either.left().get() instanceof net.minecraft.network.chat.Component c)) continue;
+            String txt = c.getString().trim();
+            for (var attr : attrs) {
+                if (txt.startsWith(attr.name() + "：") || txt.startsWith(attr.name() + ":")) {
+                    elements.set(i, com.mojang.datafixers.util.Either.right(
+                        new net.minecraft.client.yiz.ui.AttributeLineTooltipComponent(
+                            attr.attrId(), attr.name(), attr.value(), attr.color())));
+                    break;
+                }
+            }
         }
     }
 
@@ -287,7 +328,7 @@ public class tizModClient {
             String txt = it.next().getString().trim();
             if (txt.isEmpty()) continue;
             if (txt.equals("在装备时：") || txt.equals("已觉醒效果：")) { it.remove(); continue; }
-            // 属性行
+            // 属性行（纯文字"属性名："开头，图标改由 GatherComponents 组件渲染）
             if (!attrs.isEmpty()) {
                 var attrNames = attrs.stream().map(a -> a.name()).collect(java.util.stream.Collectors.toSet());
                 if (attrNames.stream().anyMatch(n -> txt.startsWith(n + "：") || txt.startsWith(n + ":"))) {

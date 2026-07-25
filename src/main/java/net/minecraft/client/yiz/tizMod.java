@@ -104,6 +104,7 @@ public class tizMod {
             e -> {
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.CRIT_RATE);
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.CRIT_DAMAGE);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.PRECISION);
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.LIFE_STEAL);
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.SPLASH_RADIUS);
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.SPLASH_DAMAGE);
@@ -170,6 +171,7 @@ public class tizMod {
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.WATER_BREATH_TIME);
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.WATER_BREATH_TIME_FLAT);
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.ATTACK_RANGE);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.AUTO_ATTACK);
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.FLIGHT_TIME);
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.JUMP_SPEED);
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.MAX_MINIONS);
@@ -199,6 +201,14 @@ public class tizMod {
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.FREEZE_DAMAGE);
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.SHOCK_DAMAGE);
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.KNOCKBACK_DAMAGE);
+                // 挖掘属性
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.MINING_LEVEL);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.MINING_PICKAXE);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.MINING_AXE);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.MINING_SHOVEL);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.MINING_ALL);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.MINING_PENALTY_IMMUNITY);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.MINING_EFFICIENCY);
             });
 
         // 声明走全槽位汇总的 yizmodqzk 自定义属性（主手/副手/盔甲/饰品槽全部生效）
@@ -281,6 +291,14 @@ public class tizMod {
         net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.FREEZE_DAMAGE);
         net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.SHOCK_DAMAGE);
         net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.KNOCKBACK_DAMAGE);
+        // 挖掘属性
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.MINING_LEVEL);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.MINING_PICKAXE);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.MINING_AXE);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.MINING_SHOVEL);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.MINING_ALL);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.MINING_PENALTY_IMMUNITY);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.MINING_EFFICIENCY);
 
         // 状态效果属性 → 注册表绑定
         StatusEffectAttributeRegistry.registerAttack(YizAttributes.STUN_ATTACK,      StatusEffectType.STUN);
@@ -361,11 +379,7 @@ public class tizMod {
             net.minecraft.client.yiz.editor.SkillConfigMenu.applyEquipmentFromStorage(sp, skillData);
             // 初始化技能充能（各槽补满起步）
             net.minecraft.client.yiz.handler.SkillChargeManager.onLogin(sp);
-            // 攻击强度默认 1 点
-            var atkStr = sp.getAttribute(YizAttributes.ATTACK_STRENGTH);
-            if (atkStr != null && atkStr.getBaseValue() < 1.0) {
-                atkStr.setBaseValue(1.0);
-            }
+            // 攻击强度现为百分比增幅（默认 0，登录无需设置基础值）
             LOGGER.debug("Player {} logged in", sp.getGameProfile().getName());
         }
     }
@@ -524,13 +538,16 @@ public class tizMod {
             "yiz_toughness_mirror", armor, net.minecraft.world.entity.ai.attributes.AttributeModifier.Operation.ADD_VALUE);
     }
 
-    /** 攻击距离镜像：读 yizmodqzk:attack_range → 1:1 写到原版 ENTITY_INTERACTION_RANGE。 */
+    /** 交互距离镜像：读 yizmodqzk:attack_range → 同时写到原版 ENTITY + BLOCK 交互距离。 */
     private static void mirrorAttackRange(net.minecraft.world.entity.LivingEntity entity) {
         var inst = entity.getAttribute(YizAttributes.ATTACK_RANGE);
         if (inst == null) return;
         double range = inst.getValue();
         net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler.setEntityAttribute(
             entity, net.minecraft.world.entity.ai.attributes.Attributes.ENTITY_INTERACTION_RANGE,
+            "yiz_range_mirror", range, net.minecraft.world.entity.ai.attributes.AttributeModifier.Operation.ADD_VALUE);
+        net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler.setEntityAttribute(
+            entity, net.minecraft.world.entity.ai.attributes.Attributes.BLOCK_INTERACTION_RANGE,
             "yiz_range_mirror", range, net.minecraft.world.entity.ai.attributes.AttributeModifier.Operation.ADD_VALUE);
     }
 }

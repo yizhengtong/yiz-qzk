@@ -53,7 +53,7 @@ public class ChargeHud extends HudElement {
     private static final int TOTAL_H = MAX_ROWS * ROW_H + (MAX_ROWS - 1) * ROW_GAP;
 
     public ChargeHud() {
-        super("charge_bar", 200, 300, 1.0f);
+        super("charge_bar", 0, 367, 0.8f);
     }
 
     // 充能 HUD 条目由各效果自行向 ChargeHudRegistry 注册（如天雷引在内容项目注册）。

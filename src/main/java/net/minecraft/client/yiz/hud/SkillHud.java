@@ -53,7 +53,7 @@ public class SkillHud extends HudElement {
     public static int selectedSmall = 0;
 
     public SkillHud() {
-        super("skill_bar", 200, 200, 0.8f);
+        super("skill_bar", 241, 492, 0.5f);
     }
 
     @Override public int getLogicalWidth()  { return TOTAL_W; }

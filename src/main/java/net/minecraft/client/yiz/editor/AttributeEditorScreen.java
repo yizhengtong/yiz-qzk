@@ -6,6 +6,8 @@ import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.client.yiz.tool.icon.AttributeIconRegistry;
+import net.minecraft.client.yiz.tool.icon.IconBlitHelper;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -65,7 +67,8 @@ public class AttributeEditorScreen extends AbstractContainerScreen<AttributeEdit
     private boolean draggingSlider = false;
     private int hoveredRow = -1;       // 鼠标悬停的行 (-1 = none)
     private int hudScrollOffset = 0;   // ⑤ HUD 滚动偏移
-    private List<String> hudLines = List.of(); // ⑤ 当前帧 HUD 行
+    private record HudRow(String label, String attrId) {}
+    private List<HudRow> hudLines = List.of(); // ⑤ 当前帧 HUD 行（带 attrId 供图标查询）
 
     public AttributeEditorScreen(AttributeEditorMenu menu, Inventory playerInv, Component title) {
         super(menu, playerInv, title);
@@ -132,11 +135,17 @@ public class AttributeEditorScreen extends AbstractContainerScreen<AttributeEdit
                 this.hoveredRow = i;
             }
 
-            // 文字
+            // 图标 + 文字
             String label = attr.listLabel(currentVal);
             int textColor = attr.unimplemented() ? 0xFFAAAAAA : 0xFFFFFFFF;
-            graphics.drawString(this.font, label, leftPos + LIST_TEXT_X,
-                topPos + LIST_Y0 + i * LIST_ROW_GAP + 5, textColor);
+            int textX = leftPos + LIST_TEXT_X;
+            var icon = AttributeIconRegistry.get(attr.id());
+            if (icon != null) {
+                int sz = AttributeIconRegistry.iconPx();  // 16
+                IconBlitHelper.blit(graphics, icon, textX, rowY + (LIST_ROW_H - sz) / 2, sz);
+                textX += sz + 2;
+            }
+            graphics.drawString(this.font, label, textX, rowY + 5, textColor);
         }
     }
 
@@ -193,7 +202,7 @@ public class AttributeEditorScreen extends AbstractContainerScreen<AttributeEdit
         for (EditableAttribute attr : all) {
             double v = attr.playerReader().apply(player);
             String label = attr.hudLabel(v);
-            if (label != null) hudLines.add(label);
+            if (label != null) hudLines.add(new HudRow(label, attr.id()));
         }
 
         int maxScroll = Math.max(0, hudLines.size() - HUD_MAX_LINES);
@@ -207,7 +216,15 @@ public class AttributeEditorScreen extends AbstractContainerScreen<AttributeEdit
         for (int i = hudScrollOffset; i < end; i++) {
             int lineY = hy + (i - hudScrollOffset) * HUD_LINE_H;
             if (lineY + HUD_LINE_H > hy + HUD_H) break;
-            graphics.drawString(this.font, hudLines.get(i), hx, lineY, 0xFFFFFFFF);
+            int tx = hx;
+            HudRow row = hudLines.get(i);
+            var icon = AttributeIconRegistry.get(row.attrId());
+            if (icon != null) {
+                int sz = HUD_LINE_H;  // 9，与行高一致（HUD 预览区紧凑）
+                IconBlitHelper.blit(graphics, icon, tx, lineY, sz);
+                tx += sz + 1;
+            }
+            graphics.drawString(this.font, row.label(), tx, lineY, 0xFFFFFFFF);
         }
 
         // 有可滚动行时画小滚动条指示

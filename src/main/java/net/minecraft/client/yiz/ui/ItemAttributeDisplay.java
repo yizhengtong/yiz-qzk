@@ -6,6 +6,7 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.ai.attributes.Attribute;
 import net.minecraft.world.entity.ai.attributes.Attributes;
@@ -63,13 +64,13 @@ public final class ItemAttributeDisplay {
         // ── 库 yizmodqzk 属性 ──────────────────────────────
         yiz("crit_rate",            "暴击率",       "%",   1.0);
         yiz("crit_damage",          "暴击伤害",     "%",   1.0);
-        yiz("life_steal",           "吸血",         "%",   1.0);
+        yiz("life_steal",           "全能吸血",         "%",   1.0);
         yiz("splash_radius",        "溅射半径",     "格",   1.0);
         yiz("splash_damage",        "溅射伤害",     "%",   1.0);
         yiz("splash_falloff",       "溅射衰减",     "%",   1.0);
         yiz("huixin",               "会心",         "格",   1.0);
         yiz("kegong",               "渴攻",         "tick", 1.0);
-        yiz("armor", "攻击强度防御",       "点",   1.0);
+        yiz("armor", "护甲抗性",       "点",   1.0);
         yiz("damage_block",         "伤害格挡",     "点",   1.0);
         yiz("generic_damage",       "全伤害",       "%",   100.0);
         yiz("damage_reduction",     "伤害减免",     "%",   1.0);
@@ -102,15 +103,15 @@ public final class ItemAttributeDisplay {
         yiz("lava_immune_time_flat","熔岩免疫时间(固定)","tick",1.0);
         yiz("lava_damage_reduction","熔岩减伤",     "%",   1.0);
         yiz("lava_damage_reduction_flat","熔岩减伤(固定)","点", 1.0);
-        yiz("life_regen_rate",      "生命恢复(定点)","点/tick",1.0);
-        yiz("life_regen_pct",       "生命恢复(%)",  "%",   1.0);
+        yiz("life_regen_rate",      "定量生命回复","点/tick",1.0);
+        yiz("life_regen_pct",       "百分比生命回复",  "%",   1.0);
         yiz("melee_damage",         "近战伤害",     "",    1.0);
         yiz("ranged_damage",        "远程伤害",     "",    1.0);
-        yiz("magic_damage", "法术伤害增幅",     "",    1.0);
+        yiz("magic_damage", "法术加成",     "",    1.0);
         yiz("summon_damage",        "召唤伤害",     "",    1.0);
         yiz("armor_penetration",        "护甲穿透(%)",  "%",  1.0);
         yiz("armor_penetration_flat",   "护甲穿透(固定)","点", 1.0);
-        yiz("attack_range",         "攻击距离",     "格",  1.0);
+        yiz("attack_range",         "交互距离",     "格",  1.0);
         yiz("flight_time",          "飞行时间",     "tick",1.0);
         yiz("jump_speed",           "步高",         "格",  1.0);
         yiz("max_minions",          "最大仆从数",   "个",  1.0);
@@ -144,22 +145,22 @@ public final class ItemAttributeDisplay {
         yiz("knockback_damage",     "击飞伤害",     "点",  1.0);
 
         // ── 攻击/法术基础（固定值）────────────────────────
-        yiz("attack_strength",      "攻击强度",     "点",  1.0);
+        yiz("attack_strength",      "攻击加成",     "%",  1.0);
         yiz("spell_power",          "法术强度",     "点",  1.0);
-        yiz("spell_defense",        "法术防御",     "点",  1.0);
+        yiz("spell_defense",        "魔法抗性",     "点",  1.0);
         yiz("shield_value",         "护盾值",       "点",  1.0);
 
         // ── 蓝条系统 ────────────────────────────────────
-        yiz("max_mana",             "蓝量上限",     "点",  1.0);
-        yiz("mana_regen",           "固定回蓝",     "点",  1.0);
-        yiz("mana_regen_pct",       "百分比回蓝",   "%",   1.0);
-        yiz("mana_cost_reduction",  "耗蓝降低",     "点",  1.0);
-        yiz("mana_cost",            "单次耗蓝",     "点",  1.0);
-        yiz("mana_cost_per_sec",    "每秒耗蓝",     "点",  1.0);
+        yiz("max_mana",             "最大法力值",     "点",  1.0);
+        yiz("mana_regen",           "定量法力回复",     "点",  1.0);
+        yiz("mana_regen_pct",       "每秒百分比法力恢复",   "%",   1.0);
+        yiz("mana_cost_reduction",  "法力值消耗降低",     "点",  1.0);
+        yiz("mana_cost",            "单次法力值消耗",     "点",  1.0);
+        yiz("mana_cost_per_sec",    "每秒法力值消耗",     "点",  1.0);
 
         // ── 冷却/充能 ──────────────────────────────────
-        yiz("cooldown_reduction",   "冷却缩减",     "%",   1.0);
-        yiz("cooldown_value",       "冷却值",       "tick",1.0);
+        yiz("cooldown_reduction",   "攻击间隔缩减",     "%",   1.0);
+        yiz("cooldown_value",       "技能冷却值",       "tick",1.0);
         yiz("max_charges",          "最大充能数",   "次",  1.0);
 
         // ── 技能公式参数 ────────────────────────────────
@@ -175,6 +176,15 @@ public final class ItemAttributeDisplay {
         yiz("skill_range",          "技能范围",     "%",   1.0);
         yiz("skill_interval",       "技能间隔",     "%",   1.0);
         yiz("shock_interval",       "感电间隔",     "tick",1.0);
+
+        // ── 挖掘属性 ──────────────────────────────────
+        yiz("mining_level",             "挖掘等级",     "点",  1.0);
+        yiz("mining_pickaxe",           "挖掘类：镐",   "",    1.0);
+        yiz("mining_axe",              "挖掘类：斧",   "",    1.0);
+        yiz("mining_shovel",           "挖掘类：铲",   "",    1.0);
+        yiz("mining_all",              "挖掘类：全",   "",    1.0);
+        yiz("mining_penalty_immunity",  "免疫挖掘惩罚", "",    1.0);
+        yiz("mining_efficiency",        "挖掘效率",     "%",   1.0);
     }
 
     private static void rule(Holder<Attribute> attr, String name, String unit, double scale) {
@@ -205,9 +215,12 @@ public final class ItemAttributeDisplay {
             double total = sumModifierValue(modifiers, mod.attribute());
             if (Math.abs(total) < 0.0001) continue;
 
+            // 反查 attrId（统一用 path：vanilla generic.max_health / yiz spell_power，与 EditableAttribute.id() 一致）
+            String attrId = mod.attribute().unwrapKey()
+                .map(ResourceKey::location).map(ResourceLocation::getPath).orElse(null);
             String value = formatWithUnit(total, rule);
             int color = total > 0 ? 0xFF55FF55 : total < 0 ? 0xFFFF5555 : 0xFFFFFFFF;
-            attributes.add(new AttributeInfo(rule.name, value, color));
+            attributes.add(new AttributeInfo(attrId, rule.name, value, color));
         }
 
         // 耐久值
@@ -215,7 +228,7 @@ public final class ItemAttributeDisplay {
             int maxDamage = stack.getMaxDamage();
             int currentDamage = stack.getDamageValue();
             String durability = (maxDamage - currentDamage) + "/" + maxDamage;
-            attributes.add(new AttributeInfo("耐久值", durability, 0x888888));
+            attributes.add(new AttributeInfo(null, "耐久值", durability, 0x888888));
         }
 
         return attributes;
@@ -260,7 +273,7 @@ public final class ItemAttributeDisplay {
     //  Component 构建
     // ═══════════════════════════════════════════════════════════
 
-    public static Component createAttributeComponent(String name, String value, int color) {
+    public static Component createAttributeComponent(String attrId, String name, String value, int color) {
         ChatFormatting fmt = color == 0xFF55FF55 ? ChatFormatting.GREEN
             : color == 0xFFFF5555 ? ChatFormatting.RED : ChatFormatting.WHITE;
         MutableComponent component = Component.literal("  " + name + "：");
@@ -268,5 +281,5 @@ public final class ItemAttributeDisplay {
         return component;
     }
 
-    public record AttributeInfo(String name, String value, int color) {}
+    public record AttributeInfo(String attrId, String name, String value, int color) {}
 }

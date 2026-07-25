@@ -277,7 +277,7 @@ public abstract class LivingEntityMixin implements HealthDataBridge, ControlData
                     }
                     if (chargedBuff) {
                         double spellPow = YizAttributes.getEffectiveSpellPower(pl);
-                        float bonusDmg = (float) (0.85 + spellPow * 0.225);
+                        float bonusDmg = (float) (0.85 * spellPow / 100.0);
                         float heal = (float) (0.375 + pl.getMaxHealth() * 0.006);
                         amount += bonusDmg;
                         pl.heal(heal);
@@ -295,6 +295,22 @@ public abstract class LivingEntityMixin implements HealthDataBridge, ControlData
                             sl.sendParticles(net.minecraft.core.particles.ParticleTypes.CRIT,
                                 self.getX(), self.getY() + self.getBbHeight() / 2, self.getZ(),
                                 8, 0.3, 0.3, 0.3, 0.1);
+                        }
+                    }
+                    // 精准：非近战来源也可暴击（投射/法术/溅射等）
+                    var precInst = pl.getAttribute(YizAttributes.PRECISION);
+                    if (precInst != null && precInst.getValue() > 0
+                        && !net.minecraft.client.yiz.api.CritTracker.isMarked(pl)) {
+                        double critRate = pl.getAttributeValue(YizAttributes.CRIT_RATE);
+                        if (critRate > 0 && Math.random() < critRate / 100.0) {
+                            double critDmg = pl.getAttributeValue(YizAttributes.CRIT_DAMAGE);
+                            float multi = 1.5f + (float)(critDmg / 100.0);
+                            amount *= multi;
+                            if (self.level() instanceof net.minecraft.server.level.ServerLevel sl) {
+                                sl.sendParticles(net.minecraft.core.particles.ParticleTypes.CRIT,
+                                    self.getX(), self.getY() + self.getBbHeight() / 2, self.getZ(),
+                                    8, 0.3, 0.3, 0.3, 0.1);
+                            }
                         }
                     }
                 }
@@ -331,12 +347,10 @@ public abstract class LivingEntityMixin implements HealthDataBridge, ControlData
                 }
             }
             if (addSum > 0) amount *= (1.0F + addSum);
-            // 攻击强度
+            // 攻击强度（百分比增幅：值 = 百分比，30 表示 +30%；不影响原版攻击力基础值）
             var atkStr = attacker.getAttribute(net.minecraft.client.yiz.attribute.YizAttributes.ATTACK_STRENGTH);
-            if (atkStr != null && atkStr.getValue() > 1.0) amount += (float)(atkStr.getValue() - 1.0);
-            // 法术强度（含法术提升加成）
-            double spellPow = net.minecraft.client.yiz.attribute.YizAttributes.getEffectiveSpellPower(attacker);
-            if (spellPow > 0) amount += (float)(spellPow * 0.1);
+            if (atkStr != null && atkStr.getValue() > 0) amount *= (1.0F + (float)(atkStr.getValue() / 100.0));
+            // 法术强度（百分比加成系数）：不再直接附加到普攻伤害，仅作用于技能/充能/感电公式。
 
             // 护甲穿透：存下攻击者的百分比+固定穿透值，供目标 getArmorValue() 注入扣减
             var penPctInst = attacker.getAttribute(
@@ -394,6 +408,9 @@ public abstract class LivingEntityMixin implements HealthDataBridge, ControlData
             amount *= (float)(1.0 - Math.min(1.0, reduction));
         }
 
+        // 卢登激荡：捕获 overkill 候选（玩家直接攻击且本次将致死时）
+        net.minecraft.client.yiz.handler.LudenOverkillHandler.captureIfLethal(self, source, amount);
+
         return Math.max(0, amount);
     }
 
@@ -421,6 +438,11 @@ public abstract class LivingEntityMixin implements HealthDataBridge, ControlData
         // === 保护态生命值纠正（ASM 原逻辑移入 Mixin）：确保血量 ≥1, 非 NaN ===
         if (net.minecraft.client.yiz.core.PlayerClassSwapper.isProtectedByUuid(self.getStringUUID())) {
             return EntityASMUtil.clampProtectedHealth(newHealth);
+        }
+
+        // 卢登溅射：跳过所有减伤/格挡/法防，全额扣血（spillDmg 已是结算值，不被任何属性加减）
+        if (net.minecraft.client.yiz.handler.LudenOverkillHandler.isSpilling()) {
+            return newHealth;
         }
 
         float current = self.getHealth();
@@ -501,7 +523,14 @@ public abstract class LivingEntityMixin implements HealthDataBridge, ControlData
     // ==================== 投射物免疫 ====================
 
     @Inject(method = "hurt", at = @At("HEAD"), cancellable = true)
-    private void yizmodqzk$onHurtProjectileImmune(DamageSource source, float amount, CallbackInfoReturnable<Boolean> cir) {
+    private void yizmodqzk$onHurtPre(DamageSource source, float amount, CallbackInfoReturnable<Boolean> cir) {
+        // ── CDR 破无敌帧（攻击来源）──
+        // 1.21.1 DamageSource.getEntity() 即返回"造成者"(causer)：玩家射出的箭/法球也会解析为玩家本身，
+        // 因此无需额外兜底；getDirectEntity() 才是箭这类直接实体。
+        if (source.getEntity() instanceof LivingEntity attacker)
+            net.minecraft.client.yiz.handler.InvulnBreakHandler.apply(attacker, (LivingEntity)(Object)this);
+
+        // ── 投射物免疫 ──
         if (source.is(net.minecraft.tags.DamageTypeTags.IS_PROJECTILE)) {
             LivingEntity self = (LivingEntity) (Object) this;
             var inst = self.getAttribute(YizAttributes.PROJECTILE_IMMUNITY);
