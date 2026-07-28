@@ -258,6 +258,9 @@ public abstract class LivingEntityMixin implements HealthDataBridge, ControlData
                 EntityASMUtil.incrementAttackCount(attacker);
                 // 被动充能 + 技能后首击
                 if (attacker instanceof net.minecraft.world.entity.player.Player pl) {
+                    // 进入玩家伤害处理即取出并清除原版暴击标记——无论后续 amount 是否归零、
+                    // 是否提前 return，标记都不会残留到下次攻击误加暴击伤害（CD/150 换算）。
+                    boolean vanillaCrit = net.minecraft.client.yiz.api.CritTracker.consume(pl);
                     // PassiveChargeTracker.onAttack 已移除：旧"满6充能+1+感电"逻辑废弃。
                     // 攻击充能计数改由天雷引 onAttack 负责（经 onHurtReturn 的 dispatchPassiveAttack）。
                     float[] bonus = net.minecraft.client.yiz.handler.PostSkillAttackTracker.tryConsume(pl);
@@ -300,7 +303,7 @@ public abstract class LivingEntityMixin implements HealthDataBridge, ControlData
                     // 精准：非近战来源也可暴击（投射/法术/溅射等）
                     var precInst = pl.getAttribute(YizAttributes.PRECISION);
                     if (precInst != null && precInst.getValue() > 0
-                        && !net.minecraft.client.yiz.api.CritTracker.isMarked(pl)) {
+                        && !vanillaCrit) {
                         double critRate = pl.getAttributeValue(YizAttributes.CRIT_RATE);
                         if (critRate > 0 && Math.random() < critRate / 100.0) {
                             double critDmg = pl.getAttributeValue(YizAttributes.CRIT_DAMAGE);
@@ -316,7 +319,7 @@ public abstract class LivingEntityMixin implements HealthDataBridge, ControlData
                     // 原版暴击已发生（跳劈等）：vanilla 已将 1.5x baked 进 amount，
                     // 需要追加 CRIT_DAMAGE 部分使最终倍率 = 1.5 + CD/100。
                     // 换算：(1.5 + CD/100) / 1.5 - 1 = CD/150
-                    if (net.minecraft.client.yiz.api.CritTracker.consume(pl)) {
+                    if (vanillaCrit) {
                         double critDmg = pl.getAttributeValue(YizAttributes.CRIT_DAMAGE);
                         if (critDmg > 0) {
                             amount *= (1.0f + (float)(critDmg / 150.0));
