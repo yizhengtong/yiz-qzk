@@ -67,6 +67,8 @@ public final class WorldGuiPanelManager {
     private static final float GUI_PANEL_HEIGHT = 1.8f;
     /** 光屏在玩家前方的距离（格），右键时拍快照。 */
     private static final float PANEL_DISTANCE_IN_FRONT = 0.5f;
+    /** FBO 超采样倍数（提升文字清晰度；FBO 尺寸 = guiScaled × 此值）。 */
+    private static final int FBO_SUPERSAMPLE = 2;
 
     /** 离屏渲染进行中标志（供 Mixin 拦截 renderBackground 全屏背景用）。 */
     private static volatile boolean offscreenRendering = false;
@@ -135,6 +137,15 @@ public final class WorldGuiPanelManager {
             captureNewPanel(lastClickedPos, container);
             lastProcessedClickPos = lastClickedPos;
         }
+
+        // 在 GUI 渲染阶段（ScreenEvent.Render.Pre）对当前 screen 离屏渲染——此时机全局状态干净
+        // （光照纹理/atlas 已就绪），物品颜色正常。留存面板（ESC 后无 mc.screen）不进这里，用冻结的旧 FBO。
+        OpModeState.PanelRecord current = (lastClickedPos != null) ? OpModeState.get(lastClickedPos) : null;
+        if (current != null && current.screen == container) {
+            current.screen = container; // 刷新实例引用（同箱子重开时 screen 是新实例）
+            renderToOffscreen(current, event.getMouseX(), event.getMouseY(), event.getPartialTick());
+        }
+
         // 取消原版贴脸渲染（玩家看世界光屏，不看贴脸 GUI）
         event.setCanceled(true);
     }
@@ -172,27 +183,28 @@ public final class WorldGuiPanelManager {
         // 保存世界渲染的投影矩阵，供鼠标逆投影命中用
         worldProjection = new org.joml.Matrix4f(RenderSystem.getProjectionMatrix());
 
+        // 只画世界四边形（离屏渲染已在 ScreenEvent.Render.Pre 完成，用各自的 FBO 纹理）。
+        // 当前面板用刚更新的 FBO；留存面板（ESC 后）用冻结的旧 FBO。
         for (OpModeState.PanelRecord r : records) {
-            if (r.screen == null) continue;
-            // 离屏渲染该面板的 screen 到它的 FBO
-            renderToOffscreen(r);
-            // 用 FBO 纹理画世界四边形
+            if (r.fbo == null) continue;
             drawWorldQuad(r, camPos, ps);
         }
     }
 
-    /** 把 screen 离屏渲染到 record.fbo（无则按窗口尺寸创建）。 */
-    private static void renderToOffscreen(OpModeState.PanelRecord r) {
+    /** 把 screen 离屏渲染到 record.fbo（无则按窗口尺寸创建）。在 ScreenEvent.Render.Pre（GUI 时机）调用。 */
+    private static void renderToOffscreen(OpModeState.PanelRecord r, int mouseX, int mouseY, float partialTick) {
         Minecraft mc = Minecraft.getInstance();
         AbstractContainerScreen<?> screen = r.screen;
-        int w = mc.getWindow().getGuiScaledWidth();
-        int h = mc.getWindow().getGuiScaledHeight();
+        int guiW = mc.getWindow().getGuiScaledWidth();
+        int guiH = mc.getWindow().getGuiScaledHeight();
+        int fboW = guiW * FBO_SUPERSAMPLE;
+        int fboH = guiH * FBO_SUPERSAMPLE;
 
-        // 创建/调整 FBO
+        // 创建/调整 FBO（超采样分辨率）
         if (r.fbo == null) {
-            r.fbo = new TextureTarget(w, h, true, Minecraft.ON_OSX);
-        } else if (r.fbo.width != w || r.fbo.height != h) {
-            r.fbo.resize(w, h, Minecraft.ON_OSX);
+            r.fbo = new TextureTarget(fboW, fboH, true, Minecraft.ON_OSX);
+        } else if (r.fbo.width != fboW || r.fbo.height != fboH) {
+            r.fbo.resize(fboW, fboH, Minecraft.ON_OSX);
         }
         RenderTarget fbo = r.fbo;
 
@@ -208,12 +220,16 @@ public final class WorldGuiPanelManager {
             fbo.clear(Minecraft.ON_OSX);
             fbo.bindWrite(true);
 
-            // 正交投影（FBO 宽高）
-            Matrix4f ortho = new Matrix4f().setOrtho(0.0f, fbo.width, fbo.height, 0.0f, 1000.0f,
+            // 超采样：正交投影用 FBO 尺寸（fboW×fboH，填满整个 FBO），
+            // ModelView 只 scale x/y（把 screen 的 guiScaled 坐标放大到 FBO 尺寸），z 保持 translation 不被放大。
+            Matrix4f ortho = new Matrix4f().setOrtho(0.0f, fboW, fboH, 0.0f, 1000.0f,
                     net.neoforged.neoforge.client.ClientHooks.getGuiFarPlane());
             RenderSystem.setProjectionMatrix(ortho, VertexSorting.ORTHOGRAPHIC_Z);
+            // 顺序（Matrix4fStack 右乘，顶点先经后写的变换）：
+            // translation（z→9900）后 scale(xy) → 顶点先 scale xy 再 translation，z 不被 xy scale 放大。
             mvStack.identity();
             mvStack.translation(0.0f, 0.0f, 10000.0f - net.neoforged.neoforge.client.ClientHooks.getGuiFarPlane());
+            mvStack.scale((float) FBO_SUPERSAMPLE, (float) FBO_SUPERSAMPLE, 1.0f);
             RenderSystem.applyModelViewMatrix();
             Lighting.setupFor3DItems();
             // 绑定光照纹理到 unit 2（物品渲染的 shader 从 unit 2 采样光照）；
@@ -222,7 +238,7 @@ public final class WorldGuiPanelManager {
 
             GuiGraphics g = new GuiGraphics(mc, bufferSource());
             try {
-                screen.render(g, screen.width / 2, screen.height / 2, 0f);
+                screen.render(g, mouseX, mouseY, partialTick);
                 g.flush();
             } catch (Throwable t) {
                 LOG.error("离屏渲染失败 @ {}", r.blockPos, t);
