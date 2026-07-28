@@ -1,6 +1,6 @@
 ---
 name: crit-damage-vanilla-baked
-description: "vanilla 跳劈已把 1.5x 暴击 baked 进 amount，叠加自定义 CRIT_DAMAGE 要换算成 CD/150，否则重复算暴击"
+description: "vanilla 跳劈已把 1.5x 暴击 baked 进 amount，叠加 CRIT_DAMAGE 要换算 CD/150；且 CritTracker.consume 必须在伤害块开头一次性取出，否则标记残留误加暴击"
 metadata:
   node_type: memory
   type: project
@@ -15,3 +15,5 @@ metadata:
 **Why:** vanilla 已经把 1.5x 算进去了，再直接乘 `1 + CD/100` 会变成 `1.5 × (1 + CD/100)`，等于把暴击伤害也算了一份 1.5x，重复计算、数值虚高。`CD/150` 是把增量摊回 1.5 基底上的正确换算。
 
 **How to apply:** 在 LivingEntityMixin 伤害钩子里，凡是要在「原版暴击已发生」分支追加 CRIT_DAMAGE，一律用 `/150` 换算，不要用 `/100`。只有玩家自身暴击未触发 vanilla 跳劈的分支才走 `1 + CD/100`。改这块前先确认走的是哪个分支。相关属性定义见 `YizAttributes.CRIT_DAMAGE`。
+
+**Consume 时序陷阱（P1，曾导致标记残留）：** `CritTracker.consume(pl)` 必须在 `if (attacker instanceof Player pl)` 块的**最开头**一次性取出存为 `boolean vanillaCrit`，后续精准分支（`!vanillaCrit`）和 vanilla baked 分支（`if (vanillaCrit)`）都用它判断。**不能**在分支内各自调 `consume`/`isMarked`——因为 251 行 `if (amount <= 0) return 0;` 在玩家块之前，一次被盾完全格挡的 vanilla 暴击会提前 return 跳过 consume，标记残留到**下次非暴击攻击**，给它误加 `CD/150`。开头取出 = 无论后续走哪条路径（提前 return / 精准掷骰 / baked 追加）标记都已清除。
