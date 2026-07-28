@@ -77,7 +77,8 @@ public final class WorldPanelInteractionHandler {
             // → isDown=false → 物理键还按着 → 下一 tick 重注册 click → 无限循环"拿起又放下"。
             // 改为把 mc.hitResult 设 MISS 让后续攻击走空，event 放行但不破坏方块。
             if (button == 0) {
-                mc.hitResult = null;
+                mc.hitResult = net.minecraft.world.phys.BlockHitResult.miss(
+                        hit.record.panelAnchor, net.minecraft.core.Direction.UP, hit.record.blockPos);
             } else {
                 event.setCanceled(true);
             }
