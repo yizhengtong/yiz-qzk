@@ -73,7 +73,14 @@ public final class WorldPanelInteractionHandler {
 
         if (hit.record.blockPos.equals(OpModeState.getActivePanel())) {
             var s = hit.record.screen;
-            event.setCanceled(true);
+            // 左键(button=0)不 cancel——startAttack() 在 cancel 时调 keyAttack.release()
+            // → isDown=false → 物理键还按着 → 下一 tick 重注册 click → 无限循环"拿起又放下"。
+            // 改为把 mc.hitResult 设 MISS 让后续攻击走空，event 放行但不破坏方块。
+            if (button == 0) {
+                mc.hitResult = null;
+            } else {
+                event.setCanceled(true);
+            }
             event.setSwingHand(false);
             boolean handled;
             boolean wasEmpty = s.getMenu().getCarried().isEmpty();
