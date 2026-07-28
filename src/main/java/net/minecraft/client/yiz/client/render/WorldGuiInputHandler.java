@@ -49,6 +49,15 @@ public final class WorldGuiInputHandler {
         }
     }
 
+    /** 准星命中结果（public，供 WorldPanelInteractionHandler 用）。 */
+    public static final class CrosshairHit {
+        public final OpModeState.PanelRecord record;
+        public final double guiX, guiY;
+        public CrosshairHit(OpModeState.PanelRecord record, double guiX, double guiY) {
+            this.record = record; this.guiX = guiX; this.guiY = guiY;
+        }
+    }
+
     private WorldGuiInputHandler() {}
 
     // ════════════════════════════════════════════════════
@@ -59,6 +68,10 @@ public final class WorldGuiInputHandler {
     public static void onMousePressed(ScreenEvent.MouseButtonPressed.Pre event) {
         if (!WorldGuiPanelManager.isEnabled()) return;
         if (!(event.getScreen() instanceof AbstractContainerScreen<?>)) return;
+        // 只拦截被世界面板接管的容器屏（右键箱子）。玩家背包等无世界面板的容器屏放行原版，否则点击失效。
+        @SuppressWarnings("unchecked")
+        AbstractContainerScreen<?> screen = (AbstractContainerScreen<?>) event.getScreen();
+        if (!OpModeState.isManagedScreen(screen)) return;
 
         Hit hit = raycastHit();
         if (hit == null) {
@@ -69,8 +82,6 @@ public final class WorldGuiInputHandler {
 
         // 命中 → 取消原版 mouseClicked，用算出的光屏坐标调
         event.setCanceled(true);
-        @SuppressWarnings("unchecked")
-        AbstractContainerScreen<?> screen = (AbstractContainerScreen<?>) event.getScreen();
         boolean handled = screen.mouseClicked(hit.guiX, hit.guiY, event.getButton());
         LOG.debug("世界GUI点击 @ gui=({},{}) button={} handled={}", (int) hit.guiX, (int) hit.guiY, event.getButton(), handled);
     }
@@ -83,6 +94,10 @@ public final class WorldGuiInputHandler {
     public static void onMouseReleased(ScreenEvent.MouseButtonReleased.Pre event) {
         if (!WorldGuiPanelManager.isEnabled()) return;
         if (!(event.getScreen() instanceof AbstractContainerScreen<?>)) return;
+        // 只拦截被世界面板接管的容器屏（右键箱子）。玩家背包等放行原版。
+        @SuppressWarnings("unchecked")
+        AbstractContainerScreen<?> screen = (AbstractContainerScreen<?>) event.getScreen();
+        if (!OpModeState.isManagedScreen(screen)) return;
 
         Hit hit = raycastHit();
         if (hit == null) {
@@ -91,14 +106,26 @@ public final class WorldGuiInputHandler {
             return;
         }
         event.setCanceled(true);
-        @SuppressWarnings("unchecked")
-        AbstractContainerScreen<?> screen = (AbstractContainerScreen<?>) event.getScreen();
         screen.mouseReleased(hit.guiX, hit.guiY, event.getButton());
     }
 
     // ════════════════════════════════════════════════════
     //  射线-平面求交（逆投影）
     // ════════════════════════════════════════════════════
+
+    /**
+     * 当前准星命中的 GUI 像素坐标（与 {@link #onMousePressed} / {@link #onMouseReleased} 同源、同一套逆投影）。
+     * <p>供离屏渲染传鼠标坐标用：vanilla {@code AbstractContainerScreen.render} 画拖拽物品（floating item）
+     * 和 mouseDragged 完全用传入的 mouseX/mouseY（见 {@code renderFloatingItem(g, stack, mouseX-leftPos-8, mouseY-topPos-i2)}）。
+     * 若传真实鼠标坐标，拖拽物品会「中心贴合、四角偏」（真实鼠标坐标对世界光屏是错的）。
+     * 改用本方法返回的命中坐标，拖拽物品就画在准星命中处，与点击点严格一致。</p>
+     *
+     * @return {@code double[]{guiX, guiY}}；未启用/未命中任何光屏返回 {@code null}
+     */
+    public static double[] getHoverGuiPos() {
+        Hit h = raycastHit();
+        return h == null ? null : new double[]{h.guiX, h.guiY};
+    }
 
     /**
      * 鼠标屏幕坐标逆投影成 3D 射线，raycast 所有世界面板，返回命中的面板 + GUI 像素坐标。
@@ -108,13 +135,32 @@ public final class WorldGuiInputHandler {
         Minecraft mc = Minecraft.getInstance();
         if (mc.cameraEntity == null || mc.screen == null) return null;
 
-        // 鼠标 GUI 坐标
-        double mouseX = mc.mouseHandler.xpos() * mc.getWindow().getGuiScaledWidth() / (double) mc.getWindow().getScreenWidth();
-        double mouseY = mc.mouseHandler.ypos() * mc.getWindow().getGuiScaledHeight() / (double) mc.getWindow().getScreenHeight();
-        // 鼠标 NDC
-        float ndcX = (float) (2.0 * mouseX / mc.getWindow().getGuiScaledWidth() - 1.0);
-        float ndcY = (float) (1.0 - 2.0 * mouseY / mc.getWindow().getGuiScaledHeight());
+        // 鼠标 NDC：mouseHandler.xpos() 是屏幕像素，视口=framebuffer 像素，用 screenWidth/screenHeight 换算 NDC。
+        // 注意不能用 guiScaledWidth（那是 GUI 逻辑坐标，与视口无关）——它若出现在分子分母会被约掉，反而掩盖真实换算。
+        float ndcX = (float) (2.0 * mc.mouseHandler.xpos() / mc.getWindow().getScreenWidth() - 1.0);
+        float ndcY = (float) (1.0 - 2.0 * mc.mouseHandler.ypos() / mc.getWindow().getScreenHeight());
+        return raycastWithNdc(mc, ndcX, ndcY);
+    }
 
+    /**
+     * 准星（屏幕中心）命中检测。供 mc.screen==null 时的"准星右键操作光屏"用：
+     * 玩家没打开任何 GUI、自由转视角，准星=屏幕中心，逆投影 NDC=(0,0)。
+     * 与 {@link #raycastHit()} 共用 {@link #raycastWithNdc} 核心，仅 NDC 来源不同。
+     *
+     * @return 命中的面板 + GUI 像素；未启用/无相机/未命中返回 null
+     */
+    public static CrosshairHit getCrosshairHit() {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.cameraEntity == null) return null;
+        Hit h = raycastWithNdc(mc, 0f, 0f);
+        return h == null ? null : new CrosshairHit(h.record, h.guiX, h.guiY);
+    }
+
+    /**
+     * 核心：给定屏幕 NDC，逆投影成世界射线，遍历所有面板求最近命中。
+     * 鼠标点击（NDC 来自鼠标位置）与准星（NDC=0,0）共用此方法，避免两套逆投影漂移。
+     */
+    private static Hit raycastWithNdc(Minecraft mc, float ndcX, float ndcY) {
         // 用世界渲染时保存的透视投影矩阵（比读 RenderSystem 全局值准——点击时全局值可能已被 GUI 正交投影覆盖）
         org.joml.Matrix4f invProj = new org.joml.Matrix4f(WorldGuiPanelManager.getWorldProjection()).invert();
         org.joml.Vector4f nearH = invProj.transform(new org.joml.Vector4f(ndcX, ndcY, -1f, 1f));
@@ -151,14 +197,12 @@ public final class WorldGuiInputHandler {
      * 在面板局部系求交（局部 z=0 是平面），规避透视畸变。
      */
     private static double[] raycastPanel(Vec3 eye, Vec3 dir, OpModeState.PanelRecord r) {
-        // 面板半宽/半高（世界尺寸，与 drawWorldQuad 的 computeGuiPanelSize 一致）
-        // 这里用 screen 宽高比近似（FBO 未就绪时也能算）
-        float srcW = r.screen.width;
-        float srcH = r.screen.height;
-        float aspect = srcW / srcH;
-        float hw, hh;
-        if (2.5f / 1.8f > aspect) { hh = 1.8f; hw = 1.8f * aspect; } else { hw = 2.5f; hh = 2.5f / aspect; }
-        hw *= 0.5f; hh *= 0.5f;
+        // 面板半宽/半高：必须与 drawWorldQuad 用同一个函数、同一份入参（r.fbo 尺寸），
+        // 否则命中框形状与实际面板不一致（中心贴合、四角偏）。FBO 未就绪=没渲染=不命中。
+        if (r.fbo == null) return null;
+        float[] sz = WorldGuiPanelManager.computeGuiPanelSize(r.fbo.width, r.fbo.height);
+        float hw = sz[0] * 0.5f;
+        float hh = sz[1] * 0.5f;
 
         // 把 eye、dir 变换到面板局部系（局部 = rotation^-1 * (world - anchor)）
         Quaternionf invRot = new Quaternionf(r.panelRotation).conjugate();

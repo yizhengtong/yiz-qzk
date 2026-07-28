@@ -61,7 +61,9 @@ public final class OpModeState {
     public static PanelRecord put(BlockPos pos, Vec3 anchor, Quaternionf rotation, AbstractContainerScreen<?> screen) {
         long key = pos.asLong();
         synchronized (records) {
-            records.remove(key);
+            // 同箱子重开：remove 返回旧 record，必须销毁其 FBO，否则 GL 纹理/缓冲泄漏（每次重开漏一份）。
+            PanelRecord existing = records.remove(key);
+            if (existing != null) destroyFbo(existing);
             while (records.size() >= MAX_PANELS) {
                 Long oldest = records.keySet().iterator().next();
                 PanelRecord removed = records.remove(oldest);
@@ -88,6 +90,19 @@ public final class OpModeState {
         }
     }
 
+    /** 该 screen 是否被某个世界面板接管（== 某条记录的 screen 实例）。
+     *  用于区分「右键箱子打开的容器屏（要走世界命中/取消贴脸渲染）」
+     *  vs「玩家背包等无世界面板的容器屏（必须放行原版，否则按E后GUI被吞、点击失效）」。 */
+    public static boolean isManagedScreen(AbstractContainerScreen<?> screen) {
+        if (screen == null) return false;
+        synchronized (records) {
+            for (PanelRecord r : records.values()) {
+                if (r.screen == screen) return true;
+            }
+        }
+        return false;
+    }
+
     public static boolean isEmpty() {
         synchronized (records) {
             return records.isEmpty();
@@ -109,5 +124,46 @@ public final class OpModeState {
             for (PanelRecord r : records.values()) destroyFbo(r);
             records.clear();
         }
+        // 状态一并复位
+        activePanel = null;
+        fakeClosed = false;
+        switchingTo = null;
+    }
+
+    // ════════════════════════════════════════════════════
+    //  准星右键交互状态（假关闭 + 活跃面板 + 切换）
+    //  ───────────────────────────────────────────────────
+    //  服务端一个玩家同时只能开一个容器。假关闭（ESC 只 setScreen(null) 不发 close 包）后，
+    //  mc.screen==null 但服务端容器仍打开，玩家可自由视角+准星右键操作该活跃光屏。
+    //  activePanel = 当前服务端活跃容器的 blockPos；fakeClosed = 是否处于「screen关但容器开」状态。
+    // ════════════════════════════════════════════════════
+
+    /** 当前服务端活跃容器的 blockPos（准星右键只对它直接生效；别的需切换）。null=无活跃容器。 */
+    private static volatile BlockPos activePanel = null;
+    /** 活跃容器是否处于假关闭（mc.screen==null 但服务端容器仍打开，可准星右键操作）。 */
+    private static volatile boolean fakeClosed = false;
+    /** 正在切换到的目标 blockPos（切换期间非 null，防重入 + 标记 onRightClickBlock 走关联而非重拍）。 */
+    private static volatile BlockPos switchingTo = null;
+
+    public static BlockPos getActivePanel() { return activePanel; }
+    public static boolean isFakeClosed() { return fakeClosed; }
+    public static BlockPos getSwitchingTo() { return switchingTo; }
+    public static void setSwitchingTo(BlockPos pos) { switchingTo = pos; }
+
+    /** 假关闭：反查 screen 对应 record，记其 blockPos 为活跃面板。 */
+    public static void markFakeClosed(AbstractContainerScreen<?> screen) {
+        if (screen == null) { activePanel = null; fakeClosed = false; return; }
+        synchronized (records) {
+            for (PanelRecord r : records.values()) {
+                if (r.screen == screen) { activePanel = r.blockPos; break; }
+            }
+        }
+        fakeClosed = true;
+    }
+
+    /** 活跃容器真正关闭（服务端 force close / 断线 / 切换失败）：清活跃状态。面板 record 可保留冻结。 */
+    public static void markRealClosed() {
+        activePanel = null;
+        fakeClosed = false;
     }
 }

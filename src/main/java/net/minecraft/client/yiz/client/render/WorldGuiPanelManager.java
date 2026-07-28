@@ -59,8 +59,10 @@ public final class WorldGuiPanelManager {
 
     /** 最近一次右键的方块 pos（供 ScreenEvent.Render.Pre 关联 screen 与方块）。 */
     private static volatile BlockPos lastClickedPos = null;
-    /** 已处理过的右键 pos（区分「新右键=面前重新生成」vs「同次重复」）。 */
-    private static volatile BlockPos lastProcessedClickPos = null;
+    /** 是否有「未处理的右键」：每次 RightClickBlock 置 true，Render.Pre 消费一次后清 false。
+     *  用标志位而非比较 pos——否则右键同一箱子时 lastClickedPos 不变会被误判为「同次重复」而跳过重新拍快照，
+     *  导致光屏停在旧位置（玩家已转身/移位），命中与视觉错位。 */
+    private static volatile boolean pendingClick = false;
 
     /** GUI 面板尺寸（方块），保持源宽高比缩到此框内。 */
     private static final float GUI_PANEL_WIDTH = 2.5f;
@@ -95,8 +97,15 @@ public final class WorldGuiPanelManager {
         return bufferSource;
     }
 
-    /** @return [panelW, panelH]，保持源宽高比缩到 GUI 尺寸框内。 */
-    private static float[] computeGuiPanelSize(float srcW, float srcH) {
+    /**
+     * 世界面板尺寸（方块），保持源宽高比缩到 {@link #GUI_PANEL_WIDTH}/{@link #GUI_PANEL_HEIGHT} 框内。
+     * <p><b>渲染端（{@link #drawWorldQuad}）与命中端（{@link WorldGuiInputHandler#raycastPanel}）必须共用此方法</b>，
+     * 否则两边尺寸漂移会导致命中框与实际面板形状不一致（中心贴合、越靠四角偏差越大）。
+     * 入参 srcW/srcH 两边必须传同一份值（统一用 {@code r.fbo.width/height}）。</p>
+     *
+     * @return [panelW, panelH]
+     */
+    public static float[] computeGuiPanelSize(float srcW, float srcH) {
         float srcAspect = srcW / srcH;
         if (GUI_PANEL_WIDTH / GUI_PANEL_HEIGHT > srcAspect) {
             return new float[]{GUI_PANEL_HEIGHT * srcAspect, GUI_PANEL_HEIGHT};
@@ -113,8 +122,9 @@ public final class WorldGuiPanelManager {
     public static void onRightClickBlock(PlayerInteractEvent.RightClickBlock event) {
         if (!enabled) return;
         if (event.getEntity().level().isClientSide) {
-            // 记录客户端右键的方块 pos，供下次 ScreenEvent.Render.Pre 关联
+            // 记录客户端右键的方块 pos，并置待处理标志，供下次 ScreenEvent.Render.Pre 关联+拍快照
             lastClickedPos = event.getPos().immutable();
+            pendingClick = true;
         }
     }
 
@@ -132,22 +142,36 @@ public final class WorldGuiPanelManager {
         AbstractContainerScreen<?> container = (AbstractContainerScreen<?>) screen;
 
         // 右键箱子 → 每次都在玩家面前重新生成光屏（即使同箱子已有旧光屏，也用新视角拍快照覆盖）。
-        // 用 lastProcessedClickPos 区分「新右键」vs「同一帧重复触发 Render.Pre」。
-        if (lastClickedPos != null && !lastClickedPos.equals(lastProcessedClickPos)) {
+        // pendingClick 由 RightClickBlock 置位、这里消费后清零：既能去重同一帧的多次 Render.Pre，
+        // 又不会因为「pos 没变」而漏掉同一箱子的再次右键。
+        if (pendingClick && lastClickedPos != null) {
             captureNewPanel(lastClickedPos, container);
-            lastProcessedClickPos = lastClickedPos;
+            pendingClick = false;
         }
 
         // 在 GUI 渲染阶段（ScreenEvent.Render.Pre）对当前 screen 离屏渲染——此时机全局状态干净
         // （光照纹理/atlas 已就绪），物品颜色正常。留存面板（ESC 后无 mc.screen）不进这里，用冻结的旧 FBO。
-        OpModeState.PanelRecord current = (lastClickedPos != null) ? OpModeState.get(lastClickedPos) : null;
-        if (current != null && current.screen == container) {
+        // 只有被世界面板接管的容器屏（右键箱子打开的）才离屏渲染+取消贴脸渲染。
+        // 玩家背包(InventoryScreen)等无世界面板的容器屏必须放行原版，否则按E后GUI被吞、什么都看不到。
+        OpModeState.PanelRecord current = OpModeState.isManagedScreen(container) ? findRecordByScreen(container) : null;
+        if (current != null) {
             current.screen = container; // 刷新实例引用（同箱子重开时 screen 是新实例）
-            renderToOffscreen(current, event.getMouseX(), event.getMouseY(), event.getPartialTick());
+            // 鼠标坐标：优先用准星命中光屏算出的 GUI 像素（vanilla render 画拖拽物品/mouseDragged 全用这个坐标，
+            // 真实鼠标坐标对世界光屏是错的→拖拽物品中心贴合四角偏）。未命中（准星移出面板）回落真实鼠标。
+            double[] hover = WorldGuiInputHandler.getHoverGuiPos();
+            int mx = hover != null ? (int) hover[0] : event.getMouseX();
+            int my = hover != null ? (int) hover[1] : event.getMouseY();
+            renderToOffscreen(current, mx, my, event.getPartialTick());
+            event.setCanceled(true);
         }
+    }
 
-        // 取消原版贴脸渲染（玩家看世界光屏，不看贴脸 GUI）
-        event.setCanceled(true);
+    /** 按 screen 实例反查面板记录（screen == record.screen 的那条）。 */
+    private static OpModeState.PanelRecord findRecordByScreen(AbstractContainerScreen<?> screen) {
+        for (OpModeState.PanelRecord r : OpModeState.list()) {
+            if (r.screen == screen) return r;
+        }
+        return null;
     }
 
     /** 新建一条面板记录：光屏锚点=玩家相机前方0.5格，朝向=当前相机（正对玩家）。 */
@@ -183,11 +207,29 @@ public final class WorldGuiPanelManager {
         // 保存世界渲染的投影矩阵，供鼠标逆投影命中用
         worldProjection = new org.joml.Matrix4f(RenderSystem.getProjectionMatrix());
 
-        // 只画世界四边形（离屏渲染已在 ScreenEvent.Render.Pre 完成，用各自的 FBO 纹理）。
-        // 当前面板用刚更新的 FBO；留存面板（ESC 后）用冻结的旧 FBO。
+        // 画世界四边形（FBO 由 onRenderGuiPost 在上一帧的 GUI 阶段更新，一帧延迟但颜色正确）
         for (OpModeState.PanelRecord r : records) {
             if (r.fbo == null) continue;
             drawWorldQuad(r, camPos, ps);
+        }
+    }
+
+    /** 假关闭面板的 FBO 实时更新：在 GUI 渲染阶段进行（光照/atlas/shader 就绪，物品颜色正常）。
+     *  不能在 {@link #onRenderLevelStage} 里做——世界渲染阶段光照纹理未绑定，物品变纯蓝。 */
+    @SubscribeEvent
+    public static void onRenderGuiPost(net.neoforged.neoforge.client.event.RenderGuiEvent.Post event) {
+        if (!enabled) return;
+        if (!OpModeState.isFakeClosed() || OpModeState.getActivePanel() == null) return;
+
+        Minecraft mc = Minecraft.getInstance();
+        WorldGuiInputHandler.CrosshairHit hit = WorldGuiInputHandler.getCrosshairHit();
+        int mx = hit != null ? (int) hit.guiX : 0;
+        int my = hit != null ? (int) hit.guiY : 0;
+        for (OpModeState.PanelRecord r : OpModeState.list()) {
+            if (r.fbo != null && r.blockPos.equals(OpModeState.getActivePanel())) {
+                renderToOffscreen(r, mx, my, event.getPartialTick().getGameTimeDeltaPartialTick(true));
+                break;
+            }
         }
     }
 

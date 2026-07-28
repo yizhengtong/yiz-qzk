@@ -10,3 +10,4 @@
 - [穿墙轮廓共面合并](outline-render-coplanar-merge.md) — 相邻方块中间分割棱消失要靠"共面接缝判定"，不是去重也不是渲染配置；附 EdgeKey 碰撞避坑
 - [vanilla 暴击 baked 换算](crit-damage-vanilla-baked.md) — 跳劈已把 1.5x 算进 amount，叠加 CRIT_DAMAGE 要用 /150 换算不是 /100；且 consume 必须在伤害块开头取出，否则标记残留误加暴击
 - [热数据别走 PlayerDataAPI](hot-data-no-persistent-api.md) — 每 tick 写的数据会让 set 全量解析+全量 S2C 同步整个 root；退出即弃的数据改纯内存+事件驱动下发
+- [空间GUI](空间GUI.md) — FBO贴世界光屏5硬坑：clear内部unbind需重绑、离屏须在Render.Pre(否则物品纯蓝)、独立bufferSource、超采样矩阵顺序、V轴翻转；逆投影命中用世界投影矩阵

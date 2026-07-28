@@ -22,7 +22,9 @@
     "StartupItemRegistryReplaceMixin"
   ],
   "client": [
+    "AbstractContainerScreenAccessor",
     "AbstractContainerScreenBackgroundMixin",
+    "AbstractContainerScreenFakeCloseMixin",
     "ClientMultiJumpMixin",
     "CreativeTabIconSafetyMixin",
     "LiquidBlockShapeMixin",

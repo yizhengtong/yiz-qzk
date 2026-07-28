@@ -99,6 +99,9 @@ public class tizModClient {
                 net.minecraft.client.yiz.client.render.WorldGuiPanelManager.class);
         net.neoforged.neoforge.common.NeoForge.EVENT_BUS.register(
                 net.minecraft.client.yiz.client.render.WorldGuiInputHandler.class);
+        // 世界光屏准星右键操作（mc.screen==null 时，准星对准留存光屏右键操作槽位）
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.register(
+                net.minecraft.client.yiz.client.render.WorldPanelInteractionHandler.class);
 
         // 注册着色器预设 (1=星芒, 2=图标贴图, 3=曲速穿越)
         ShaderManager.registerPreset("1", new ShaderManager.ShaderDescriptor(
