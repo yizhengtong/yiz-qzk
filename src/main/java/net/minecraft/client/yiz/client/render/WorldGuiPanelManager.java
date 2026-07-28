@@ -201,10 +201,10 @@ public final class WorldGuiPanelManager {
         return null;
     }
 
-    /** 新建一条面板记录：先清除所有旧光屏（含 FBO、状态），再在玩家相机前方 0.5 格创建新的。
-     *  每次右键箱子都是全新的交互起点。 */
+    /** 新建一条面板记录：清除同一箱子旧面板，复位假关闭状态（新面板是活跃的锁视角模式），在玩家前方创建。 */
     private static void captureNewPanel(BlockPos pos, AbstractContainerScreen<?> screen) {
-        OpModeState.clearAll();  // 清除所有旧面板 + 复位 activePanel/fakeClosed/switchingTo
+        OpModeState.remove(pos);   // 只清除同箱子旧面板，不影响其他留存面板
+        OpModeState.markRealClosed(); // 新面板不是假关闭态（mc.screen 活跃，锁视角模式）
         Minecraft mc = Minecraft.getInstance();
         var cam = mc.gameRenderer.getMainCamera();
         Vec3 camPos = cam.getPosition();
