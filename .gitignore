@@ -42,3 +42,6 @@ run/
 repo/
 !**/src/**/repo/
 build_dead/
+
+# 会话级计划/笔记，不进代码库
+.context/

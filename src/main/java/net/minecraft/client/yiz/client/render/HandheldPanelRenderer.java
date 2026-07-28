@@ -152,6 +152,45 @@ public final class HandheldPanelRenderer {
         }
     }
 
+    /** 对外暴露的面板尺寸计算（float 入参，供 WorldGuiPanelManager 用）。 */
+    public static float[] computePanelSizePublic(float srcW, float srcH) {
+        return computePanelSize((int) srcW, (int) srcH);
+    }
+
+    /**
+     * 用外部 GL 纹理渲染一块世界四边形（路 2A：FBO 纹理直通），支持 UV 裁剪。
+     * 与 {@link #renderQuad} 的区别：纹理来源从 Panel.texture 换成传入的 glTextureId，
+     * 位置/朝向由调用方给出（FIXED 坐标），且只采样 FBO 纹理中指定子区域。
+     *
+     * <p>UV 语义（已在调用方换算好，本方法不做翻转）：</p>
+     * <ul>
+     *   <li>{@code uLeft/uRight}：左右边对应的 U（FBO 纹理 U 轴，原点左下，与 GUI X 同向，不翻转）</li>
+     *   <li>{@code vTop/vBottom}：世界顶边/底边对应的 V（FBO 纹理 V 轴，原点左下，已含 GUI→GL 的 Y 翻转）</li>
+     * </ul>
+     * 在 AFTER_TRANSLUCENT_BLOCKS 阶段调用。
+     */
+    public static void renderQuadWithTexture(int glTextureId, Vec3 center, Quaternionf rot,
+                                             float halfWidth, float halfHeight, Vec3 camPos, PoseStack ps,
+                                             float uLeft, float vTop, float uRight, float vBottom) {
+        ps.pushPose();
+        ps.translate(center.x - camPos.x, center.y - camPos.y, center.z - camPos.z);
+        ps.mulPose(rot);
+
+        RenderSystem.setShaderTexture(0, glTextureId);
+
+        var mat = ps.last().pose();
+        BufferBuilder builder = Tesselator.getInstance().begin(
+                VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
+        // 世界顶边(+hh)→vTop，底边(-hh)→vBottom；左边(-hw)→uLeft，右边(+hw)→uRight。
+        builder.addVertex(mat, -halfWidth, -halfHeight, 0).setUv(uLeft, vBottom);
+        builder.addVertex(mat,  halfWidth, -halfHeight, 0).setUv(uRight, vBottom);
+        builder.addVertex(mat,  halfWidth,  halfHeight, 0).setUv(uRight, vTop);
+        builder.addVertex(mat, -halfWidth,  halfHeight, 0).setUv(uLeft, vTop);
+        BufferUploader.drawWithShader(builder.buildOrThrow());
+
+        ps.popPose();
+    }
+
     /** 获取面板的 ManagedSession，用于发送输入事件 */
     public static synchronized WindowCaptureManager.ManagedSession getSession(int id) {
         Panel p = panels.get(id);

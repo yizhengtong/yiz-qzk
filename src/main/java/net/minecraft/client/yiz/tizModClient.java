@@ -94,6 +94,12 @@ public class tizModClient {
         net.neoforged.neoforge.common.NeoForge.EVENT_BUS.register(
                 net.minecraft.client.yiz.ui.VanillaAttributeTooltipHider.class);
 
+        // 世界空间容器 GUI：箱子面板离屏渲染到 FBO + 世界四边形 + 准星命中
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.register(
+                net.minecraft.client.yiz.client.render.WorldGuiPanelManager.class);
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.register(
+                net.minecraft.client.yiz.client.render.WorldGuiInputHandler.class);
+
         // 注册着色器预设 (1=星芒, 2=图标贴图, 3=曲速穿越)
         ShaderManager.registerPreset("1", new ShaderManager.ShaderDescriptor(
                 tizMod.MODID, "rendertype_cosmic2", "rendertype_cosmic2_armor", true
