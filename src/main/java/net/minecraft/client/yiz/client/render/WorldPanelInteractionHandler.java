@@ -33,9 +33,9 @@ public final class WorldPanelInteractionHandler {
 
     private static final Logger LOG = LoggerFactory.getLogger("WorldPanelInteractionHandler");
 
-    /** 上次处理的游戏 tick，同 tick 内防抖（Minecraft.startAttack 用 while(consumeClick) 循环，
-     *  快速点击累积多次 click 会一帧内全触发 → 拿起立刻放下的错觉）。 */
-    private static int lastHandledTick = -1;
+    /** 上次拿起物品的时间戳。100ms 内收到的新事件（while(consumeClick) 累积）跳过，
+     *  避免"瞬间拿起又放下"。超过 100ms 的认为是独立点击，正常处理。 */
+    private static long lastPickupMs = 0;
 
     private WorldPanelInteractionHandler() {}
 
@@ -44,11 +44,10 @@ public final class WorldPanelInteractionHandler {
         if (!WorldGuiPanelManager.isEnabled()) return;
         if (event.getHand() != InteractionHand.MAIN_HAND) return;
 
-        // 同 tick 只处理一次（防抖）
+        // 刚拿起物品后 100ms 内跳过（while(consumeClick) 循环累积的事件）
+        if (System.currentTimeMillis() - lastPickupMs < 100) return;
+
         net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
-        if (mc.player == null) return;
-        if (mc.player.tickCount == lastHandledTick) return;
-        lastHandledTick = mc.player.tickCount;
 
         final int button;
         if (event.isAttack())       button = 0;  // 左键：拿全部/放全部
@@ -77,9 +76,12 @@ public final class WorldPanelInteractionHandler {
             event.setCanceled(true);
             event.setSwingHand(false);
             boolean handled;
-            if (s.getMenu().getCarried().isEmpty()) {
+            boolean wasEmpty = s.getMenu().getCarried().isEmpty();
+            if (wasEmpty) {
                 handled = s.mouseClicked(hit.guiX, hit.guiY, button);
                 acc.setQuickCrafting(false);
+                // 记录拿起时间戳，100ms 内跳过累积事件
+                if (!s.getMenu().getCarried().isEmpty()) lastPickupMs = System.currentTimeMillis();
             } else {
                 acc.setSkipNextRelease(false);
                 acc.setQuickCrafting(false);
