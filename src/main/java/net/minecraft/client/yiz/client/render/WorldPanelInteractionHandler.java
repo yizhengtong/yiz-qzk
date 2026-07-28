@@ -38,21 +38,23 @@ public final class WorldPanelInteractionHandler {
     @SubscribeEvent
     public static void onUseItem(InputEvent.InteractionKeyMappingTriggered event) {
         if (!WorldGuiPanelManager.isEnabled()) return;
-        if (!event.isUseItem()) return;                              // 只处理右键
-        if (event.getHand() != InteractionHand.MAIN_HAND) return;    // 事件对 MAIN/OFF 各 fire 一次，只处理主手避免重复
+        if (event.getHand() != InteractionHand.MAIN_HAND) return;
 
-        // 切换进行中：锁，防重入（阶段4）
+        final int button;
+        if (event.isAttack())       button = 0;  // 左键：拿全部/放全部
+        else if (event.isUseItem()) button = 1;  // 右键：拿一半/放一个
+        else return;
+
+        // 切换进行中：锁，防重入
         if (OpModeState.getSwitchingTo() != null) return;
         if (!OpModeState.isFakeClosed()) return;
 
         WorldGuiInputHandler.CrosshairHit hit = WorldGuiInputHandler.getCrosshairHit();
         if (hit == null) return;
-
         if (hit.record.screen == null) return;
 
-        // 击中光屏空白区（GUI槽位范围外）→ 不 cancel，放行原版右键。
-        // 光屏只是渲染四边形、无碰撞体，vanilla 的 mc.hitResult 仍指向背后方块，
-        // RightClickBlock 会正常触发 → 重新打开箱子 → captureNewPanel 在面前重建光屏。
+        // 击中光屏空白区（GUI槽位范围外）→ 不 cancel，放行原版。
+        // 光屏只是渲染四边形无碰撞体，vanilla mc.hitResult 指向背后方块 → RightClickBlock/LeftClickBlock 正常触发。
         var acc = (net.minecraft.client.yiz.mixin.AbstractContainerScreenAccessor) hit.record.screen;
         int left = acc.getLeftPos(), top = acc.getTopPos();
         int imgW = acc.getImageWidth(), imgH = acc.getImageHeight();
@@ -66,17 +68,17 @@ public final class WorldPanelInteractionHandler {
             event.setSwingHand(false);
             boolean handled;
             if (s.getMenu().getCarried().isEmpty()) {
-                handled = s.mouseClicked(hit.guiX, hit.guiY, 1);
+                handled = s.mouseClicked(hit.guiX, hit.guiY, button);
                 acc.setQuickCrafting(false);
             } else {
                 acc.setSkipNextRelease(false);
                 acc.setQuickCrafting(false);
-                handled = s.mouseReleased(hit.guiX, hit.guiY, 1);
+                handled = s.mouseReleased(hit.guiX, hit.guiY, button);
             }
-            LOG.debug("世界光屏准星右键 @ gui=({},{}) carried={} handled={}",
-                    (int) hit.guiX, (int) hit.guiY, s.getMenu().getCarried().getCount(), handled);
-        } else {
-            // 多光屏切换：命中非活跃光屏 → 主动让服务端打开目标方块的容器
+            LOG.debug("世界光屏准星{}键 @ gui=({},{}) carried={} handled={}",
+                    button == 0 ? "左" : "右", (int) hit.guiX, (int) hit.guiY, s.getMenu().getCarried().getCount(), handled);
+        } else if (event.isUseItem()) {
+            // 仅右键触发多光屏切换（左键打光屏没意义，放行原版让玩家攻击背后的方块）
             net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
             net.minecraft.core.BlockPos target = hit.record.blockPos;
             OpModeState.setSwitchingTo(target);
@@ -88,5 +90,6 @@ public final class WorldPanelInteractionHandler {
             mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND, bhr);
             LOG.info("多光屏切换开始 @ {}，等待服务端打开容器...", target);
         }
+        // 左键命中非活跃光屏：不 cancel → 放行原版，让玩家攻击/破坏背后方块
     }
 }
