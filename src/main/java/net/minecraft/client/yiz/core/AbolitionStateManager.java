@@ -19,7 +19,9 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * 物品废除 + 背包废除 中央状态管理器（带文件持久化）。
  *
- * <p>状态保存到 {@code config/yizmodqzk-abolish.json}，游戏重启后自动恢复。</p>
+ * <p>状态保存到 {@code config/yizmodqzk-abolish.json}，游戏重启后自动恢复。
+ * 属于<b>全局创作偏好</b>（非世界隔离）：存到游戏目录而非存档目录，
+ * 刻意跨所有世界/存档保留 —— 玩家在任意存档废除的物品，换档后仍保持废除。</p>
  */
 public final class AbolitionStateManager {
     private static final Logger LOGGER = LoggerFactory.getLogger("AbolitionState");

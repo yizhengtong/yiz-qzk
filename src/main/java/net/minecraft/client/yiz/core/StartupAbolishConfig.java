@@ -25,13 +25,13 @@ import java.util.TreeSet;
  * 启动期 abolish 列表 —— 在 Item 还没注册的时候就能读，
  * 不依赖 {@code Minecraft.getInstance()}。
  *
- * <p>独立于 {@link AbolitionStateManager}（按存档的运行时状态）。
- * 两个文件共存：</p>
+ * <p>独立于 {@link AbolitionStateManager}（全局创作偏好的运行时状态）。
+ * 两者都是<b>全局</b>偏好（存游戏目录、跨所有存档保留），区别仅在生效阶段：</p>
  * <ul>
  *   <li>{@code config/yizmodqzk-startup-abolish.json} —— 启动期固化的黑名单。
  *       影响 {@code MappedRegistry.register} 注入：被列入的 Item 会被替换为
  *       基类 Item，等同于该 mod 没注册过它</li>
- *   <li>{@code config/yizmodqzk-abolish.json} —— 运行时 abolish 状态（按存档）。
+ *   <li>{@code config/yizmodqzk-abolish.json} —— 运行时 abolish 状态（全局偏好）。
  *       走 vtable / Mixin 层拦截</li>
  * </ul>
  *
