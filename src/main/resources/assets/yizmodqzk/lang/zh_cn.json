@@ -29,7 +29,7 @@
   "attribute.yizmodqzk.splash_damage": "溅射伤害",
   "attribute.yizmodqzk.splash_falloff": "溅射衰减",
   "attribute.yizmodqzk.huixin": "会心",
-  "attribute.yizmodqzk.cooldown_reduction": "攻击间隔缩减",
+  "attribute.yizmodqzk.cooldown_reduction": "攻击速度",
   "attribute.yizmodqzk.attack_strength": "攻击加成",
   "attribute.yizmodqzk.spell_defense": "魔法抗性",
   "attribute.yizmodqzk.spell_power": "法术强度",
@@ -134,6 +134,5 @@
 
   "enchantment.yizmodqzk.auto_attack": "自动攻击",
   "enchantment.yizmodqzk.poshi": "破时",
-  "enchantment.yizmodqzk.poxian": "破限",
-  "enchantment.yizmodqzk.cooldown_reduction": "攻击间隔缩减"
+  "enchantment.yizmodqzk.poxian": "破限"
 }

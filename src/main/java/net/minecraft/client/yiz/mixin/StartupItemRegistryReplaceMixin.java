@@ -88,6 +88,12 @@ public abstract class StartupItemRegistryReplaceMixin {
                     " (was " + (value != null ? value.getClass().getName() : "null") +
                     ") with empty Item");
             return replacement;
+        } catch (Exception e) {
+            // 注册表已冻结（如 NeoForge takeVanillaSnapshot 期间）→ new Item 会抛异常，
+            // 跳过替换返回原值让快照正常完成
+            System.err.println("[StartupAbolish] Cannot replace " + idStr +
+                    " (registry frozen): " + e.getMessage());
+            return value;
         } finally {
             yizmodqzk$replacing.set(false);
         }

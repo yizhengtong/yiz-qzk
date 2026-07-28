@@ -159,7 +159,7 @@ public final class ItemAttributeDisplay {
         yiz("mana_cost_per_sec",    "每秒法力值消耗",     "点",  1.0);
 
         // ── 冷却/充能 ──────────────────────────────────
-        yiz("cooldown_reduction",   "攻击间隔缩减",     "%",   1.0);
+        yiz("cooldown_reduction",   "攻击速度",     "%",   1.0);
         yiz("cooldown_value",       "技能冷却值",       "tick",1.0);
         yiz("max_charges",          "最大充能数",   "次",  1.0);
 

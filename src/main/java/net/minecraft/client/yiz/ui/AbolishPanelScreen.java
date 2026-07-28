@@ -146,6 +146,13 @@ public class AbolishPanelScreen extends Screen {
         updateArmorBtn();
         addRenderableWidget(armorBtn);
 
+        // 一键清除按钮
+        addRenderableWidget(Button.builder(
+                Component.literal("§c§l清除全部"),
+                btn -> clearAllAbolished())
+                .bounds(rightLeft + 8, height - MARGIN - 25 - 5, RIGHT_W - 16, 20)
+                .build());
+
         buildData();
     }
 
@@ -353,6 +360,26 @@ public class AbolishPanelScreen extends Screen {
             idx++;
         }
         return false;
+    }
+
+    /** 一键清除：运行时废除 + 启动黑名单，全部清空。 */
+    private void clearAllAbolished() {
+        int cnt1 = AbolitionStateManager.getAbolishedItems().size();
+        int cnt2 = StartupAbolishConfig.size();
+        // 逐一恢复运行时废除的物品
+        for (ResourceLocation id : new ArrayList<>(AbolitionStateManager.getAbolishedItems())) {
+            ItemAbolitionHelper.restoreItemById(id);
+        }
+        // 清空启动黑名单
+        StartupAbolishConfig.clearAll();
+        if (Minecraft.getInstance().player != null) {
+            Minecraft.getInstance().player.displayClientMessage(
+                Component.literal("§a已清除全部 §c" + cnt1 + " 项运行时废除 §f+ §b" + cnt2 + " 项启动黑名单"), true);
+        }
+        // 刷新 UI
+        updateArmorBtn();
+        addRenderableWidget(armorBtn);
+        buildData();
     }
 
     private void toggleStartupAbolish(ItemEntry entry) {

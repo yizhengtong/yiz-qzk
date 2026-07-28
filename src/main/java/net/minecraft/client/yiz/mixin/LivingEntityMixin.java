@@ -313,6 +313,15 @@ public abstract class LivingEntityMixin implements HealthDataBridge, ControlData
                             }
                         }
                     }
+                    // 原版暴击已发生（跳劈等）：vanilla 已将 1.5x baked 进 amount，
+                    // 需要追加 CRIT_DAMAGE 部分使最终倍率 = 1.5 + CD/100。
+                    // 换算：(1.5 + CD/100) / 1.5 - 1 = CD/150
+                    if (net.minecraft.client.yiz.api.CritTracker.consume(pl)) {
+                        double critDmg = pl.getAttributeValue(YizAttributes.CRIT_DAMAGE);
+                        if (critDmg > 0) {
+                            amount *= (1.0f + (float)(critDmg / 150.0));
+                        }
+                    }
                 }
                 // 状态效果派发（仅服务端：applyShock/doShockAoE 会发 S2C 包，客户端不能发 clientbound）
                 if (!self.level().isClientSide()) {

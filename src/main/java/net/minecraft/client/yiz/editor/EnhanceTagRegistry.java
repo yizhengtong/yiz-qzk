@@ -166,9 +166,9 @@ public final class EnhanceTagRegistry {
         // ── 奔雷袭系列八大强化 ──
 
         register("wuyingji", "无影击",
-            "获得50%攻击间隔缩减，4次攻击后移除",
+            "获得100%攻击速度，4次攻击后移除",
             ctx -> addAttackModifier(ctx.player(), "yiz:wuyingji",
-                net.minecraft.client.yiz.attribute.YizAttributes.COOLDOWN_REDUCTION, 50.0, 4));
+                net.minecraft.client.yiz.attribute.YizAttributes.COOLDOWN_REDUCTION, 100.0, 4));
 
         register("gandian", "感电",
             "使用技能后减少20%的技能冷却时间",
@@ -238,7 +238,7 @@ public final class EnhanceTagRegistry {
                 net.minecraft.client.yiz.attribute.YizAttributes.CRIT_RATE, 100.0, 4));
 
         register("leixiaoshan", "雷啸闪",
-            "获得15%攻击间隔缩减持续5秒，可叠加3层至45%延至15秒",
+            "获得20%攻击速度持续5秒，可叠加3层至60%延至15秒",
             ctx -> addLeixiaoshan(ctx.player()));
 
         register("pozhenjinshen", "破阵金身",
@@ -321,7 +321,7 @@ public final class EnhanceTagRegistry {
 
     private static void applyLeixiaoshan(ServerPlayer player) {
         int stacks = player.getPersistentData().getInt("yiz:leixiaoshan_s");
-        double cdr = stacks * 15.0; // 15/30/45
+        double cdr = stacks * 20.0; // 20/40/60% 攻击速度
         var inst = player.getAttribute(net.minecraft.client.yiz.attribute.YizAttributes.COOLDOWN_REDUCTION);
         if (inst == null) return;
         var rl = net.minecraft.resources.ResourceLocation.parse("yiz:leixiaoshan");

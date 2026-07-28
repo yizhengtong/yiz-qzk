@@ -7,10 +7,12 @@ metadata:
 
 ## Mixin 1.21.1 关键踩坑
 
-### refmap 缺失 → `@ModifyVariable` / `@ModifyExpressionValue` / `@ModifyArg` 不可用
-项目 `yizmodqzk.refmap.json` 并不实际生成。只有 `@Inject` + `@Shadow` 稳定工作（Mixin 直接匹配 Mojang 映射名）。**禁止**使用 `@ModifyVariable`、`@ModifyExpressionValue`、`@ModifyArg`、`@Redirect`——均报 `No refMap loaded` / `Scanned 0 target(s)`。
+### refmap 缺失 → `@ModifyExpressionValue` / `@ModifyArg` 不可用；`@ModifyVariable` 可用
+项目 `yizmodqzk.refmap.json` 并不实际生成。只有 `@Inject` + `@Shadow` 稳定工作（Mixin 直接匹配 Mojang 映射名）。**禁止**使用 `@ModifyExpressionValue`、`@ModifyArg`、`@Redirect`——均报 `No refMap loaded` / `Scanned 0 target(s)`。
 
-**How to apply:** 优先用 `@Inject(method="方法名", at=@At("HEAD/RETURN/TAIL"), cancellable=true)` + `cir.setReturnValue(...)`。方法名在 NeoForm 源码 `.build/neoform/.../transformed/` 中查找。
+`@ModifyVariable` 按参数名匹配需要 refmap，但 **`@ModifyVariable(at = @At("HEAD"), argsOnly = true, index = N)` 按参数位置匹配**不需要 refmap，经验证可用（`StartupItemRegistryReplaceMixin`）。
+
+**How to apply:** 优先用 `@Inject(method="方法名", at=@At("HEAD/RETURN/TAIL"), cancellable=true)` + `cir.setReturnValue(...)`。需要拦截方法参数时用 `@ModifyVariable` + `argsOnly=true, index=N`。方法名在 NeoForm 源码 `.build/neoform/.../transformed/` 中查找。
 
 ### `GameRenderer.pick(float)` 不存在于运行时映射
 编译通过但运行时 `No refMap loaded`。需选取准星事件时，目标改为 `Entity.pick(double,float,boolean)`（已验证可用）或直接 `Minecraft.getInstance()`。

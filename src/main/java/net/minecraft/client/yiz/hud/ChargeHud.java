@@ -13,7 +13,7 @@ import java.util.List;
  * <p>遍历 {@link ChargeHudRegistry} 中所有激活的充能条目，每个条目渲染一行：
  * 源图标（左）+ 该条目 max 数量的充能格框架。多行纵向排列，互不干扰。</p>
  *
- * <p>典型条目：天雷引（满6给强化普攻+冷却缩减）、PassiveChargeTracker（满6给技能充能+1）。</p>
+ * <p>典型条目：天雷引（满6给强化普攻+攻击速度）、PassiveChargeTracker（满6给技能充能+1）。</p>
  *
  * <p>逻辑高度预留 MAX_ROWS 行的空间（编辑器固定尺寸），实际按激活条目数渲染。</p>
  */

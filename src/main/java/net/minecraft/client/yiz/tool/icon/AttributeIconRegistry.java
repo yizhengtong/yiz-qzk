@@ -67,7 +67,7 @@ public final class AttributeIconRegistry {
         reg("shield_value",           4);  // 护盾值
         reg("damage_block",           5);  // 格挡
         reg("cooldown_value",         6);  // 冷却值
-        reg("cooldown_reduction",     7);  // 冷却缩减
+        reg("cooldown_reduction",     7);  // 攻击速度
         reg("attack_range",           8);  // 延距 / 交互距离
         reg("move_speed",             9);  // 移动速度（yiz）
         reg("generic.movement_speed", 9);  // 移动速度（vanilla，共享图标）

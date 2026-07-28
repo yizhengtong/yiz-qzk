@@ -84,7 +84,7 @@ public record EditableAttribute(
         yiz("splash_falloff",       "溅射衰减",     false, "%"),
         yiz("huixin",               "会心",         false, "格"),
         yiz("kegong",               "渴攻",         false, "tick"),
-        yiz("cooldown_reduction",   "攻击间隔缩减", false, "%"),
+        yiz("cooldown_reduction",   "攻击速度", false, "%"),
 
         // 库 — 点数/次数类
         yiz("attack_strength",   "攻击加成",     false, "%"),

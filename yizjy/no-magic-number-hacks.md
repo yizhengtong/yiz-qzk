@@ -1,7 +1,7 @@
 ---
 name: no-magic-number-hacks
 description: "实现\"无限制/全场/所有实体\"等功能用正确 API，别用魔法数字 hack 假装"
-metadata: 
+metadata:
   node_type: memory
   type: feedback
   originSessionId: d1a63761-c9e1-4afa-97f3-05af1129959f

@@ -141,6 +141,15 @@ public final class StartupAbolishConfig {
         return added;
     }
 
+    /** 一键清除所有启动黑名单项并写文件。 */
+    public static synchronized void clearAll() {
+        ensureLoaded();
+        if (!STARTUP_ABOLISHED.isEmpty()) {
+            STARTUP_ABOLISHED.clear();
+            save();
+        }
+    }
+
     /**
      * 从启动黑名单移除并立刻写文件。
      *

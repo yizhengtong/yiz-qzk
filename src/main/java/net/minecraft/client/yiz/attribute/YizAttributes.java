@@ -105,12 +105,12 @@ public final class YizAttributes {
                 .setSyncable(true));
 
     /**
-     * 攻击冷却缩减 — 百分比减少攻击间隔（0=无效果, 100=立即重置）。
-     * <p>值域 0~100。计算公式：实际冷却 = 原冷却 × (1 - 值/100)。</p>
+     * 攻击速度 — 百分比增加攻击频率（0=无效果, 100=攻速翻倍）。
+     * <p>值域 ≥0，无上限。计算公式：实际冷却 = 原冷却 / (1 + 值/100)。</p>
      */
     public static final Holder<Attribute> COOLDOWN_REDUCTION =
         ATTRIBUTES.register("cooldown_reduction",
-            () -> new RangedAttribute("attribute.yizmodqzk.cooldown_reduction", 0.0, 0.0, 100.0)
+            () -> new RangedAttribute("attribute.yizmodqzk.cooldown_reduction", 0.0, 0.0, Double.MAX_VALUE)
                 .setSyncable(true));
 
     /**
