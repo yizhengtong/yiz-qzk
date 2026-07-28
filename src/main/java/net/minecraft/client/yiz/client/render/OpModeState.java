@@ -144,6 +144,8 @@ public final class OpModeState {
     private static volatile boolean fakeClosed = false;
     /** 正在切换到的目标 blockPos（切换期间非 null，防重入 + 标记 onRightClickBlock 走关联而非重拍）。 */
     private static volatile BlockPos switchingTo = null;
+    /** 切换完成后，新 screen 在 Render.Pre 中待关联到的目标 record 的 blockPos（非 null=待关联）。 */
+    static volatile BlockPos pendingSwitchCapture = null;
 
     public static BlockPos getActivePanel() { return activePanel; }
     public static boolean isFakeClosed() { return fakeClosed; }

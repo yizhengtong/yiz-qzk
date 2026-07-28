@@ -66,7 +66,18 @@ public final class WorldPanelInteractionHandler {
             }
             LOG.debug("世界光屏准星右键 @ gui=({},{}) carried={} handled={}",
                     (int) hit.guiX, (int) hit.guiY, s.getMenu().getCarried().getCount(), handled);
+        } else {
+            // 多光屏切换：命中非活跃光屏 → 主动让服务端打开目标方块的容器
+            net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+            net.minecraft.core.BlockPos target = hit.record.blockPos;
+            OpModeState.setSwitchingTo(target);
+            event.setCanceled(true);
+            event.setSwingHand(false);
+            net.minecraft.world.phys.Vec3 hitVec = net.minecraft.world.phys.Vec3.atCenterOf(target).add(0, 0.5, 0);
+            net.minecraft.world.phys.BlockHitResult bhr = new net.minecraft.world.phys.BlockHitResult(
+                    hitVec, net.minecraft.core.Direction.UP, target, false);
+            mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND, bhr);
+            LOG.info("多光屏切换开始 @ {}，等待服务端打开容器...", target);
         }
-        // else: 命中非活跃光屏（阶段4切换，待实现）
     }
 }

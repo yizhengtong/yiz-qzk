@@ -124,7 +124,13 @@ public final class WorldGuiPanelManager {
         if (event.getEntity().level().isClientSide) {
             // 记录客户端右键的方块 pos，并置待处理标志，供下次 ScreenEvent.Render.Pre 关联+拍快照
             lastClickedPos = event.getPos().immutable();
-            pendingClick = true;
+            // 区分「切换触发的右键」（useItemOn on switchingTo）vs「玩家真实右键」：
+            // 切换时不能让 captureNewPanel 用新视角重拍覆盖已有光屏（应保留原 anchor/rotation）。
+            if (event.getPos().equals(OpModeState.getSwitchingTo())) {
+                OpModeState.pendingSwitchCapture = lastClickedPos;
+            } else {
+                pendingClick = true;
+            }
         }
     }
 
@@ -147,6 +153,26 @@ public final class WorldGuiPanelManager {
         if (pendingClick && lastClickedPos != null) {
             captureNewPanel(lastClickedPos, container);
             pendingClick = false;
+        }
+
+        // 多光屏切换完成：新 screen 已从服务端到达，关联到已有 record（保留原 anchor/rotation），
+        // 然后立即假关闭回自由视角，让切换无缝。
+        BlockPos switchTarget = OpModeState.pendingSwitchCapture;
+        if (switchTarget != null) {
+            OpModeState.pendingSwitchCapture = null;
+            OpModeState.PanelRecord existing = OpModeState.get(switchTarget);
+            if (existing != null) {
+                existing.screen = container;  // 关联新 screen，保留原 anchor/rotation
+                Object fboOld = existing.fbo;
+                existing.fbo = null;           // 强制重建 FBO（尺寸可能不同）
+                if (fboOld instanceof com.mojang.blaze3d.pipeline.RenderTarget rt) {
+                    com.mojang.blaze3d.systems.RenderSystem.recordRenderCall(rt::destroyBuffers);
+                }
+                OpModeState.markFakeClosed(container);
+                OpModeState.setSwitchingTo(null);
+                Minecraft.getInstance().setScreen(null); // 立即假关闭回自由视角
+                LOG.info("多光屏切换完成 @ {}，已关联新 screen 并假关闭", switchTarget);
+            }
         }
 
         // 在 GUI 渲染阶段（ScreenEvent.Render.Pre）对当前 screen 离屏渲染——此时机全局状态干净
