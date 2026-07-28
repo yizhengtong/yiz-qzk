@@ -33,12 +33,22 @@ public final class WorldPanelInteractionHandler {
 
     private static final Logger LOG = LoggerFactory.getLogger("WorldPanelInteractionHandler");
 
+    /** 上次处理的游戏 tick，同 tick 内防抖（Minecraft.startAttack 用 while(consumeClick) 循环，
+     *  快速点击累积多次 click 会一帧内全触发 → 拿起立刻放下的错觉）。 */
+    private static int lastHandledTick = -1;
+
     private WorldPanelInteractionHandler() {}
 
     @SubscribeEvent
     public static void onUseItem(InputEvent.InteractionKeyMappingTriggered event) {
         if (!WorldGuiPanelManager.isEnabled()) return;
         if (event.getHand() != InteractionHand.MAIN_HAND) return;
+
+        // 同 tick 只处理一次（防抖）
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+        if (mc.player == null) return;
+        if (mc.player.tickCount == lastHandledTick) return;
+        lastHandledTick = mc.player.tickCount;
 
         final int button;
         if (event.isAttack())       button = 0;  // 左键：拿全部/放全部
@@ -79,7 +89,6 @@ public final class WorldPanelInteractionHandler {
                     button == 0 ? "左" : "右", (int) hit.guiX, (int) hit.guiY, s.getMenu().getCarried().getCount(), handled);
         } else if (event.isUseItem()) {
             // 仅右键触发多光屏切换（左键打光屏没意义，放行原版让玩家攻击背后的方块）
-            net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
             net.minecraft.core.BlockPos target = hit.record.blockPos;
             OpModeState.setSwitchingTo(target);
             event.setCanceled(true);
