@@ -12,6 +12,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.renderer.GameRenderer;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.Vec3;
@@ -200,8 +201,10 @@ public final class WorldGuiPanelManager {
         return null;
     }
 
-    /** 新建一条面板记录：光屏锚点=玩家相机前方0.5格，朝向=当前相机（正对玩家）。 */
+    /** 新建一条面板记录：先清除所有旧光屏（含 FBO、状态），再在玩家相机前方 0.5 格创建新的。
+     *  每次右键箱子都是全新的交互起点。 */
     private static void captureNewPanel(BlockPos pos, AbstractContainerScreen<?> screen) {
+        OpModeState.clearAll();  // 清除所有旧面板 + 复位 activePanel/fakeClosed/switchingTo
         Minecraft mc = Minecraft.getInstance();
         var cam = mc.gameRenderer.getMainCamera();
         Vec3 camPos = cam.getPosition();
@@ -255,6 +258,24 @@ public final class WorldGuiPanelManager {
             if (r.fbo != null && r.blockPos.equals(OpModeState.getActivePanel())) {
                 renderToOffscreen(r, mx, my, event.getPartialTick().getGameTimeDeltaPartialTick(true));
                 break;
+            }
+        }
+    }
+
+    /** 每 tick 检测面板对应方块是否仍为容器方块。容器被摧毁/替换后同步销毁面板。 */
+    @SubscribeEvent
+    public static void onClientTick(ClientTickEvent.Post event) {
+        if (!enabled) return;
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.level == null) return;
+        var records = OpModeState.list();
+        if (records.isEmpty()) return;
+        for (OpModeState.PanelRecord r : records) {
+            // 方块被摧毁/替换后 getBlockEntity 返回 null 或类型不匹配
+            var be = mc.level.getBlockEntity(r.blockPos);
+            if (be == null) {
+                LOG.info("容器方块消失，销毁面板 @ {}", r.blockPos);
+                OpModeState.remove(r.blockPos);
             }
         }
     }

@@ -118,6 +118,18 @@ public final class OpModeState {
         r.fbo = null;
     }
 
+    /** 按 blockPos 移除单条记录（销毁其 FBO）。 */
+    public static void remove(BlockPos pos) {
+        long key = pos.asLong();
+        synchronized (records) {
+            PanelRecord r = records.remove(key);
+            if (r != null) {
+                destroyFbo(r);
+                if (pos.equals(activePanel)) { activePanel = null; fakeClosed = false; }
+            }
+        }
+    }
+
     /** 清除所有记录（销毁所有 FBO）。 */
     public static void clearAll() {
         synchronized (records) {

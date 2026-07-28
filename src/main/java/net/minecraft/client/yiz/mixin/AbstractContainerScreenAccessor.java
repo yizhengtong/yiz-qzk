@@ -22,4 +22,16 @@ public interface AbstractContainerScreenAccessor {
 
     @Accessor("skipNextRelease")
     void setSkipNextRelease(boolean value);
+
+    @Accessor("leftPos")
+    int getLeftPos();
+
+    @Accessor("topPos")
+    int getTopPos();
+
+    @Accessor("imageWidth")
+    int getImageWidth();
+
+    @Accessor("imageHeight")
+    int getImageHeight();
 }

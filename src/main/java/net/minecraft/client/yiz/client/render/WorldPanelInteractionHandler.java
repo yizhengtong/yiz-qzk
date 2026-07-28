@@ -50,11 +50,20 @@ public final class WorldPanelInteractionHandler {
 
         if (hit.record.screen == null) return;
 
+        // 击中光屏空白区（GUI槽位范围外）→ 不 cancel，放行原版右键。
+        // 光屏只是渲染四边形、无碰撞体，vanilla 的 mc.hitResult 仍指向背后方块，
+        // RightClickBlock 会正常触发 → 重新打开箱子 → captureNewPanel 在面前重建光屏。
+        var acc = (net.minecraft.client.yiz.mixin.AbstractContainerScreenAccessor) hit.record.screen;
+        int left = acc.getLeftPos(), top = acc.getTopPos();
+        int imgW = acc.getImageWidth(), imgH = acc.getImageHeight();
+        if (hit.guiX < left || hit.guiX >= left + imgW || hit.guiY < top || hit.guiY >= top + imgH) {
+            return;
+        }
+
         if (hit.record.blockPos.equals(OpModeState.getActivePanel())) {
             var s = hit.record.screen;
             event.setCanceled(true);
             event.setSwingHand(false);
-            var acc = (net.minecraft.client.yiz.mixin.AbstractContainerScreenAccessor) s;
             boolean handled;
             if (s.getMenu().getCarried().isEmpty()) {
                 handled = s.mouseClicked(hit.guiX, hit.guiY, 1);
