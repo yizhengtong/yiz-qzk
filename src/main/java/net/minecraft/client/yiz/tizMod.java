@@ -38,6 +38,16 @@ public class tizMod {
     public tizMod(IEventBus modEventBus, ModContainer modContainer) {
         modEventBus.addListener(this::commonSetup);
 
+        // 注册组合容器 MenuType
+        modEventBus.addListener(net.neoforged.neoforge.registries.RegisterEvent.class, event -> {
+            if (event.getRegistryKey().equals(net.minecraft.core.registries.Registries.MENU)) {
+                net.minecraft.core.Registry.register(
+                        net.minecraft.core.registries.BuiltInRegistries.MENU,
+                        net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(MODID, "combined_container"),
+                        CombinedContainerMenu.TYPE);
+            }
+        });
+
         // 注册网络同步处理器
         modEventBus.addListener(NetworkHandler::onRegisterPayloadHandlers);
         // 注册 PlayerDataAPI 自动同步
@@ -351,12 +361,6 @@ public class tizMod {
 
     private void commonSetup(FMLCommonSetupEvent event) {
         LOGGER.info("YizMod QZK Framework initialized");
-
-        // 注册自定义 MenuType（组合容器）
-        event.enqueueWork(() -> net.minecraft.core.Registry.register(
-                net.minecraft.core.registries.BuiltInRegistries.MENU,
-                net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(MODID, "combined_container"),
-                CombinedContainerMenu.TYPE));
 
         // 初始化 vtable 方法替换系统
         event.enqueueWork(() -> {
