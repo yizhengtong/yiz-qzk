@@ -1,5 +1,6 @@
 package net.minecraft.client.yiz.client.render;
 
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.InteractionHand;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
@@ -77,6 +78,21 @@ public final class WorldPanelInteractionHandler {
         int left = acc.getLeftPos(), top = acc.getTopPos();
         int imgW = acc.getImageWidth(), imgH = acc.getImageHeight();
         if (hit.guiX < left || hit.guiX >= left + imgW || hit.guiY < top || hit.guiY >= top + imgH) {
+            // 空白区 Shift+右键 → 拼凑模式（标记/合并两个留存光屏为一个大容器）
+            if (event.isUseItem() && mc.options.keyShift.isDown()) {
+                BlockPos source = OpModeState.combineSource;
+                if (source == null) {
+                    OpModeState.combineSource = hit.record.blockPos;
+                    event.setCanceled(true);
+                    LOG.info("拼凑模式：已标记左侧面板 @ {}", hit.record.blockPos);
+                } else if (!source.equals(hit.record.blockPos)) {
+                    OpModeState.combineSource = null;
+                    event.setCanceled(true);
+                    LOG.info("拼凑模式：合并 @ {} + @ {}", source, hit.record.blockPos);
+                    net.minecraft.client.yiz.network.C2SCombinePanelsPayload.send(source, hit.record.blockPos);
+                }
+                // 同一面板重复 Shift+右键：不做任何事（等用户选另一个）
+            }
             return;
         }
 

@@ -158,6 +158,8 @@ public final class OpModeState {
     private static volatile BlockPos switchingTo = null;
     /** 切换完成后，新 screen 在 Render.Pre 中待关联到的目标 record 的 blockPos（非 null=待关联）。 */
     static volatile BlockPos pendingSwitchCapture = null;
+    /** 拼凑模式：第一次 Shift+右键空白区记下的源面板 blockPos，第二次触发合并。 */
+    public static volatile BlockPos combineSource = null;
 
     public static BlockPos getActivePanel() { return activePanel; }
     public static boolean isFakeClosed() { return fakeClosed; }
