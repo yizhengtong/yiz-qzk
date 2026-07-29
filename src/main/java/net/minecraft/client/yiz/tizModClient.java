@@ -63,6 +63,9 @@ public class tizModClient {
             event.register(
                 net.minecraft.client.yiz.editor.SkillConfigRegistries.SKILL_CONFIG_MENU.get(),
                 net.minecraft.client.yiz.editor.SkillConfigScreen::new);
+            event.register(
+                net.minecraft.client.yiz.CombinedContainerMenu.TYPE,
+                net.minecraft.client.yiz.client.render.CombinedContainerScreen::new);
         });
 
         // ═══ HUD 系统（管理能力由 yizmodqzk 提供） ═══

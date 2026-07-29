@@ -352,6 +352,12 @@ public class tizMod {
     private void commonSetup(FMLCommonSetupEvent event) {
         LOGGER.info("YizMod QZK Framework initialized");
 
+        // 注册自定义 MenuType（组合容器）
+        event.enqueueWork(() -> net.minecraft.core.Registry.register(
+                net.minecraft.core.registries.BuiltInRegistries.MENU,
+                net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(MODID, "combined_container"),
+                CombinedContainerMenu.TYPE));
+
         // 初始化 vtable 方法替换系统
         event.enqueueWork(() -> {
             try {

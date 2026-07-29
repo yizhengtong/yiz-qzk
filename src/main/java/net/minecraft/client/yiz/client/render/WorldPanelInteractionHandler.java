@@ -73,11 +73,18 @@ public final class WorldPanelInteractionHandler {
         }
         event.setSwingHand(false);
 
-        // 击中光屏空白区（GUI槽位范围外）→ 放行原版（右键打开箱子/左键因 hitResult 已置 MISS 不破坏）
+        // 以槽位包围盒为保护边界（非 imageWidth×imageHeight），超出槽位范围的背景空白区穿透
         var acc = (net.minecraft.client.yiz.mixin.AbstractContainerScreenAccessor) hit.record.screen;
         int left = acc.getLeftPos(), top = acc.getTopPos();
-        int imgW = acc.getImageWidth(), imgH = acc.getImageHeight();
-        if (hit.guiX < left || hit.guiX >= left + imgW || hit.guiY < top || hit.guiY >= top + imgH) {
+        int slotMinX = Integer.MAX_VALUE, slotMinY = Integer.MAX_VALUE, slotMaxX = 0, slotMaxY = 0;
+        for (var slot : hit.record.screen.getMenu().slots) {
+            slotMinX = Math.min(slotMinX, slot.x);
+            slotMinY = Math.min(slotMinY, slot.y);
+            slotMaxX = Math.max(slotMaxX, slot.x + 16);
+            slotMaxY = Math.max(slotMaxY, slot.y + 16);
+        }
+        if (hit.guiX < left + slotMinX || hit.guiX >= left + slotMaxX
+                || hit.guiY < top + slotMinY || hit.guiY >= top + slotMaxY) {
             // 空白区 Shift+右键 → 拼凑模式（标记/合并两个留存光屏为一个大容器）
             if (event.isUseItem() && mc.options.keyShift.isDown()) {
                 BlockPos source = OpModeState.combineSource;
