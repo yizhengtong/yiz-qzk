@@ -61,6 +61,7 @@ public final class WorldGuiPanelManager {
     /** 最近一次右键的方块 pos（供 ScreenEvent.Render.Pre 关联 screen 与方块）。 */
     private static volatile BlockPos lastClickedPos = null;
     private static volatile BlockPos pairedFurnace = null;
+    private static volatile boolean autoCloseAfterPair = false;
     /** 是否有「未处理的右键」：每次 RightClickBlock 置 true，Render.Pre 消费一次后清 false。
      *  用标志位而非比较 pos——否则右键同一箱子时 lastClickedPos 不变会被误判为「同次重复」而跳过重新拍快照，
      *  导致光屏停在旧位置（玩家已转身/移位），命中与视觉错位。 */
@@ -134,10 +135,6 @@ public final class WorldGuiPanelManager {
                 OpModeState.pendingSwitchCapture = lastClickedPos;
             } else {
                 pendingClick = true;
-                // 检测周围是否有熔炉（箱子+熔炉默认绑定）
-                if (isChest(event.getLevel(), event.getPos())) {
-                    pairedFurnace = findNearbyFurnace(event.getLevel(), event.getPos(), FURNACE_SCAN_RADIUS);
-                }
             }
         }
     }
@@ -175,7 +172,6 @@ public final class WorldGuiPanelManager {
                 existing.fbo = null;           // 强制重建 FBO（尺寸可能不同）
                 if (fboOld instanceof com.mojang.blaze3d.pipeline.RenderTarget rt) {
                     com.mojang.blaze3d.systems.RenderSystem.recordRenderCall(rt::destroyBuffers);
-                }
                 OpModeState.markFakeClosed(container);
                 OpModeState.setSwitchingTo(null);
                 Minecraft.getInstance().setScreen(null); // 立即假关闭回自由视角
@@ -197,6 +193,16 @@ public final class WorldGuiPanelManager {
             int my = hover != null ? (int) hover[1] : event.getMouseY();
             renderToOffscreen(current, mx, my, event.getPartialTick());
             event.setCanceled(true);
+        }
+        // 箱子+熔炉自动绑定：创建完两个面板后自动假关闭熔炉，玩家立刻回到自由视角见双光屏
+        if (autoCloseAfterPair) {
+            autoCloseAfterPair = false;
+            OpModeState.PanelRecord r = OpModeState.isManagedScreen(container) ? findRecordByScreen(container) : null;
+            if (r != null) {
+                OpModeState.markFakeClosed(container);
+                Minecraft.getInstance().setScreen(null);
+                LOG.info("双面板绑定完成，自动假关闭 @ {}", r.blockPos);
+            }
         }
     }
 
@@ -227,7 +233,8 @@ public final class WorldGuiPanelManager {
         // 箱子+熔炉默认绑定：打开箱子时检测到附近熔炉，自动打开熔炉面板
         BlockPos furnace = pairedFurnace;
         pairedFurnace = null;
-        if (furnace != null && mc.level != null) {
+        autoCloseAfterPair = true;
+            if (furnace != null && mc.level != null) {
             mc.gameMode.useItemOn(mc.player, net.minecraft.world.InteractionHand.MAIN_HAND,
                     new net.minecraft.world.phys.BlockHitResult(
                             net.minecraft.world.phys.Vec3.atCenterOf(furnace).add(0, 0.5, 0),
@@ -255,7 +262,6 @@ public final class WorldGuiPanelManager {
                     if (furnaceTypes.contains(level.getBlockState(mp).getBlock())) {
                         return mp.immutable();
                     }
-                }
             }
         }
         return null;

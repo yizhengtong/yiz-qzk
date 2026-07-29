@@ -36,7 +36,8 @@ metadata:
 - 去全屏背景：Mixin `AbstractContainerScreen.renderBackground`，离屏标志（`WorldGuiPanelManager.isOffscreenRendering()`）为 true 时只调 renderBg（箱子背景图）跳过 renderTransparentBackground（全屏暗色），用 `@SubscribeEvent static` 方法 + `NeoForge.EVENT_BUS.register(Class)` 注册。
 - PanelRaycast 已实现桌面面板的射线-平面求交（返回 nx/ny，但 U 有翻转约定，给世界 GUI 用要自算或对齐）。
 - `setColorTextureId` 是 protected → 用 public `getColorTextureId()`。`getProjectionMatrix()` 返回引用 → 存拷贝 `new Matrix4f(原)`。
-- 路线演进：路1（屏幕空间 pose 变换）因正交投影推远不变小而失败；路2A（相机分离）被废弃（晕眩/视锥剔除）；**最终=光屏世界固定 + 视角锁(原版天然) + 鼠标逆投影命中**。
+- 路线演进：路1（屏幕空间 pose 变换）因正交投影推远不变小而失败；路2A（相机分离）被废弃（晕眩/视锥剔除）；**最终=光屏世界固定 + 视角锁(原版天然) + 鼠标逆投影命中 + 准星右键全操作**。
+- **组合面板**（开发中）：`C2SCombinePanelsPayload` 已建（服务端 CompoundContainer+ChestMenu.sixRows 合并两个箱子），但最终方向确认为**纯视觉拼凑**——两个独立光屏并排展示，点哪边透明切换。箱子+熔炉自动配对的检测逻辑已写（`isChest`/`findNearbyFurnace` 4 格范围）但 RightClickBlock 事件触发不稳定，待把检测移到 `captureNewPanel` 内。
 
 ## 准星右键操作光屏（ESC 假关闭 + 自由视角）
 
@@ -45,5 +46,11 @@ metadata:
 - **右键事件点**：`InputEvent.InteractionKeyMappingTriggered`（在 Minecraft.startUseItem 内、仅 mc.screen==null、可 cancel、在原版右键分支之前）。比 RightClickBlock/Item/Empty 统一（一处拦全部分支）。`isUseItem()`=右键；只处理 `MAIN_HAND`（事件对 MAIN/OFF 各 fire 一次）。准星没命中光屏→不 cancel 放行原版（放方块/吃东西）。
 - **准星命中=屏幕中心 NDC(0,0)**：与鼠标命中共用 `raycastWithNdc(mc, ndcX, ndcY)` 核心（重构出，避免两套逆投影漂移），只 NDC 来源不同。`getCrosshairHit()` 返回 public `CrosshairHit{record,guiX,guiY}`。
 - **状态机**（OpModeState）：`activePanel`（服务端活跃容器 blockPos）、`fakeClosed`（screen关但容器开）、`switchingTo`（切换中防重入）。准星右键命中 activePanel→直 `screen.mouseClicked(guiX,guiY,1)`（button=1=拿一半/放一个）；命中非活跃光屏→需切换（多光屏切换未实现，当前放行）。
-- **多光屏切换**（待实现）：服务端一玩家同时只一个容器。准星右键非活跃光屏 P_target 时，`mc.gameMode.useItemOn(player, MAIN_HAND, 伪BlockHitResult(pos,UP))` 主动打开目标容器（useItemOn 不校验视线对准，只校验 worldborder），服务端 openMenu→ClientboundOpenScreenPacket→客户端 setScreen 同步 containerId。坑：useItemOn 会触发客户端 RightClickBlock→captureNewPanel 用新视角重拍移动光屏；用 `switchingTo` 标志位拦下改为把新 screen 关联到已有 record（保留锚点/朝向），随即假关闭回自由视角。降级：若 useItemOn 对非对准方块被服务端拒，退路只允许操作 activePanel。
-- **边界**（待实现）：走远/卸载→服务端 force close→`hasContainerOpen()` 变 false，ClientTickEvent.End 检测→markRealClosed（面板画面可留存冻结但不可操作）。断线/换世界→clearAll+状态复位。
+- **多光屏切换**（已实现）：非活跃光屏左右键均可触发切换→`useItemOn`→`pendingSwitchCapture`→关联新 screen 到已有 record→假关闭。`switchingTo` 防重入。
+- **边界处理**（已实现）：`ClientTickEvent.Post` 每 tick 检测 `getBlockEntity(pos)==null`→方块被摧毁自动销毁面板+复位状态。`OpModeState.remove(pos)` 单条移除。
+- **左键操作**（已实现）：`InteractionKeyMappingTriggered.isAttack()` (button=0=拿全部/放全部)。左右键共用同一套拾取/放下逻辑。
+- **左键保护**（已实现）：左键不 cancel 事件（否则 `startAttack()` 调 `keyAttack.release()`→无限循环拿起又放下）。改为 `mc.hitResult=BlockHitResult.miss()` 让后续攻击走空。长按左键用 `MinecraftHoldKeyMixin` 在 `handleKeybinds` HEAD 每帧重置 hitResult 为 MISS。
+- **空白区穿透**（已实现）：用 `menu.slots` 容器槽位包围盒（过滤玩家背包槽）替代 `imageWidth×imageHeight`，只保护实际交互区域。槽位外装饰空白穿透。
+- **拿起/放下防抖**（已实现）：100ms 时间窗口，拿起和放下后都设 `lastActionMs`，跳过 while(consumeClick) 累积事件。
+- **FBO 全面板实时更新**（已实现）：`RenderGuiEvent.Post` 每帧更新所有留存面板的 FBO，不只是活跃面板。
+- **容器摧毁同步**（已实现）：`ClientTickEvent.Post` 每 tick 检测 `getBlockEntity` 是否 null→自动 remove 面板+复位状态。
