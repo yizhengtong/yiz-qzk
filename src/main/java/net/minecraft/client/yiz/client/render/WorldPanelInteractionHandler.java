@@ -62,8 +62,18 @@ public final class WorldPanelInteractionHandler {
         if (hit == null) return;
         if (hit.record.screen == null) return;
 
-        // 击中光屏空白区（GUI槽位范围外）→ 不 cancel，放行原版。
-        // 光屏只是渲染四边形无碰撞体，vanilla mc.hitResult 指向背后方块 → RightClickBlock/LeftClickBlock 正常触发。
+        // 全区域保护：光屏任意位置（含空白区）的左键都不破坏后方方块。
+        // 左键不 cancel（否则 startAttack() 调 keyAttack.release()→无限循环），
+        // 改为 hitResult 设 MISS 让后续攻击走空。
+        if (button == 0) {
+            mc.hitResult = net.minecraft.world.phys.BlockHitResult.miss(
+                    hit.record.panelAnchor, net.minecraft.core.Direction.UP, hit.record.blockPos);
+        } else {
+            event.setCanceled(true); // 右键正常cancel（startUseItem 无 release 循环问题）
+        }
+        event.setSwingHand(false);
+
+        // 击中光屏空白区（GUI槽位范围外）→ 放行原版（右键打开箱子/左键因 hitResult 已置 MISS 不破坏）
         var acc = (net.minecraft.client.yiz.mixin.AbstractContainerScreenAccessor) hit.record.screen;
         int left = acc.getLeftPos(), top = acc.getTopPos();
         int imgW = acc.getImageWidth(), imgH = acc.getImageHeight();
@@ -73,15 +83,6 @@ public final class WorldPanelInteractionHandler {
 
         if (hit.record.blockPos.equals(OpModeState.getActivePanel())) {
             var s = hit.record.screen;
-            // 左键(button=0)不 cancel——startAttack() 在 cancel 时调 keyAttack.release()
-            // → isDown=false → 物理键还按着 → 下一 tick 重注册 click → 无限循环"拿起又放下"。
-            // 改为把 mc.hitResult 设 MISS 让后续攻击走空，event 放行但不破坏方块。
-            if (button == 0) {
-                mc.hitResult = net.minecraft.world.phys.BlockHitResult.miss(
-                        hit.record.panelAnchor, net.minecraft.core.Direction.UP, hit.record.blockPos);
-            } else {
-                event.setCanceled(true);
-            }
             event.setSwingHand(false);
             boolean handled;
             boolean wasEmpty = s.getMenu().getCarried().isEmpty();
@@ -98,11 +99,9 @@ public final class WorldPanelInteractionHandler {
             LOG.debug("世界光屏准星{}键 @ gui=({},{}) carried={} handled={}",
                     button == 0 ? "左" : "右", (int) hit.guiX, (int) hit.guiY, s.getMenu().getCarried().getCount(), handled);
         } else if (event.isUseItem()) {
-            // 仅右键触发多光屏切换（左键打光屏没意义，放行原版让玩家攻击背后的方块）
+            // 仅右键触发多光屏切换
             net.minecraft.core.BlockPos target = hit.record.blockPos;
             OpModeState.setSwitchingTo(target);
-            event.setCanceled(true);
-            event.setSwingHand(false);
             net.minecraft.world.phys.Vec3 hitVec = net.minecraft.world.phys.Vec3.atCenterOf(target).add(0, 0.5, 0);
             net.minecraft.world.phys.BlockHitResult bhr = new net.minecraft.world.phys.BlockHitResult(
                     hitVec, net.minecraft.core.Direction.UP, target, false);
