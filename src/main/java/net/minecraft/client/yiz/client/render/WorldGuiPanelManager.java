@@ -60,6 +60,7 @@ public final class WorldGuiPanelManager {
 
     /** 最近一次右键的方块 pos（供 ScreenEvent.Render.Pre 关联 screen 与方块）。 */
     private static volatile BlockPos lastClickedPos = null;
+    private static volatile BlockPos pairedFurnace = null;
     /** 是否有「未处理的右键」：每次 RightClickBlock 置 true，Render.Pre 消费一次后清 false。
      *  用标志位而非比较 pos——否则右键同一箱子时 lastClickedPos 不变会被误判为「同次重复」而跳过重新拍快照，
      *  导致光屏停在旧位置（玩家已转身/移位），命中与视觉错位。 */
@@ -70,6 +71,8 @@ public final class WorldGuiPanelManager {
     private static final float GUI_PANEL_HEIGHT = 1.8f;
     /** 光屏在玩家前方的距离（格），右键时拍快照。 */
     private static final float PANEL_DISTANCE_IN_FRONT = 0.5f;
+    /** 熔炉检测范围（格）。打开箱子时检索此范围内是否有熔炉/高炉/烟熏炉。 */
+    private static final int FURNACE_SCAN_RADIUS = 4;
     /** FBO 超采样倍数（提升文字清晰度；FBO 尺寸 = guiScaled × 此值）。 */
     private static final int FBO_SUPERSAMPLE = 2;
 
@@ -131,6 +134,10 @@ public final class WorldGuiPanelManager {
                 OpModeState.pendingSwitchCapture = lastClickedPos;
             } else {
                 pendingClick = true;
+                // 检测周围是否有熔炉（箱子+熔炉默认绑定）
+                if (isChest(event.getLevel(), event.getPos())) {
+                    pairedFurnace = findNearbyFurnace(event.getLevel(), event.getPos(), FURNACE_SCAN_RADIUS);
+                }
             }
         }
     }
@@ -216,6 +223,42 @@ public final class WorldGuiPanelManager {
         Quaternionf rotation = new Quaternionf(cam.rotation());
         OpModeState.put(pos, anchor, rotation, screen);
         LOG.info("新建世界面板 @ {} 前方{}格，anchor=({},{},{})", pos, PANEL_DISTANCE_IN_FRONT, anchor.x, anchor.y, anchor.z);
+
+        // 箱子+熔炉默认绑定：打开箱子时检测到附近熔炉，自动打开熔炉面板
+        BlockPos furnace = pairedFurnace;
+        pairedFurnace = null;
+        if (furnace != null && mc.level != null) {
+            mc.gameMode.useItemOn(mc.player, net.minecraft.world.InteractionHand.MAIN_HAND,
+                    new net.minecraft.world.phys.BlockHitResult(
+                            net.minecraft.world.phys.Vec3.atCenterOf(furnace).add(0, 0.5, 0),
+                            net.minecraft.core.Direction.UP, furnace, false));
+            LOG.info("自动打开附近熔炉 @ {}", furnace);
+        }
+    }
+
+    private static boolean isChest(net.minecraft.world.level.Level level, BlockPos pos) {
+        // 检查方块是否实现了 Container（箱子、木桶等）
+        return level.getBlockEntity(pos) instanceof net.minecraft.world.level.block.entity.BaseContainerBlockEntity;
+    }
+
+    private static BlockPos findNearbyFurnace(net.minecraft.world.level.Level level, BlockPos center, int radius) {
+        var furnaceTypes = java.util.Set.of(
+                net.minecraft.world.level.block.Blocks.FURNACE,
+                net.minecraft.world.level.block.Blocks.BLAST_FURNACE,
+                net.minecraft.world.level.block.Blocks.SMOKER);
+        BlockPos.MutableBlockPos mp = new BlockPos.MutableBlockPos();
+        for (int dx = -radius; dx <= radius; dx++) {
+            for (int dy = -radius; dy <= radius; dy++) {
+                for (int dz = -radius; dz <= radius; dz++) {
+                    if (dx == 0 && dy == 0 && dz == 0) continue;
+                    mp.set(center.getX() + dx, center.getY() + dy, center.getZ() + dz);
+                    if (furnaceTypes.contains(level.getBlockState(mp).getBlock())) {
+                        return mp.immutable();
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     // ════════════════════════════════════════════════════

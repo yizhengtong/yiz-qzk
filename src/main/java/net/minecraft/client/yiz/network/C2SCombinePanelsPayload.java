@@ -55,8 +55,9 @@ public record C2SCombinePanelsPayload(BlockPos leftPos, BlockPos rightPos) imple
 
             if (leftChest instanceof RandomizableContainerBlockEntity rl) rl.unpackLootTable(sp);
             if (rightChest instanceof RandomizableContainerBlockEntity rr) rr.unpackLootTable(sp);
+            Container compound = new CompoundContainer(leftChest, rightChest);
             sp.openMenu(new SimpleMenuProvider(
-                    (id, inv, p) -> new net.minecraft.client.yiz.CombinedContainerMenu(id, inv, leftChest, level),
+                    (id, inv, p) -> ChestMenu.sixRows(id, inv, compound),
                     Component.literal("组合容器")));
         });
     }

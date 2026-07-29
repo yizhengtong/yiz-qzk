@@ -73,11 +73,14 @@ public final class WorldPanelInteractionHandler {
         }
         event.setSwingHand(false);
 
-        // 以槽位包围盒为保护边界（非 imageWidth×imageHeight），超出槽位范围的背景空白区穿透
+        // 以容器槽位包围盒为保护边界（过滤玩家背包，只算箱子/工作台自身的槽位），
+        // 超出范围的装饰空白区穿透——和实际交互区域一致，不会太大。
         var acc = (net.minecraft.client.yiz.mixin.AbstractContainerScreenAccessor) hit.record.screen;
         int left = acc.getLeftPos(), top = acc.getTopPos();
         int slotMinX = Integer.MAX_VALUE, slotMinY = Integer.MAX_VALUE, slotMaxX = 0, slotMaxY = 0;
+        var playerInv = mc.player.getInventory();
         for (var slot : hit.record.screen.getMenu().slots) {
+            if (slot.container == playerInv) continue; // 跳过玩家背包槽位
             slotMinX = Math.min(slotMinX, slot.x);
             slotMinY = Math.min(slotMinY, slot.y);
             slotMaxX = Math.max(slotMaxX, slot.x + 16);
