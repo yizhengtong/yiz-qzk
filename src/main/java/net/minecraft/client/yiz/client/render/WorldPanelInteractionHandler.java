@@ -98,8 +98,8 @@ public final class WorldPanelInteractionHandler {
             }
             LOG.debug("世界光屏准星{}键 @ gui=({},{}) carried={} handled={}",
                     button == 0 ? "左" : "右", (int) hit.guiX, (int) hit.guiY, s.getMenu().getCarried().getCount(), handled);
-        } else if (event.isUseItem()) {
-            // 仅右键触发多光屏切换
+        } else {
+            // 多光屏切换：左右键均可触发（hitResult 已在顶层设 MISS，左键安全）
             net.minecraft.core.BlockPos target = hit.record.blockPos;
             OpModeState.setSwitchingTo(target);
             net.minecraft.world.phys.Vec3 hitVec = net.minecraft.world.phys.Vec3.atCenterOf(target).add(0, 0.5, 0);
