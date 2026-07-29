@@ -11,3 +11,5 @@
 - [vanilla 暴击 baked 换算](crit-damage-vanilla-baked.md) — 跳劈已把 1.5x 算进 amount，叠加 CRIT_DAMAGE 要用 /150 换算不是 /100；且 consume 必须在伤害块开头取出，否则标记残留误加暴击
 - [热数据别走 PlayerDataAPI](hot-data-no-persistent-api.md) — 每 tick 写的数据会让 set 全量解析+全量 S2C 同步整个 root；退出即弃的数据改纯内存+事件驱动下发
 - [空间GUI](空间GUI.md) — 世界光屏完整系统：5硬坑+假关闭+准星左右键+多光屏切换+空白区穿透+防抖+左键保护+容器摧毁同步+FBO实时更新+组合面板(开发中)
+- [强制实体移除](entity-force-remove-unsafe.md) — 当 Entity.remove/discard/ChunkSource 全被 override 时的最底层绕过方案：Unsafe + EntityLookup 内部 Map 反射
+- [模块包名冲突](module-export-package-conflict.md) — run/mods 旧 jar 导致 Modules X and Y export package Z 崩溃的排查与修复
