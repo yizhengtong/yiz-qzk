@@ -33,9 +33,8 @@ public final class WorldPanelInteractionHandler {
 
     private static final Logger LOG = LoggerFactory.getLogger("WorldPanelInteractionHandler");
 
-    /** 上次拿起物品的时间戳。100ms 内收到的新事件（while(consumeClick) 累积）跳过，
-     *  避免"瞬间拿起又放下"。超过 100ms 的认为是独立点击，正常处理。 */
-    private static long lastPickupMs = 0;
+    /** 上次操作的时间戳。拿起/放下后 100ms 内跳过累积事件，避免闪烁。 */
+    private static long lastActionMs = 0;
 
     private WorldPanelInteractionHandler() {}
 
@@ -44,8 +43,8 @@ public final class WorldPanelInteractionHandler {
         if (!WorldGuiPanelManager.isEnabled()) return;
         if (event.getHand() != InteractionHand.MAIN_HAND) return;
 
-        // 刚拿起物品后 100ms 内跳过（while(consumeClick) 循环累积的事件）
-        if (System.currentTimeMillis() - lastPickupMs < 100) return;
+        // 上次操作后 100ms 内跳过（拿起/放下后 while(consumeClick) 累积的事件）
+        if (System.currentTimeMillis() - lastActionMs < 100) return;
 
         net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
 
@@ -89,12 +88,13 @@ public final class WorldPanelInteractionHandler {
             if (wasEmpty) {
                 handled = s.mouseClicked(hit.guiX, hit.guiY, button);
                 acc.setQuickCrafting(false);
-                // 记录拿起时间戳，100ms 内跳过累积事件
-                if (!s.getMenu().getCarried().isEmpty()) lastPickupMs = System.currentTimeMillis();
+                // 记录操作时间戳，100ms 内跳过累积事件
+                lastActionMs = System.currentTimeMillis();
             } else {
                 acc.setSkipNextRelease(false);
                 acc.setQuickCrafting(false);
                 handled = s.mouseReleased(hit.guiX, hit.guiY, button);
+                lastActionMs = System.currentTimeMillis();
             }
             LOG.debug("世界光屏准星{}键 @ gui=({},{}) carried={} handled={}",
                     button == 0 ? "左" : "右", (int) hit.guiX, (int) hit.guiY, s.getMenu().getCarried().getCount(), handled);
