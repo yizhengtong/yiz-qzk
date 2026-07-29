@@ -13,3 +13,4 @@
 - [空间GUI](空间GUI.md) — 世界光屏完整系统：5硬坑+假关闭+准星左右键+多光屏切换+空白区穿透+防抖+左键保护+容器摧毁同步+FBO实时更新+组合面板(开发中)
 - [强制实体移除](entity-force-remove-unsafe.md) — 当 Entity.remove/discard/ChunkSource 全被 override 时的最底层绕过方案：Unsafe + EntityLookup 内部 Map 反射
 - [模块包名冲突](module-export-package-conflict.md) — run/mods 旧 jar 导致 Modules X and Y export package Z 崩溃的排查与修复
+- [模组技术谱系](modding-tech-landscape.md) — 技术深度 6 层分类、关键术语释义(Instrumentation/AT/TransformationService/VTable)、竞品强度分析
