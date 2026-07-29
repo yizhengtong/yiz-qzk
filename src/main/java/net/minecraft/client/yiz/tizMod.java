@@ -38,15 +38,6 @@ public class tizMod {
     public tizMod(IEventBus modEventBus, ModContainer modContainer) {
         modEventBus.addListener(this::commonSetup);
 
-        // 注册组合容器 MenuType
-        modEventBus.addListener(net.neoforged.neoforge.registries.RegisterEvent.class, event -> {
-            if (event.getRegistryKey().equals(net.minecraft.core.registries.Registries.MENU)) {
-                net.minecraft.core.Registry.register(
-                        net.minecraft.core.registries.BuiltInRegistries.MENU,
-                        net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(MODID, "combined_container"),
-                        CombinedContainerMenu.TYPE);
-            }
-        });
 
         // 注册网络同步处理器
         modEventBus.addListener(NetworkHandler::onRegisterPayloadHandlers);
@@ -58,6 +49,7 @@ public class tizMod {
 
         // 注册 /yiz th 保护态切换指令
         YizProtectCommand.register();
+        net.minecraft.client.yiz.client.render.WorldGuiCommand.register();
 
         // 创造模式自动保护 + 重生 3 秒无敌（通过配置文件可关闭）
         CreativeProtectionConfig.ensureLoaded();

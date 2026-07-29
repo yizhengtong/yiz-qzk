@@ -73,13 +73,6 @@ public final class NetworkHandler {
             S2CBenleixiWindowPayload.STREAM_CODEC,
             S2CBenleixiWindowPayload::handle
         );
-        // 组合面板：C2S 请求合并两个留存光屏为一个大容器
-        registrar.playToServer(
-                C2SCombinePanelsPayload.TYPE,
-                C2SCombinePanelsPayload.STREAM_CODEC,
-                C2SCombinePanelsPayload::handle
-        );
-        // 技能加强：C2S 加减等级
         registrar.playToServer(
             net.minecraft.client.yiz.editor.C2SSkillEnhancePayload.TYPE,
             net.minecraft.client.yiz.editor.C2SSkillEnhancePayload.STREAM_CODEC,

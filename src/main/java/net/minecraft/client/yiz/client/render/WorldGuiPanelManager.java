@@ -12,7 +12,6 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.renderer.GameRenderer;
-import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.Vec3;
@@ -56,12 +55,10 @@ public final class WorldGuiPanelManager {
     private static final Logger LOG = LoggerFactory.getLogger("WorldGuiPanelManager");
 
     /** 世界化总开关。 */
-    private static volatile boolean enabled = true;
+    private static volatile boolean enabled = false;
 
     /** 最近一次右键的方块 pos（供 ScreenEvent.Render.Pre 关联 screen 与方块）。 */
     private static volatile BlockPos lastClickedPos = null;
-    private static volatile BlockPos pairedFurnace = null;
-    private static volatile boolean autoCloseAfterPair = false;
     /** 是否有「未处理的右键」：每次 RightClickBlock 置 true，Render.Pre 消费一次后清 false。
      *  用标志位而非比较 pos——否则右键同一箱子时 lastClickedPos 不变会被误判为「同次重复」而跳过重新拍快照，
      *  导致光屏停在旧位置（玩家已转身/移位），命中与视觉错位。 */
@@ -72,8 +69,6 @@ public final class WorldGuiPanelManager {
     private static final float GUI_PANEL_HEIGHT = 1.8f;
     /** 光屏在玩家前方的距离（格），右键时拍快照。 */
     private static final float PANEL_DISTANCE_IN_FRONT = 0.5f;
-    /** 熔炉检测范围（格）。打开箱子时检索此范围内是否有熔炉/高炉/烟熏炉。 */
-    private static final int FURNACE_SCAN_RADIUS = 4;
     /** FBO 超采样倍数（提升文字清晰度；FBO 尺寸 = guiScaled × 此值）。 */
     private static final int FBO_SUPERSAMPLE = 2;
 
@@ -129,13 +124,7 @@ public final class WorldGuiPanelManager {
         if (event.getEntity().level().isClientSide) {
             // 记录客户端右键的方块 pos，并置待处理标志，供下次 ScreenEvent.Render.Pre 关联+拍快照
             lastClickedPos = event.getPos().immutable();
-            // 区分「切换触发的右键」（useItemOn on switchingTo）vs「玩家真实右键」：
-            // 切换时不能让 captureNewPanel 用新视角重拍覆盖已有光屏（应保留原 anchor/rotation）。
-            if (event.getPos().equals(OpModeState.getSwitchingTo())) {
-                OpModeState.pendingSwitchCapture = lastClickedPos;
-            } else {
-                pendingClick = true;
-            }
+            pendingClick = true;
         }
     }
 
@@ -160,25 +149,6 @@ public final class WorldGuiPanelManager {
             pendingClick = false;
         }
 
-        // 多光屏切换完成：新 screen 已从服务端到达，关联到已有 record（保留原 anchor/rotation），
-        // 然后立即假关闭回自由视角，让切换无缝。
-        BlockPos switchTarget = OpModeState.pendingSwitchCapture;
-        if (switchTarget != null) {
-            OpModeState.pendingSwitchCapture = null;
-            OpModeState.PanelRecord existing = OpModeState.get(switchTarget);
-            if (existing != null) {
-                existing.screen = container;  // 关联新 screen，保留原 anchor/rotation
-                Object fboOld = existing.fbo;
-                existing.fbo = null;           // 强制重建 FBO（尺寸可能不同）
-                if (fboOld instanceof com.mojang.blaze3d.pipeline.RenderTarget rt) {
-                    com.mojang.blaze3d.systems.RenderSystem.recordRenderCall(rt::destroyBuffers);
-                OpModeState.markFakeClosed(container);
-                OpModeState.setSwitchingTo(null);
-                Minecraft.getInstance().setScreen(null); // 立即假关闭回自由视角
-                LOG.info("多光屏切换完成 @ {}，已关联新 screen 并假关闭", switchTarget);
-            }
-        }
-
         // 在 GUI 渲染阶段（ScreenEvent.Render.Pre）对当前 screen 离屏渲染——此时机全局状态干净
         // （光照纹理/atlas 已就绪），物品颜色正常。留存面板（ESC 后无 mc.screen）不进这里，用冻结的旧 FBO。
         // 只有被世界面板接管的容器屏（右键箱子打开的）才离屏渲染+取消贴脸渲染。
@@ -194,16 +164,6 @@ public final class WorldGuiPanelManager {
             renderToOffscreen(current, mx, my, event.getPartialTick());
             event.setCanceled(true);
         }
-        // 箱子+熔炉自动绑定：创建完两个面板后自动假关闭熔炉，玩家立刻回到自由视角见双光屏
-        if (autoCloseAfterPair) {
-            autoCloseAfterPair = false;
-            OpModeState.PanelRecord r = OpModeState.isManagedScreen(container) ? findRecordByScreen(container) : null;
-            if (r != null) {
-                OpModeState.markFakeClosed(container);
-                Minecraft.getInstance().setScreen(null);
-                LOG.info("双面板绑定完成，自动假关闭 @ {}", r.blockPos);
-            }
-        }
     }
 
     /** 按 screen 实例反查面板记录（screen == record.screen 的那条）。 */
@@ -214,10 +174,8 @@ public final class WorldGuiPanelManager {
         return null;
     }
 
-    /** 新建一条面板记录：清除同一箱子旧面板，复位假关闭状态（新面板是活跃的锁视角模式），在玩家前方创建。 */
+    /** 新建一条面板记录：光屏锚点=玩家相机前方0.5格，朝向=当前相机（正对玩家）。 */
     private static void captureNewPanel(BlockPos pos, AbstractContainerScreen<?> screen) {
-        OpModeState.remove(pos);   // 只清除同箱子旧面板，不影响其他留存面板
-        OpModeState.markRealClosed(); // 新面板不是假关闭态（mc.screen 活跃，锁视角模式）
         Minecraft mc = Minecraft.getInstance();
         var cam = mc.gameRenderer.getMainCamera();
         Vec3 camPos = cam.getPosition();
@@ -229,42 +187,6 @@ public final class WorldGuiPanelManager {
         Quaternionf rotation = new Quaternionf(cam.rotation());
         OpModeState.put(pos, anchor, rotation, screen);
         LOG.info("新建世界面板 @ {} 前方{}格，anchor=({},{},{})", pos, PANEL_DISTANCE_IN_FRONT, anchor.x, anchor.y, anchor.z);
-
-        // 箱子+熔炉默认绑定：打开箱子时检测到附近熔炉，自动打开熔炉面板
-        BlockPos furnace = pairedFurnace;
-        pairedFurnace = null;
-        autoCloseAfterPair = true;
-            if (furnace != null && mc.level != null) {
-            mc.gameMode.useItemOn(mc.player, net.minecraft.world.InteractionHand.MAIN_HAND,
-                    new net.minecraft.world.phys.BlockHitResult(
-                            net.minecraft.world.phys.Vec3.atCenterOf(furnace).add(0, 0.5, 0),
-                            net.minecraft.core.Direction.UP, furnace, false));
-            LOG.info("自动打开附近熔炉 @ {}", furnace);
-        }
-    }
-
-    private static boolean isChest(net.minecraft.world.level.Level level, BlockPos pos) {
-        // 检查方块是否实现了 Container（箱子、木桶等）
-        return level.getBlockEntity(pos) instanceof net.minecraft.world.level.block.entity.BaseContainerBlockEntity;
-    }
-
-    private static BlockPos findNearbyFurnace(net.minecraft.world.level.Level level, BlockPos center, int radius) {
-        var furnaceTypes = java.util.Set.of(
-                net.minecraft.world.level.block.Blocks.FURNACE,
-                net.minecraft.world.level.block.Blocks.BLAST_FURNACE,
-                net.minecraft.world.level.block.Blocks.SMOKER);
-        BlockPos.MutableBlockPos mp = new BlockPos.MutableBlockPos();
-        for (int dx = -radius; dx <= radius; dx++) {
-            for (int dy = -radius; dy <= radius; dy++) {
-                for (int dz = -radius; dz <= radius; dz++) {
-                    if (dx == 0 && dy == 0 && dz == 0) continue;
-                    mp.set(center.getX() + dx, center.getY() + dy, center.getZ() + dz);
-                    if (furnaceTypes.contains(level.getBlockState(mp).getBlock())) {
-                        return mp.immutable();
-                    }
-            }
-        }
-        return null;
     }
 
     // ════════════════════════════════════════════════════
@@ -299,33 +221,14 @@ public final class WorldGuiPanelManager {
         if (!enabled) return;
         if (!OpModeState.isFakeClosed() || OpModeState.getActivePanel() == null) return;
 
-        // 更新所有留存面板的 FBO（非活跃面板也需要刷新，否则切换后显示冻结旧画面）
-        for (OpModeState.PanelRecord r : OpModeState.list()) {
-            if (r.fbo == null) continue;
-            // 对活跃面板传准星坐标（有槽位高亮），非活跃面板传屏外坐标即可
-            int mx = 0, my = 0;
-            if (r.blockPos.equals(OpModeState.getActivePanel())) {
-                WorldGuiInputHandler.CrosshairHit hit = WorldGuiInputHandler.getCrosshairHit();
-                if (hit != null) { mx = (int) hit.guiX; my = (int) hit.guiY; }
-            }
-            renderToOffscreen(r, mx, my, event.getPartialTick().getGameTimeDeltaPartialTick(true));
-        }
-    }
-
-    /** 每 tick 检测面板对应方块是否仍为容器方块。容器被摧毁/替换后同步销毁面板。 */
-    @SubscribeEvent
-    public static void onClientTick(ClientTickEvent.Post event) {
-        if (!enabled) return;
         Minecraft mc = Minecraft.getInstance();
-        if (mc.level == null) return;
-        var records = OpModeState.list();
-        if (records.isEmpty()) return;
-        for (OpModeState.PanelRecord r : records) {
-            // 方块被摧毁/替换后 getBlockEntity 返回 null 或类型不匹配
-            var be = mc.level.getBlockEntity(r.blockPos);
-            if (be == null) {
-                LOG.info("容器方块消失，销毁面板 @ {}", r.blockPos);
-                OpModeState.remove(r.blockPos);
+        WorldGuiInputHandler.CrosshairHit hit = WorldGuiInputHandler.getCrosshairHit();
+        int mx = hit != null ? (int) hit.guiX : 0;
+        int my = hit != null ? (int) hit.guiY : 0;
+        for (OpModeState.PanelRecord r : OpModeState.list()) {
+            if (r.fbo != null && r.blockPos.equals(OpModeState.getActivePanel())) {
+                renderToOffscreen(r, mx, my, event.getPartialTick().getGameTimeDeltaPartialTick(true));
+                break;
             }
         }
     }
