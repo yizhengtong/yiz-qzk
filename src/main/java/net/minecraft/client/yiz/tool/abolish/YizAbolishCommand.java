@@ -1,11 +1,9 @@
 package net.minecraft.client.yiz.tool.abolish;
 
 import com.mojang.brigadier.Command;
-import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
-import com.mojang.brigadier.suggestion.SuggestionProvider;
 import net.minecraft.client.yiz.tool.SimpleCommandRegistry;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -16,17 +14,15 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.item.Item;
 import net.minecraft.client.yiz.core.AbolitionStateManager;
 import net.minecraft.client.yiz.core.VTableReplace;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.client.yiz.tool.abolish.ItemAbolitionHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.stream.Collectors;
+import java.util.Set;
 
 /**
  * /yiz abolish — 物品废除 + 背包废除 指令。
@@ -64,6 +60,16 @@ public final class YizAbolishCommand {
                                 .then(Commands.literal("tooltip")
                                         .executes(YizAbolishCommand::abolishItemTooltip))
                         ))
+                // ── 实体废除 ──
+                .then(Commands.literal("entity")
+                        .then(Commands.argument("entity",
+                                        ResourceKeyArgument.key(Registries.ENTITY_TYPE))
+                                .executes(YizAbolishCommand::abolishEntityFull)
+                                .then(Commands.literal("behavior")
+                                        .executes(YizAbolishCommand::abolishEntityBehavior))
+                                .then(Commands.literal("aliveness")
+                                        .executes(YizAbolishCommand::abolishEntityAliveness))
+                        ))
                 .then(Commands.literal("defense")
                         .executes(YizAbolishCommand::abolishDefenseSelf)
                         .then(Commands.argument("player", EntityArgument.player())
@@ -76,6 +82,11 @@ public final class YizAbolishCommand {
                         .executes(YizAbolishCommand::restoreDefenseSelf)
                         .then(Commands.argument("player", EntityArgument.player())
                                 .executes(YizAbolishCommand::restoreDefensePlayer))
+                )
+                .then(Commands.literal("entity")
+                        .then(Commands.argument("entity",
+                                        ResourceKeyArgument.key(Registries.ENTITY_TYPE))
+                                .executes(YizAbolishCommand::restoreEntity))
                 ));
 
         // /yiz vtable status
@@ -304,6 +315,57 @@ public final class YizAbolishCommand {
                             VTableReplace.getInitError() : "未知")), false);
         }
 
+        return Command.SINGLE_SUCCESS;
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  实体废除
+    // ══════════════════════════════════════════════════════════
+
+    @SuppressWarnings("unchecked")
+    private static ResourceLocation getEntityId(CommandContext<CommandSourceStack> ctx)
+            throws CommandSyntaxException {
+        ResourceKey<EntityType<?>> key = ctx.getArgument("entity", ResourceKey.class);
+        return key.location();
+    }
+
+    private static int abolishEntityFull(CommandContext<CommandSourceStack> ctx)
+            throws CommandSyntaxException {
+        ResourceLocation entityId = getEntityId(ctx);
+        // Mixin 层：注册到状态管理器（立即生效）
+        int count = EntityAbolitionHelper.abolishEntityById(entityId);
+        ctx.getSource().sendSuccess(() -> Component.literal(
+                "§a已废除实体 §e" + entityId + " §a(VTable " + count + " 方法 + Mixin 拦截)"), true);
+        LOGGER.info("{} abolished entity {} ({} methods + Mixin)",
+                ctx.getSource().getDisplayName(), entityId, count);
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private static int abolishEntityBehavior(CommandContext<CommandSourceStack> ctx)
+            throws CommandSyntaxException {
+        ResourceLocation entityId = getEntityId(ctx);
+        EntityAbolitionStateManager.abolishEntity(entityId);
+        ctx.getSource().sendSuccess(() -> Component.literal(
+                "§a已废除 §e" + entityId + " §a的行为 (tick/AI/despawn)"), true);
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private static int abolishEntityAliveness(CommandContext<CommandSourceStack> ctx)
+            throws CommandSyntaxException {
+        ResourceLocation entityId = getEntityId(ctx);
+        EntityAbolitionStateManager.abolishEntity(entityId);
+        ctx.getSource().sendSuccess(() -> Component.literal(
+                "§a已废除 §e" + entityId + " §a的存活判定 (isAlive/isDeadOrDying)"), true);
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private static int restoreEntity(CommandContext<CommandSourceStack> ctx)
+            throws CommandSyntaxException {
+        ResourceLocation entityId = getEntityId(ctx);
+        EntityAbolitionHelper.restoreEntityById(entityId);
+        ctx.getSource().sendSuccess(() -> Component.literal(
+                "§a已恢复实体 §e" + entityId), true);
+        LOGGER.info("{} restored entity {}", ctx.getSource().getDisplayName(), entityId);
         return Command.SINGLE_SUCCESS;
     }
 }

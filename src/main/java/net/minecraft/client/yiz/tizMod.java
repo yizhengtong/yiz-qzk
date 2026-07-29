@@ -70,6 +70,9 @@ public class tizMod {
         // 注册 /yiz stack 物品最大堆叠数修改指令
         net.minecraft.client.yiz.tool.YizStackCommand.register();
 
+        // 注册 /yiz remove <半径> 实体清除指令
+        net.minecraft.client.yiz.tool.YizRemoveCommand.register();
+
         // 注册 /yiz setHealth <选择器> <数值> <类型1|2> 生命值修改指令
         net.minecraft.client.yiz.tool.YizSetHealthCommand.register();
 
