@@ -250,15 +250,16 @@ public final class WorldGuiPanelManager {
         if (!enabled) return;
         if (!OpModeState.isFakeClosed() || OpModeState.getActivePanel() == null) return;
 
-        Minecraft mc = Minecraft.getInstance();
-        WorldGuiInputHandler.CrosshairHit hit = WorldGuiInputHandler.getCrosshairHit();
-        int mx = hit != null ? (int) hit.guiX : 0;
-        int my = hit != null ? (int) hit.guiY : 0;
+        // 更新所有留存面板的 FBO（非活跃面板也需要刷新，否则切换后显示冻结旧画面）
         for (OpModeState.PanelRecord r : OpModeState.list()) {
-            if (r.fbo != null && r.blockPos.equals(OpModeState.getActivePanel())) {
-                renderToOffscreen(r, mx, my, event.getPartialTick().getGameTimeDeltaPartialTick(true));
-                break;
+            if (r.fbo == null) continue;
+            // 对活跃面板传准星坐标（有槽位高亮），非活跃面板传屏外坐标即可
+            int mx = 0, my = 0;
+            if (r.blockPos.equals(OpModeState.getActivePanel())) {
+                WorldGuiInputHandler.CrosshairHit hit = WorldGuiInputHandler.getCrosshairHit();
+                if (hit != null) { mx = (int) hit.guiX; my = (int) hit.guiY; }
             }
+            renderToOffscreen(r, mx, my, event.getPartialTick().getGameTimeDeltaPartialTick(true));
         }
     }
 
