@@ -7,12 +7,16 @@ metadata:
 
 ## Mixin 1.21.1 关键踩坑
 
-### refmap 缺失 → `@ModifyExpressionValue` / `@ModifyArg` 不可用；`@ModifyVariable` 可用
-项目 `yizmodqzk.refmap.json` 并不实际生成。只有 `@Inject` + `@Shadow` 稳定工作（Mixin 直接匹配 Mojang 映射名）。**禁止**使用 `@ModifyExpressionValue`、`@ModifyArg`、`@Redirect`——均报 `No refMap loaded` / `Scanned 0 target(s)`。
+### refmap 缺失 → 注解选取规则
+项目 `yizmodqzk.refmap.json` 并不实际生成（jar 里没有该文件，但 `mixins.json` 仍声明了它）。这意味着依赖 refmap 做「短方法名→运行时映射名」解析的注解会静默失败。
 
-`@ModifyVariable` 按参数名匹配需要 refmap，但 **`@ModifyVariable(at = @At("HEAD"), argsOnly = true, index = N)` 按参数位置匹配**不需要 refmap，经验证可用（`StartupItemRegistryReplaceMixin`）。
+**经验证各注解可用性（2026-07-30 复核）：**
+- ✅ `@Inject(method=..., at=@At("HEAD/RETURN/TAIL"), cancellable=true)` + `cir.setReturnValue/ci.cancel()` —— 最稳，首选。**短方法名可命中**（已验证 `getMaxStackSize`/`limitSize` 等无重载简单方法名 HEAD 注入成功，日志 "does use it's CallbackInfo"）。`@At("RETURN")` + 完整描述符定位接口 default 方法也成功。
+- ✅ `@ModifyVariable(at=@At("HEAD"), argsOnly=true, index=N)` —— 按参数位置匹配，不依赖 refmap，可用（`StartupItemRegistryReplaceMixin`）。但**单纯 `@ModifyVariable(method="短名")` 不带 index 不可靠**（曾在 `limitSize` 上静默失效）。
+- ✅ `@Redirect` —— 可用（`HumanoidArmorLayerStarMixin` 用了且工作）。需显式 `target`。
+- ⚠️ `@ModifyArg` / `@ModifyExpressionValue` —— 这两类对「短方法名 + refmap 解析」依赖最强，历史上报过 `No refMap loaded` / `Scanned 0 target(s)`。要用必须给**完整描述符 target**（如 `@At(value="INVOKE", target="Lnet/.../Class;method(...)V")`），否则不要用。
 
-**How to apply:** 优先用 `@Inject(method="方法名", at=@At("HEAD/RETURN/TAIL"), cancellable=true)` + `cir.setReturnValue(...)`。需要拦截方法参数时用 `@ModifyVariable` + `argsOnly=true, index=N`。方法名在 NeoForm 源码 `.build/neoform/.../transformed/` 中查找。
+**How to apply:** 优先 `@Inject` + 短名/描述符。改方法参数用 `@Inject` HEAD 捕获参数 + `ci.cancel()` 自行处理（比 `@ModifyArg` 稳），或 `@ModifyVariable(argsOnly=true, index=N)`。`@ModifyArg`/`@ModifyExpressionValue` 仅在能写完整描述符 target 时考虑。方法名在 NeoForm 源码 `.build/neoForm/.../transformed/` 中查找。
 
 ### `GameRenderer.pick(float)` 不存在于运行时映射
 编译通过但运行时 `No refMap loaded`。需选取准星事件时，目标改为 `Entity.pick(double,float,boolean)`（已验证可用）或直接 `Minecraft.getInstance()`。

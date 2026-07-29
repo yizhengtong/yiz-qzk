@@ -10,6 +10,7 @@
     "FallDamageMixin",
     "FlightOptimizationMixin",
     "ItemAbolitionMixin",
+    "ItemStackMaxSizeMixin",
     "LivingEntityArmorAbolitionMixin",
     "LivingEntityMixin",
     "NoCollisionMixin",
