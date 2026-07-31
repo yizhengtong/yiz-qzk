@@ -8,20 +8,19 @@ import net.minecraft.world.damagesource.DamageType;
 /**
  * 前置库自定义伤害类型（data-driven DamageType）。
  *
- * <p>{@link #SPILL} — 卢登激荡溅射伤害专用类型，设计目标"无视大部分生物免疫"：
- * <ul>
- *   <li>不在任何 {@code DamageTypeTags}（IS_FIRE / IS_LIGHTNING / IS_EXPLOSION / IS_PROJECTILE /
- *       IS_PLAYER_ATTACK / IS_FREEZING …）→ mob 的 tag 免疫（含末影龙对火/弹射物等）全部命中不到它</li>
- *   <li>{@code scaling = never}：不随难度缩放</li>
- *   <li>配合 {@code LudenOverkillHandler.isSpilling} 跳过 modifyHealthForHealBan，全额扣血、不被任何属性加减</li>
- * </ul>
- * 数据包定义：{@code data/yizmodqzk/damage_type/spill.json}</p>
+ * <p>{@link #SPELL} — 法强类型伤害，仅抗性提升（90%封顶）+ 保护附魔（80%封顶）+ spell_defense 生效。
+ * 不在任何物理 {@code DamageTypeTags} 中 → 自然路由 spell_defense，跳过 armor/damage_reduction/damage_block/盾牌。
+ * 数据包定义：{@code data/yizmodqzk/damage_type/spell.json}</p>
  */
 public final class YizDamageTypes {
 
     private YizDamageTypes() {}
 
-    /** 卢登激荡溅射伤害类型（yizmodqzk:spill）。 */
-    public static final ResourceKey<DamageType> SPILL = ResourceKey.create(
-        Registries.DAMAGE_TYPE, ResourceLocation.fromNamespaceAndPath("yizmodqzk", "spill"));
+    /**
+     * 法强类型伤害（yizmodqzk:spell）。
+     * 仅抗性提升（cap 90%）+ 保护附魔（cap 80%=原版封顶）+ spell_defense 生效，
+     * 跳过护甲/韧性及 damage_reduction / damage_block / 盾牌。
+     */
+    public static final ResourceKey<DamageType> SPELL = ResourceKey.create(
+        Registries.DAMAGE_TYPE, ResourceLocation.fromNamespaceAndPath("yizmodqzk", "spell"));
 }

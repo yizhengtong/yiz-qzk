@@ -52,7 +52,7 @@ public final class MeleeWeaponScaling {
     private static final double[] SPEED         = {1.0, 1.1, 1.2, 1.3, 1.5};
     private static final double[] CRIT_RATE     = {1.0, 1.25, 1.75, 2.0, 2.5};
     private static final double[] CRIT_DMG      = {1.0, 1.5, 1.75, 2.0, 3.0};
-    private static final double[] LIFE_STEAL    = {1.0, 1.2, 1.4, 1.6, 2.0};
+    // LIFE_STEAL 武器倍率已移除 — 吸血统一走前置库 LIFE_STEAL 属性。
     private static final double[] SPLASH_RADIUS = {1.0, 1.1, 1.3, 1.5, 2.0};
     private static final double[] SPLASH_DMG    = {1.0, 1.2, 1.4, 1.6, 2.0};
     private static final double[] SPLASH_FALLOFF= {1.0, 1.2, 1.4, 1.6, 2.0};
@@ -72,13 +72,12 @@ public final class MeleeWeaponScaling {
         double speed,
         double critRate,
         double critDmg,
-        double lifeSteal,
         double splashRadius,
         double splashDmg,
         double splashFalloff,
         double interactionRange  // 实体交互距离 Lv1（=0 时不修改默认交互距离）
     ) {
-        public static final BaseStats ZERO = new BaseStats(0, 0, 0, 0, 0, 0, 0, 0, 0);
+        public static final BaseStats ZERO = new BaseStats(0, 0, 0, 0, 0, 0, 0, 0);
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -109,7 +108,6 @@ public final class MeleeWeaponScaling {
                 .stats(base.damage * DAMAGE[lv], speed)
                 .critRate(base.critRate * CRIT_RATE[lv])
                 .extra("critDmg",        base.critDmg        * CRIT_DMG[lv])
-                .extra("lifeSteal",      base.lifeSteal      * LIFE_STEAL[lv])
                 .extra("splashRadius",   base.splashRadius   * SPLASH_RADIUS[lv])
                 .extra("splashDmg",      base.splashDmg      * SPLASH_DMG[lv])
                 .extra("splashFalloff",  base.splashFalloff  * SPLASH_FALLOFF[lv])
@@ -133,7 +131,6 @@ public final class MeleeWeaponScaling {
             case "speed"        -> SPEED[idx];
             case "critRate"     -> CRIT_RATE[idx];
             case "critDmg"      -> CRIT_DMG[idx];
-            case "lifeSteal"    -> LIFE_STEAL[idx];
             case "splashRadius" -> SPLASH_RADIUS[idx];
             case "splashDmg"    -> SPLASH_DMG[idx];
             case "splashFalloff"-> SPLASH_FALLOFF[idx];

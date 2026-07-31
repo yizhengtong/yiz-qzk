@@ -134,7 +134,6 @@ public class tizMod {
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.ON_HURT);
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.COUNTER_RATE);
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.COUNTER_VALUE);
-                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.COUNTER_COUNT);
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.COMBO_RATE);
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.COMBO_VALUE);
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.COMBO_COUNT);
@@ -259,7 +258,6 @@ public class tizMod {
         net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.LIFE_REGEN_PCT);
         net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.COUNTER_RATE);
         net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.COUNTER_VALUE);
-        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.COUNTER_COUNT);
         net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.COMBO_RATE);
         net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.COMBO_VALUE);
         net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.COMBO_COUNT);

@@ -45,7 +45,7 @@ metadata:
 - **假关闭是准星操作的前提**：真 ESC 走 `AbstractContainerScreen.onClose`→`player.closeContainer()` 发 `ServerboundContainerClosePacket`，服务端把 `player.containerMenu` 切回背包，之后对留存 screen 调 mouseClicked 发的 click 包被服务端 `handleContainerClick`（containerId 不匹配）**静默忽略**，槽位不变。所以 ESC 必须**假关闭**：Mixin `AbstractContainerScreen.onClose` HEAD，仅当 `OpModeState.isManagedScreen(self)`（世界面板接管的）时 `ci.cancel()` 跳过 closeContainer + `setScreen(null)`（恢复视角+准星，不发 close 包）+ `markFakeClosed`。setScreen(null) 安全：不调 onClose、不发 close 包、removed()→menu.removed() 客户端空操作、grabMouse 恢复视角。非世界面板（背包等）放行真关。
 - **右键事件点**：`InputEvent.InteractionKeyMappingTriggered`（在 Minecraft.startUseItem 内、仅 mc.screen==null、可 cancel、在原版右键分支之前）。比 RightClickBlock/Item/Empty 统一（一处拦全部分支）。`isUseItem()`=右键；只处理 `MAIN_HAND`（事件对 MAIN/OFF 各 fire 一次）。准星没命中光屏→不 cancel 放行原版（放方块/吃东西）。
 - **准星命中=屏幕中心 NDC(0,0)**：与鼠标命中共用 `raycastWithNdc(mc, ndcX, ndcY)` 核心（重构出，避免两套逆投影漂移），只 NDC 来源不同。`getCrosshairHit()` 返回 public `CrosshairHit{record,guiX,guiY}`。
-- **状态机**（OpModeState）：`activePanel`（服务端活跃容器 blockPos）、`fakeClosed`（screen关但容器开）、`switchingTo`（切换中防重入）。准星右键命中 activePanel→直 `screen.mouseClicked(guiX,guiY,1)`（button=1=拿一半/放一个）；命中非活跃光屏→需切换（多光屏切换未实现，当前放行）。
+- **状态机**（OpModeState）：`activePanel`（服务端活跃容器 blockPos）、`fakeClosed`（screen关但容器开）、`switchingTo`（切换中防重入）。准星右键命中 activePanel→直 `screen.mouseClicked(guiX,guiY,1)`（button=1=拿一半/放一个）；命中非活跃光屏→触发切换（已实现，见下方多光屏切换）。
 - **多光屏切换**（已实现）：非活跃光屏左右键均可触发切换→`useItemOn`→`pendingSwitchCapture`→关联新 screen 到已有 record→假关闭。`switchingTo` 防重入。
 - **边界处理**（已实现）：`ClientTickEvent.Post` 每 tick 检测 `getBlockEntity(pos)==null`→方块被摧毁自动销毁面板+复位状态。`OpModeState.remove(pos)` 单条移除。
 - **左键操作**（已实现）：`InteractionKeyMappingTriggered.isAttack()` (button=0=拿全部/放全部)。左右键共用同一套拾取/放下逻辑。

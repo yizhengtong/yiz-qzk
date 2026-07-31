@@ -60,6 +60,18 @@ public abstract class LivingEntityMixin implements HealthDataBridge, ControlData
     @Unique
     private static final int yizmodqzk$DELTA_DECAY_INTERVAL = 100;
 
+    /** SPELL 伤害类型——临时卸下的抗性效果（hurt 后恢复） */
+    @Unique
+    private static final java.util.Map<LivingEntity, net.minecraft.world.effect.MobEffectInstance>
+            yizmodqzk$SPELL_RES_BACKUP = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** ARMOR/SPELL_DEFENSE 指数减伤参数：减伤 = 1 - (1 + x/BASE)^(-ln2/ln(1+50/BASE))，锚定 x=20→50%、x=50→75% */
+    @Unique
+    private static final double yizmodqzk$EXP_REDUCTION_BASE = 40.0;
+    @Unique
+    private static final double yizmodqzk$EXP_REDUCTION_EXP =
+            Math.log(2.0) / Math.log(1.0 + 50.0 / yizmodqzk$EXP_REDUCTION_BASE);
+
     // ==================== HealthDataBridge 接口实现 ====================
 
     @Override
@@ -250,8 +262,21 @@ public abstract class LivingEntityMixin implements HealthDataBridge, ControlData
         amount = DamageValueModifierRegistry.apply(self, source, amount);
         if (amount <= 0) return 0;
 
-        // === 攻击者伤害增幅（按堆叠模式：MULTIPLY 逐项乘，ADD 求和后一次乘）===
-        if (source.getEntity() instanceof LivingEntity attacker) {
+        // === SPELL：No-harm——跳过攻击者一切增幅，仅抗性 90% 封顶 + 初始值 ===
+        boolean isSpell = source.is(net.minecraft.client.yiz.api.YizDamageTypes.SPELL);
+        if (isSpell) {
+            if (net.minecraft.client.yiz.core.SpellSourceTracker.get() == null) net.minecraft.client.yiz.core.SpellSourceTracker.set("spell");
+            var resInst = self.getEffect(net.minecraft.world.effect.MobEffects.DAMAGE_RESISTANCE);
+            if (resInst != null) {
+                float capped = Math.min((resInst.getAmplifier() + 1) * 0.05f, 0.90f);
+                amount *= (1.0f - capped);
+                self.removeEffect(net.minecraft.world.effect.MobEffects.DAMAGE_RESISTANCE);
+                yizmodqzk$SPELL_RES_BACKUP.put(self, resInst);
+            }
+        }
+
+        // === 攻击者伤害增幅（SPELL 跳过，不受任何来源增幅）===
+        if (!isSpell && source.getEntity() instanceof LivingEntity attacker) {
             // 状态伤害（感电/眩晕等派发的 hurt）不再次触发攻方派发——防递归 + 防充能误计
             if (!net.minecraft.client.yiz.core.StatusEffectDispatcher.DISPATCHING.get()) {
                 // 攻击计数器 +1（供法球系统读取）
@@ -376,7 +401,7 @@ public abstract class LivingEntityMixin implements HealthDataBridge, ControlData
             }
         }
 
-        // 注：MAGIC_DAMAGE / SUMMON_DAMAGE 保留给后续魔法武器/召唤武器系统，暂不在此处消费。
+        // 注：MAGIC_DAMAGE / SUMMON_DAMAGE / SPELL 均已被前面的 SPELL 前置处理拦截，此段不执行。
 
         // === 熔岩/火焰防护（目标方属性）===
         if (source.is(net.minecraft.tags.DamageTypeTags.IS_FIRE)) {
@@ -406,7 +431,8 @@ public abstract class LivingEntityMixin implements HealthDataBridge, ControlData
 
         // === ARMOR / SPELL_DEFENSE 指数减免（目标方，hurt 层）===
         // 策略：只对明确的"物理类"伤害走 ARMOR；其余一切（含其他模组自定义伤害）
-        // 默认走 SPELL_DEFENSE。这样第三方模组不设标签也不会被漏掉。
+        // 默认走 SPELL_DEFENSE。spell 类型无物理 tag → 自然路由到 spell_defense。
+        // 这样第三方模组不设标签也不会被漏掉。
         boolean isPhysical = source.is(net.minecraft.tags.DamageTypeTags.IS_PROJECTILE)
             || source.is(net.minecraft.tags.DamageTypeTags.IS_EXPLOSION)
             || source.is(net.minecraft.tags.DamageTypeTags.IS_PLAYER_ATTACK)
@@ -416,7 +442,9 @@ public abstract class LivingEntityMixin implements HealthDataBridge, ControlData
             : net.minecraft.client.yiz.attribute.YizAttributes.SPELL_DEFENSE;
         var expInst = self.getAttribute(expAttr);
         if (expInst != null && expInst.getValue() > 0) {
-            double reduction = 1.0 - Math.exp(-0.0277259 * expInst.getValue());
+            double reduction = 1.0 - Math.pow(
+                    1.0 + expInst.getValue() / yizmodqzk$EXP_REDUCTION_BASE,
+                    -yizmodqzk$EXP_REDUCTION_EXP);
             amount *= (float)(1.0 - Math.min(1.0, reduction));
         }
 
@@ -452,8 +480,8 @@ public abstract class LivingEntityMixin implements HealthDataBridge, ControlData
             return EntityASMUtil.clampProtectedHealth(newHealth);
         }
 
-        // 卢登溅射：跳过所有减伤/格挡/法防，全额扣血（spillDmg 已是结算值，不被任何属性加减）
-        if (net.minecraft.client.yiz.handler.LudenOverkillHandler.isSpilling()) {
+        // SPELL 伤害类型：仅保护附魔 + 抗性提升 + spell_defense 生效，跳过其余自定义防御
+        if (net.minecraft.client.yiz.core.SpellSourceTracker.isActive()) {
             return newHealth;
         }
 
@@ -591,6 +619,17 @@ public abstract class LivingEntityMixin implements HealthDataBridge, ControlData
         Entity srcEntity = source.getEntity();
         if (!(srcEntity instanceof LivingEntity attacker)) return;
 
+        // ── SPELL 清理（resist 恢复 + 标签清除）始终执行 ──
+        boolean isSpell = net.minecraft.client.yiz.core.SpellSourceTracker.isActive();
+        var backedUp = yizmodqzk$SPELL_RES_BACKUP.remove(self);
+        if (isSpell) {
+            if (backedUp != null) self.addEffect(backedUp);
+            net.minecraft.client.yiz.core.SpellSourceTracker.remove();
+        }
+
+        // ── SPELL 伤害：不触发任何装备特效/反击/连击/被动分发，防无限链 ──
+        if (isSpell) return;
+
         // ── 标签攻击后处理（无影击/霹雳/雷神）──
         // 仅对玩家主手主动攻击触发一次；感电/链电等派生 hurt(DISPATCHING=true)跳过，避免反复触发。
         if (srcEntity instanceof net.minecraft.server.level.ServerPlayer spAttacker && !(self instanceof Player)
@@ -606,8 +645,8 @@ public abstract class LivingEntityMixin implements HealthDataBridge, ControlData
             if (rate > 0 && Math.random() < rate / 100.0) {
                 double value = player.getAttributeValue(YizAttributes.COUNTER_VALUE);
                 if (value <= 0) value = 50.0;
-                double count = player.getAttributeValue(YizAttributes.COUNTER_COUNT);
-                if (count < 1) count = 1;
+                // 反击次数固定 1（原 COUNTER_COUNT 属性已移除）
+                double count = 1;
 
                 double playerAtk = player.getAttributeValue(net.minecraft.world.entity.ai.attributes.Attributes.ATTACK_DAMAGE);
                 float counterDmg = (float) (playerAtk * value / 100.0);
@@ -634,12 +673,22 @@ public abstract class LivingEntityMixin implements HealthDataBridge, ControlData
             }
         }
 
+
         // ── 连击：走 Player.attack() 管道，可触发暴击 ──
         if (srcEntity instanceof net.minecraft.server.level.ServerPlayer cPlayer && !(self instanceof Player)
             && !ComboAttackHelper.isComboAttacking()) {
             double cRate = cPlayer.getAttributeValue(YizAttributes.COMBO_RATE);
             if (cRate > 0 && Math.random() < cRate / 100.0) {
                 ComboAttackHelper.executeCombo(cPlayer, self);
+            }
+        }
+
+        // ── 全能吸血：造成伤害 × 吸血% 治疗攻击者 ──
+        if (amount > 0) {
+            var lsInst = attacker.getAttribute(YizAttributes.LIFE_STEAL);
+            if (lsInst != null) {
+                double ls = lsInst.getValue();
+                if (ls > 0) attacker.heal((float)(amount * ls / 100.0));
             }
         }
     }

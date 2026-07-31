@@ -15,6 +15,7 @@ import java.lang.reflect.Type;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
+import javax.annotation.Nullable;
 
 /**
  * 物品最大堆叠数覆盖表（运行时拦截 + 双文件持久化）。
@@ -79,7 +80,10 @@ public final class ItemStackSizeOverride {
     /** 单个物品 ID 最多强化次数 */
     public static final int MAX_ENHANCE = 2;
 
-    private static volatile boolean loaded = false;
+    private static volatile boolean defaultsLoaded = false;
+    /** 当前已加载后天/强化次数数据的存档目录路径，切换存档时自动重载 */
+    @Nullable
+    private static volatile java.nio.file.Path activeWorldPath = null;
 
     private ItemStackSizeOverride() {}
 
@@ -96,25 +100,80 @@ public final class ItemStackSizeOverride {
         }
     }
 
-    private static File getOverridesFile() {
-        return new File(getConfigDir(), OVERRIDES_FILE);
-    }
-
+    /** 先天默认文件：全局（所有存档共享） */
     private static File getDefaultsFile() {
         return new File(getConfigDir(), DEFAULTS_FILE);
     }
 
-    private static File getEnhanceFile() {
-        return new File(getConfigDir(), ENHANCE_FILE);
+    /** 存档内专用子目录（装备叠层同款约定） */
+    private static final String DIR_NAME = "yizmodqzk";
+
+    /**
+     * 当前存档的专用数据目录（null = 无存档加载）。
+     * 单机：{@code saves/<存档名>/yizmodqzk/}，天然按存档隔离、删档即数据消失。
+     */
+    @Nullable
+    private static java.nio.file.Path getWorldDir() {
+        try {
+            var server = Minecraft.getInstance().getSingleplayerServer();
+            if (server != null) {
+                java.nio.file.Path saveDir = server.getWorldPath(
+                        net.minecraft.world.level.storage.LevelResource.LEVEL_DATA_FILE).getParent();
+                return saveDir.resolve(DIR_NAME);
+            }
+        } catch (Exception ignored) {}
+        return null;
     }
 
-    /** 从文件加载状态（仅在第一次调用时执行）。 */
+    /**
+     * 后天设置文件：存放于存档专用目录（{@code saves/<存档>/yizmodqzk/yizmodqzk-stacksize.json}），
+     * 删档=数据随之消失；同名新档=真干净。
+     */
+    private static File getOverridesFile() {
+        java.nio.file.Path worldDir = getWorldDir();
+        return worldDir != null ? worldDir.resolve(OVERRIDES_FILE).toFile()
+                : new File(getConfigDir(), OVERRIDES_FILE);
+    }
+
+    /**
+     * 强化次数文件：存放于存档专用目录（{@code saves/<存档>/yizmodqzk/yizmodqzk-stacksize-enhance.json}）
+     */
+    private static File getEnhanceFile() {
+        java.nio.file.Path worldDir = getWorldDir();
+        return worldDir != null ? worldDir.resolve(ENHANCE_FILE).toFile()
+                : new File(getConfigDir(), ENHANCE_FILE);
+    }
+
+    /**
+     * 加载全局默认 + 确保当前存档的后天/强化次数数据已加载。
+     * <p>先天默认全局只加载一次；后天/强化次数按存档隔离，
+     * 切换存档时自动重载（检测 {@link #activeWorldKey} 变化）。</p>
+     */
     public static synchronized void load() {
-        if (loaded) return;
-        loaded = true;
-        loadInto(getDefaultsFile(), DEFAULTS, "defaults");
+        if (!defaultsLoaded) {
+            defaultsLoaded = true;
+            loadInto(getDefaultsFile(), DEFAULTS, "defaults");
+        }
+        ensureWorldLoaded();
+    }
+
+    /**
+     * 确保当前存档的后天 / 强化次数数据已加载。
+     * 若存档切换（save 目录变化）则清空旧数据并重载。
+     */
+    private static void ensureWorldLoaded() {
+        java.nio.file.Path worldPath = getWorldDir();
+        if (worldPath == null) return; // 无存档，后天/次数为空
+        if (worldPath.equals(activeWorldPath)) return; // 已加载
+
+        // 存档首次加载或切换 → 重载
+        OVERRIDES.clear();
+        ENHANCE_COUNT.clear();
         loadInto(getOverridesFile(), OVERRIDES, "overrides");
         loadInto(getEnhanceFile(), ENHANCE_COUNT, "enhance");
+        activeWorldPath = worldPath;
+        LOGGER.info("Activated stack-size world data from {} ({} overrides, {} enhanced)",
+                worldPath.getFileName(), OVERRIDES.size(), ENHANCE_COUNT.size());
     }
 
     private static void loadInto(File file, Map<ResourceLocation, Integer> target, String label) {
@@ -224,6 +283,8 @@ public final class ItemStackSizeOverride {
      */
     public static int getOverride(ResourceLocation itemId) {
         if (itemId == null) return -1;
+        // 确保当前存档的后天数据已加载（切换存档时 key 变化 → 自动重载）
+        ensureWorldLoaded();
         Integer v = OVERRIDES.get(itemId);
         if (v != null) return v;
         v = DEFAULTS.get(itemId);
@@ -234,6 +295,7 @@ public final class ItemStackSizeOverride {
      * 是否存在任意层覆盖（先天或后天）。
      */
     public static boolean isOverridden(ResourceLocation itemId) {
+        ensureWorldLoaded();
         return itemId != null && (OVERRIDES.containsKey(itemId) || DEFAULTS.containsKey(itemId));
     }
 

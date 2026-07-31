@@ -108,7 +108,6 @@ public record EditableAttribute(
         yiz("damage_reduction",     "伤害减免",     false, "%"),
         yiz("counter_rate",         "反击率",       false, "%"),
         yiz("counter_value",        "反击值",       false, "%"),
-        yiz("counter_count",        "反击数",       false, "次"),
         yiz("combo_rate",           "连击",         false, "%"),
         yiz("combo_value",          "连击倍率",     false, "%"),
         yiz("combo_count",          "连击次数",     false, "次"),

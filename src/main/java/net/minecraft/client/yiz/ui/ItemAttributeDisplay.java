@@ -76,7 +76,6 @@ public final class ItemAttributeDisplay {
         yiz("damage_reduction",     "伤害减免",     "%",   1.0);
         yiz("counter_rate",         "反击率",       "%",   1.0);
         yiz("counter_value",        "反击值",       "%",   1.0);
-        yiz("counter_count",        "反击数",       "次",   1.0);
         yiz("combo_rate",           "连击",         "%",   1.0);
         yiz("combo_value",          "连击倍率",     "%",   1.0);
         yiz("combo_count",          "连击次数",     "次",   1.0);

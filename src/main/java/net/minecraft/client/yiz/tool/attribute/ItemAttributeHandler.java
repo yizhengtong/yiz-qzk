@@ -373,10 +373,7 @@ public final class ItemAttributeHandler {
         setVanillaModifier(stack, YizAttributes.COUNTER_VALUE, "item_counter_value", value);
     }
 
-    /** 给 ItemStack 添加反击数（值域 ≥1）。 */
-    public static void addCounterCount(ItemStack stack, double value) {
-        setVanillaModifier(stack, YizAttributes.COUNTER_COUNT, "item_counter_count", value);
-    }
+    // addCounterCount 已移除：counter_count 属性已删除，固定为每次 1 次。
 
     /** 给 ItemStack 添加复活次数（值域 ≥0）。 */
     public static void addUndying(ItemStack stack, double value) {

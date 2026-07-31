@@ -202,7 +202,7 @@ public final class YizAttributes {
 
     /**
      * 攻击强度防御 — 1:1 镜像到原版护甲+韧性，同时提供指数公式通用伤害减免。
-     * <p>减免公式：1 - e^(-0.0277259 × 值)。25点≈50%，50点≈75%。</p>
+     * <p>减免公式：1 - (1 + 值/40)^(-ln2/ln1.5)。20点=50%，50点=75%。</p>
      * <p>仅减免通用型伤害（物理类），不减免火焰/冰冻/闪电/魔法伤害。</p>
      */
     public static final Holder<Attribute> ARMOR =
@@ -221,7 +221,7 @@ public final class YizAttributes {
 
     /**
      * 法术防御 — 1:1 镜像到原版击退韧性，同时提供指数公式非通用伤害减免。
-     * <p>减免公式：1 - e^(-0.0277259 × 值)。减免火焰/冰冻/闪电/魔法等非物理伤害。</p>
+     * <p>减免公式：1 - (1 + 值/40)^(-ln2/ln1.5)。减免火焰/冰冻/闪电/魔法等非物理伤害。</p>
      */
     public static final Holder<Attribute> SPELL_DEFENSE =
         ATTRIBUTES.register("spell_defense",
@@ -609,12 +609,7 @@ public final class YizAttributes {
             () -> new RangedAttribute("attribute.yizmodqzk.counter_value", 0.0, 0.0, Double.MAX_VALUE)
                 .setSyncable(true));
 
-    /** 反击数 — 每次触发连击次数。值域 ≥1。 */
-    public static final Holder<Attribute> COUNTER_COUNT =
-        ATTRIBUTES.register("counter_count",
-            () -> new RangedAttribute("attribute.yizmodqzk.counter_count", 1.0, 1.0, Double.MAX_VALUE)
-                .setSyncable(true));
-
+    // 反击次数已移除（原 COUNTER_COUNT），固定为每次触发打 1 次。
     // ═══════════════════════════════════════════════════════════
     //  连击效果属性
     // ═══════════════════════════════════════════════════════════
