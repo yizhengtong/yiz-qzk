@@ -10,11 +10,13 @@ import net.minecraft.client.yiz.bridge.ControlDataBridge;
 import net.minecraft.client.yiz.bridge.HealthDataBridge;
 import net.minecraft.client.yiz.bridge.InvulnerableDataBridge;
 import net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler;
+import net.minecraft.client.yiz.tool.health.ConductionDamageLimiter;
 import net.minecraft.client.yiz.tool.health.EntityASMUtil;
+import net.minecraft.client.yiz.tool.health.SecureHealthClosure;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.client.yiz.tool.health.HealBanConfig;
-import net.minecraft.client.yiz.tool.health.HealBanHandler;
+import net.minecraft.client.yiz.tool.health.VitalitySeveranceConfig;
+import net.minecraft.client.yiz.tool.health.VitalitySeveranceHandler;
 import net.minecraft.client.yiz.tool.health.HealthModificationScheduler;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
@@ -57,8 +59,7 @@ public abstract class LivingEntityMixin implements HealthDataBridge, ControlData
     private static final EntityDataAccessor<Float> yizmodqzk$FE_GET_HEALTH_DATA =
         SynchedEntityData.defineId(LivingEntity.class, EntityDataSerializers.FLOAT);
 
-    @Unique
-    private static final int yizmodqzk$DELTA_DECAY_INTERVAL = 100;
+    // （2026-08-05 已移除 Delta 衰减常量 yizmodqzk$DELTA_DECAY_INTERVAL——参照 mhzy 全局不衰减）
 
     /** SPELL 伤害类型——临时卸下的抗性效果（hurt 后恢复） */
     @Unique
@@ -123,6 +124,18 @@ public abstract class LivingEntityMixin implements HealthDataBridge, ControlData
     private void yizmodqzk$modifyGetHealth(CallbackInfoReturnable<Float> cir) {
         LivingEntity self = (LivingEntity) (Object) this;
 
+        // 0. 血量外部存储（flashfur 式）：SECURE_PULSE &gt; 0 的实体返回外部表真值。
+        //    已 override getHealth 的实体（如辖界者）不触发本注入（override 不走 super.getHealth）；
+        //    未 override 的 secure 实体由本注入兜底。
+        if (SecureHealthClosure.isSecure(self)) {
+            // 首次访问时注册（以当前 vanilla 血量初始化）
+            if (!net.minecraft.client.yiz.tool.health.SecureHealthClosure.isRegistered(self)) {
+                net.minecraft.client.yiz.tool.health.SecureHealthClosure.register(self, cir.getReturnValueF());
+            }
+            cir.setReturnValue(net.minecraft.client.yiz.tool.health.SecureHealthClosure.getHealth(self));
+            return;
+        }
+
         // 1. 玩家无敌检查（PlayerMixin 实现 InvulnerableDataBridge）
         if (self instanceof InvulnerableDataBridge iv && iv.yizmodqzk$isInvulnerable()) {
             cir.setReturnValue(Math.max(1.0F, self.getMaxHealth()));
@@ -170,25 +183,31 @@ public abstract class LivingEntityMixin implements HealthDataBridge, ControlData
         LivingEntity entity = (LivingEntity) (Object) this;
         if (entity.level().isClientSide()) return;
 
+        // 无敌帧到期检查（DODGE_CHANCE / INVINCIBILITY_MULT，泛化至所有实体）
+        net.minecraft.client.yiz.handler.AttackInvulnerabilityTracker.onTick(
+            entity, entity.level().getGameTime());
+
         // 状态效果 tick（感电周期 AoE/传播、减速到期、控制计时）
         net.minecraft.client.yiz.core.StatusEffectDispatcher.tickControlTimers(entity);
 
-        if (entity.tickCount % yizmodqzk$DELTA_DECAY_INTERVAL == 0 && !entity.isDeadOrDying()) {
-            float delta = entity.getEntityData().get(yizmodqzk$FE_GET_HEALTH_DATA);
-            if (delta <= -1) {
-                entity.getEntityData().set(yizmodqzk$FE_GET_HEALTH_DATA, delta + 1.0F);
-            } else if (delta >= 1) {
-                entity.getEntityData().set(yizmodqzk$FE_GET_HEALTH_DATA, delta - 1.0F);
-            } else if (delta != 0) {
-                entity.getEntityData().set(yizmodqzk$FE_GET_HEALTH_DATA, 0F);
-            }
-        }
+        // 【2026-08-05 移除 Delta 衰减】参照 mhzy（梦幻终焉）：Delta 持久不回弹。
+        // 此前每 100 tick 朝 0 衰减 1 点导致最初梦幻等 Delta 伤害对自研血量实体（totalDamageTaken 型）回弹；
+        // 全局不衰减后 Delta 伤害持久生效、UI 干净（当前血下降、最大血不变）。
 
         HealthModificationScheduler.tick(entity);
 
-        // Heal ban tick 级强制（每 10 tick 检测各 Float 通道是否有未经授权的增长）
+        // 传导限伤：每 tick 清理死亡/卸载实体状态
+        ConductionDamageLimiter.tick(entity);
+
+        // 血量隐匿：每 tick 清理死亡实体状态（诱饵随机化由 setHealth 触发时进行）
+        SecureHealthClosure.tick(entity);
+
+        // 绝妄生机 tick 级强制（每 10 tick）：通道级（原版/DataParameter）+ 字段级（自研血量实体真实字段）
         if (entity.tickCount % 10 == 0) {
-            HealBanHandler.enforceTick(entity);
+            VitalitySeveranceHandler.enforceTick(entity);
+            VitalitySeveranceHandler.enforceFieldTick(entity);
+            // 健康值字段写入守卫（零织入反射钩子）：拦截受管理自研血量实体的「回血方向」外部篡改
+            net.minecraft.client.yiz.tool.health.HealthWriteGuard.enforce(entity);
         }
         // tick 计数器 +1（供法球系统读取）
         EntityASMUtil.incrementTickCount(entity);
@@ -206,8 +225,11 @@ public abstract class LivingEntityMixin implements HealthDataBridge, ControlData
 
         entity.getEntityData().set(yizmodqzk$FE_GET_HEALTH_DATA, 0F);
         HealthModificationScheduler.removeAll(entity);
-        HealBanConfig.remove(entity);
+        VitalitySeveranceConfig.remove(entity);
         net.minecraft.client.yiz.tool.health.ShieldTracker.remove(entity);
+        ConductionDamageLimiter.removeAll(entity);
+        SecureHealthClosure.removeAll(entity);
+        net.minecraft.client.yiz.tool.health.HealthWriteGuard.remove(entity);
     }
 
     // ==================== NBT 持久化 ====================
@@ -268,7 +290,8 @@ public abstract class LivingEntityMixin implements HealthDataBridge, ControlData
             if (net.minecraft.client.yiz.core.SpellSourceTracker.get() == null) net.minecraft.client.yiz.core.SpellSourceTracker.set("spell");
             var resInst = self.getEffect(net.minecraft.world.effect.MobEffects.DAMAGE_RESISTANCE);
             if (resInst != null) {
-                float capped = Math.min((resInst.getAmplifier() + 1) * 0.05f, 0.90f);
+                // 原版抗性：每级减免 20%（(amp+1)×20%），抗性5=100% 封顶 90%
+                float capped = Math.min((resInst.getAmplifier() + 1) * 0.20f, 0.90f);
                 amount *= (1.0f - capped);
                 self.removeEffect(net.minecraft.world.effect.MobEffects.DAMAGE_RESISTANCE);
                 yizmodqzk$SPELL_RES_BACKUP.put(self, resInst);
@@ -451,6 +474,12 @@ public abstract class LivingEntityMixin implements HealthDataBridge, ControlData
         // 卢登激荡：捕获 overkill 候选（玩家直接攻击且本次将致死时）
         net.minecraft.client.yiz.handler.LudenOverkillHandler.captureIfLethal(self, source, amount);
 
+        // ── 传导限伤引擎（最后）：统一限伤核心——丢弃模组原值，衰减→限伤 得放行量 ──
+        // 位置在所有减伤/增幅之后 → 是「最终放行量」限流，不破坏破限恢复 / DamageValueModifierRegistry /
+        // SPELL 抗性 / 攻方增幅 / 熔岩 / ARMOR-SPELL_DEFENSE 指数减伤。
+        // 不豁免任何来源（kill/环境伤害一律限）；CD 内全挡由 INVINCIBILITY_MULT 无敌帧天然实现（onHurtPre cancel）。
+        amount = ConductionDamageLimiter.limitHurt(self, source, amount, self.level().getGameTime());
+
         return Math.max(0, amount);
     }
 
@@ -467,13 +496,27 @@ public abstract class LivingEntityMixin implements HealthDataBridge, ControlData
      * 如果禁疗计算抛出异常，直接返回原始值，不拦截。</p>
      */
     @ModifyVariable(method = "setHealth", at = @At("HEAD"), argsOnly = true)
-    private float yizmodqzk$modifyHealthForHealBan(float newHealth) {
+    private float yizmodqzk$modifyHealthForVitalitySeverance(float newHealth) {
         // 如果 ASM 已在 heal() 中处理过禁疗，跳过
-        if (EntityASMUtil.consumeHealBanFlag()) {
+        if (EntityASMUtil.consumeVitalitySeveranceFlag()) {
             return newHealth;
         }
 
         LivingEntity self = (LivingEntity) (Object) this;
+
+        // 血量外部存储（flashfur 式）：SECURE_PULSE &gt; 0 的实体逻辑血量写外部哈希表。
+        // 已 override setHealth 的实体（如辖界者）不触发本注入（override 不走 super.setHealth）；
+        // 未 override 的 secure 实体由本注入兜底：限伤后写表，vanilla 字段写真值。
+        if (SecureHealthClosure.isSecure(self)) {
+            if (!net.minecraft.client.yiz.tool.health.SecureHealthClosure.isRegistered(self)) {
+                net.minecraft.client.yiz.tool.health.SecureHealthClosure.register(self, self.getHealth());
+            }
+            // 统一限伤：丢弃模组 setHealth 原值，扣血方向自行限伤设血（治疗方向放行）
+            float next = ConductionDamageLimiter.limitSetHealth(self, newHealth, self.level().getGameTime());
+            next = Math.max(0.0F, next);
+            net.minecraft.client.yiz.tool.health.SecureHealthClosure.setHealth(self, next);
+            return next; // vanilla 字段 = 真实值（血条正常）
+        }
 
         // === 保护态生命值纠正（ASM 原逻辑移入 Mixin）：确保血量 ≥1, 非 NaN ===
         if (net.minecraft.client.yiz.core.PlayerClassSwapper.isProtectedByUuid(self.getStringUUID())) {
@@ -524,6 +567,9 @@ public abstract class LivingEntityMixin implements HealthDataBridge, ControlData
             }
             // 注册表减伤（饰品 EffectTag，yizxian 注册）
             newHealth = DamageReductionRegistry.applyBeforeSetHealth(self, newHealth);
+            // ── 传导统一限伤（最后）：丢弃模组 setHealth 原值，扣血方向自行限伤设血 ──
+            // 来自 hurt 流程（已限伤）→ 放行；外部直接 setHealth → 自行限伤（不豁免任何来源）。
+            newHealth = ConductionDamageLimiter.limitSetHealth(self, newHealth, self.level().getGameTime());
             return newHealth;
         }
 
@@ -534,13 +580,13 @@ public abstract class LivingEntityMixin implements HealthDataBridge, ControlData
             float healing = newHealth - current;
 
             // 1. 检查 API 禁疗配置（百分比 + 固定值）
-            var config = HealBanConfig.get(self);
+            var config = VitalitySeveranceConfig.get(self);
             if (config != null) {
                 healing = config.apply(healing);
             }
 
             // 2. 检查临时禁疗（来自攻击者主动施加）
-            float tempBan = net.minecraft.client.yiz.tool.health.HealBanHandler.getBanFactor(self);
+            float tempBan = net.minecraft.client.yiz.tool.health.VitalitySeveranceHandler.getBanFactor(self);
             if (tempBan > 0) {
                 healing *= (1.0f - Math.min(1.0f, tempBan));
             }
@@ -557,22 +603,40 @@ public abstract class LivingEntityMixin implements HealthDataBridge, ControlData
      */
     @Inject(method = "setHealth", at = @At("RETURN"))
     private void yizmodqzk$onSetHealth(CallbackInfo ci) {
-        HealBanHandler.updateBaseline((LivingEntity) (Object) this);
+        VitalitySeveranceHandler.updateBaseline((LivingEntity) (Object) this);
     }
 
     // ==================== 投射物免疫 ====================
 
     @Inject(method = "hurt", at = @At("HEAD"), cancellable = true)
     private void yizmodqzk$onHurtPre(DamageSource source, float amount, CallbackInfoReturnable<Boolean> cir) {
+        LivingEntity self = (LivingEntity) (Object) this;
+
+        // ── 破时：攻击者带破时（BYPASSING 标记）→ 清目标无敌帧（确保命中）。
+        // 伤害（最初梦幻等）由通用攻击方钩子 applyDreamDamage 统一应用（Player.attack / Mob.doHurtTarget / 辖界者 hit），
+        // 不依赖目标 hurt —— 自研血量实体免疫期间 hurt 返回 false 不走 super.hurt，onHurtPre 不触发也能命中。
+        if (!self.level().isClientSide() && source.getEntity() instanceof LivingEntity poshiAttacker
+                && net.minecraft.client.yiz.editor.PoshiBypassBridge.shouldBypass(poshiAttacker)) {
+            self.invulnerableTime = 0;
+        }
+
+        // ── 闪避 / 无敌帧（DODGE_CHANCE / INVINCIBILITY_MULT）──
+        // 泛化至任意实体：玩家 override 的 hurt() 最终调用 super.hurt()（本方法），同样在此被处理。
+        // 受击后 N tick 完全无敌（INVINCIBILITY_MULT）天然构成"防刷伤间隙"，传导引擎不再单独设间隙。
+        if (net.minecraft.client.yiz.handler.AttackInvulnerabilityTracker.onHurtHead(self)
+                == net.minecraft.client.yiz.handler.AttackInvulnerabilityTracker.HurtHeadResult.CANCEL) {
+            cir.setReturnValue(false);
+            return;
+        }
+
         // ── CDR 破无敌帧（攻击来源）──
         // 1.21.1 DamageSource.getEntity() 即返回"造成者"(causer)：玩家射出的箭/法球也会解析为玩家本身，
         // 因此无需额外兜底；getDirectEntity() 才是箭这类直接实体。
         if (source.getEntity() instanceof LivingEntity attacker)
-            net.minecraft.client.yiz.handler.InvulnBreakHandler.apply(attacker, (LivingEntity)(Object)this);
+            net.minecraft.client.yiz.handler.InvulnBreakHandler.apply(attacker, self);
 
         // ── 投射物免疫 ──
         if (source.is(net.minecraft.tags.DamageTypeTags.IS_PROJECTILE)) {
-            LivingEntity self = (LivingEntity) (Object) this;
             var inst = self.getAttribute(YizAttributes.PROJECTILE_IMMUNITY);
             if (inst != null) {
                 double v = inst.getValue();
@@ -615,6 +679,11 @@ public abstract class LivingEntityMixin implements HealthDataBridge, ControlData
         if (!cir.getReturnValue()) return;
         LivingEntity self = (LivingEntity) (Object) this;
         if (self.level().isClientSide()) return;
+
+        // ── 无敌帧激活：受击确实扣血后激活 INVINCIBILITY_MULT（N tick 完全无敌）──
+        // 泛化至任意实体；放在攻击者检查之前，环境伤害（掉落/火焰等）同样触发。
+        net.minecraft.client.yiz.handler.AttackInvulnerabilityTracker.onHurtSuccess(
+            self, self.level().getGameTime());
 
         Entity srcEntity = source.getEntity();
         if (!(srcEntity instanceof LivingEntity attacker)) return;
@@ -691,6 +760,11 @@ public abstract class LivingEntityMixin implements HealthDataBridge, ControlData
                 if (ls > 0) attacker.heal((float)(amount * ls / 100.0));
             }
         }
+
+        // ── 绝妄生机：统一施加入口（率/时间/注册表聚合）──
+        net.minecraft.client.yiz.tool.health.VitalitySeverance.apply(attacker, self);
+
+        // （最初梦幻已移至 onHurtPre hurt HEAD 最前，绕过自研血量实体免疫/无敌帧；此处不再消费）
     }
 
     // ==================== 击退免疫 ====================
@@ -701,11 +775,8 @@ public abstract class LivingEntityMixin implements HealthDataBridge, ControlData
     private void yizmodqzk$onKnockback(double d0, double d1, double d2, CallbackInfo ci) {
         LivingEntity self = (LivingEntity) (Object) this;
         var inst = self.getAttribute(YizAttributes.KNOCKBACK_IMMUNITY);
-        if (inst != null) {
-            double v = inst.getValue();
-            if (v >= 100.0 || (v > 0 && Math.random() < v / 100.0)) {
-                ci.cancel();
-            }
+        if (inst != null && inst.getValue() > 0) {
+            ci.cancel(); // 属性 >0 = 完全免疫击退
         }
     }
 

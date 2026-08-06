@@ -73,6 +73,12 @@ public final class NetworkHandler {
             S2CBenleixiWindowPayload.STREAM_CODEC,
             S2CBenleixiWindowPayload::handle
         );
+        // 血量隐匿同步：S2C 把服务端真实血量发给客户端闭包（血条/反馈正常）
+        registrar.playToClient(
+            S2CSecureHealthPayload.TYPE,
+            S2CSecureHealthPayload.STREAM_CODEC,
+            S2CSecureHealthPayload::handle
+        );
         registrar.playToServer(
             net.minecraft.client.yiz.editor.C2SSkillEnhancePayload.TYPE,
             net.minecraft.client.yiz.editor.C2SSkillEnhancePayload.STREAM_CODEC,

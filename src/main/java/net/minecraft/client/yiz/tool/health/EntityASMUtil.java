@@ -87,7 +87,11 @@ public final class EntityASMUtil {
      */
     private static void triggerDeathIfDead(LivingEntity entity) {
         if (!deathTriggerEnabled) return;
-        if (entity.getHealth() > 0.0F) return;
+        // 不依赖 getHealth() 注入（部分实体的 override 在部分路径不合并 delta，判断不可靠）：
+        // 直接用 delta 判断「有效血量 = maxHealth + delta ≤ 0」即死亡（delta 是 SynchedEntityData，写入可靠）
+        float delta = getHealthDelta(entity);
+        if (delta >= 0) return;
+        if (entity.getMaxHealth() + delta > 0.0F) return;
 
         MethodHandle mh = getDieMethodHandle();
         if (mh == null) return;
@@ -130,7 +134,7 @@ public final class EntityASMUtil {
      * 自动裁剪：累计结果若 > 0 则归零（delta 不允许为正）。
      * <p>
      * 同时会对目标实体上<b>所有</b> Float 类型的 DataParameter 施加等量伤害，
-     * 以覆盖其他模组的自定义血量系统（如泰坦生物的 TITAN_HEALTH）。
+     * 以覆盖其他模组的自定义血量系统。
      * </p>
      */
     public static void addDelta(LivingEntity entity, float amount) {
@@ -155,23 +159,51 @@ public final class EntityASMUtil {
         }
 
         // 2. 通用打击：直接修改该实体上所有 Float DataParameter 通道
-        //    捕获其他模组的自定义血量（EntityTitan 的 TITAN_HEALTH 等）
-        for (EntityDataAccessor<Float> channel : HealthChannelScanner.getFloatChannels(entity)) {
-            float value = entity.getEntityData().get(channel);
-            float newValue = Math.max(0, value + amount);
-            entity.getEntityData().set(channel, newValue);
-        }
+        //    捕获其他模组的自定义血量（DataParameter 中存巨量 HP 的实体等）。
+        //    独立 try-catch：某通道异常不得中断后续（尤其第 4 步死亡触发）
+        try {
+            for (EntityDataAccessor<Float> channel : HealthChannelScanner.getFloatChannels(entity)) {
+                // 跳过 delta 通道（FE_GET_HEALTH_DATA）：由第 1 层 delta 系统处理，避免 max(0,..) 清负 delta
+                if (channel.id() == DirectHealthFallback.DELTA_ACCESSOR_ID) continue;
+                float value = entity.getEntityData().get(channel);
+                float newValue = Math.max(0, value + amount);
+                entity.getEntityData().set(channel, newValue);
+            }
+        } catch (Throwable ignored) {}
 
-        // 3. 最终保底：反射直接修改 DataItem[] 内部值
-        //    确保上述两步未覆盖的 Float 数据通道也能被打到
+        // 3. 最终保底：反射直接修改 DataItem[] 内部值（内部已 try-catch）
         DirectHealthFallback.damageAll(entity, amount);
 
-        // 更新禁疗跟踪基线，使 tick 级强制基于最新血量判断
-        HealBanHandler.updateBaseline(entity);
+        // 更新禁疗跟踪基线
+        try { VitalitySeveranceHandler.updateBaseline(entity); } catch (Throwable ignored) {}
 
         // 4. 死亡触发：若有效血量 ≤ 0，通过反射调用 die() 触发原版死亡事件
-        //    解决 Cataclysm 等模组 Boss 重写 hurt() 返回 false 导致无掉落物的问题
+        //    解决部分模组 Boss 重写 hurt() 返回 false 导致无掉落物的问题
         triggerDeathIfDead(entity);
+    }
+
+    /**
+     * 攻方「最初梦幻」通用消费：攻击者带 {@code FIRST_DREAM} → 对目标扣真实血量（绕过目标 hurt 免疫）。
+     *
+     * <p>通用攻击方钩子（Player.attack / Mob.doHurtTarget / 辖界者 hit / 其它模组攻击入口）统一调用——
+     * <b>不依赖目标 hurt</b>（自研血量实体在无敌/免疫期间 hurt 返回 false、不走 super.hurt，
+     * onHurtPre 不触发，这里直接从攻击方扣）。</p>
+     * <ul>
+     *   <li>自研血量实体（EntityHealthLocator 定位到真实血量字段）→ 直接改字段 + 永久禁疗（阻止目标回血弹回）</li>
+     *   <li>原版/未定位 → Delta 通道（全局不衰减，持久）</li>
+     * </ul>
+     */
+    public static void applyDreamDamage(LivingEntity attacker, LivingEntity target) {
+        if (attacker == null || target == null) return;
+        if (attacker.level().isClientSide()) return;
+        var inst = attacker.getAttribute(net.minecraft.client.yiz.attribute.YizAttributes.FIRST_DREAM);
+        if (inst == null || inst.getValue() <= 0) return;
+        float dream = (float) inst.getValue();
+        if (net.minecraft.client.yiz.tool.health.EntityHealthLocator.applyPersistentDamage(target, dream)) {
+            net.minecraft.client.yiz.tool.health.VitalitySeveranceConfig.set(target, 100.0f, 0); // 永久禁疗，堵死目标回血
+        } else {
+            modifyHealth(target, -dream); // 原版/未定位：Delta（不衰减，持久）
+        }
     }
 
     /**
@@ -190,7 +222,7 @@ public final class EntityASMUtil {
             addDelta(entity, delta);
         } else if (delta > 0) {
             // 治疗：先应用禁疗配置（百分比 + 固定值）
-            var ban = HealBanConfig.get(entity);
+            var ban = VitalitySeveranceConfig.get(entity);
             if (ban != null) {
                 delta = ban.apply(delta);
                 if (delta <= 0) return; // 完全被禁疗
@@ -204,7 +236,7 @@ public final class EntityASMUtil {
             DirectHealthFallback.healAll(entity, delta);
 
             // 更新禁疗跟踪基线，防止 tick 级强制将本次治疗也拦截
-            HealBanHandler.updateBaseline(entity);
+            VitalitySeveranceHandler.updateBaseline(entity);
         }
     }
 
@@ -218,17 +250,17 @@ public final class EntityASMUtil {
      * 在 NeoForge 事件钩子和原版逻辑执行之前，对治疗量应用禁疗配置。
      * 对所有 LivingEntity 子类生效，即使其 {@code heal()} 被子类重写。
      */
-    public static float applyHealBan(LivingEntity entity, float healAmount) {
+    public static float applyVitalitySeverance(LivingEntity entity, float healAmount) {
         if (healAmount <= 0) return healAmount;
 
         float result = healAmount;
 
-        var config = HealBanConfig.get(entity);
+        var config = VitalitySeveranceConfig.get(entity);
         if (config != null) {
             result = config.apply(result);
         }
 
-        float tempBan = HealBanHandler.getBanFactor(entity);
+        float tempBan = VitalitySeveranceHandler.getBanFactor(entity);
         if (tempBan > 0) {
             result *= (1.0f - tempBan);
         }
@@ -243,7 +275,7 @@ public final class EntityASMUtil {
      * 消费 ASM 禁疗标记。
      * 供 Mixin 和事件处理器调用，避免在 heal() → setHealth() 链中重复禁疗。
      */
-    public static boolean consumeHealBanFlag() {
+    public static boolean consumeVitalitySeveranceFlag() {
         boolean v = HEAL_BAN_APPLIED_BY_ASM.get();
         HEAL_BAN_APPLIED_BY_ASM.set(false);
         return v;
@@ -302,7 +334,17 @@ public final class EntityASMUtil {
         // 死亡由 die()/remove() 拦截链统一处理，不依赖 getHealth() 返回值。
         float delta = getHealthDelta(living);
         if (delta != 0) {
-            return Math.min(health, living.getMaxHealth() + delta);
+            float ret = Math.min(health, living.getMaxHealth() + delta);
+            // 【调试】弹回定位：getHealth 注入返回值（节流）
+            if (living.tickCount % 40 == 0 && !living.level().isClientSide()) {
+                net.minecraft.client.yiz.tizMod.LOGGER.info("[GetHealth] {} h={} maxHp={} delta={} ret={}",
+                    living.getClass().getSimpleName(), health, living.getMaxHealth(), delta, ret);
+            }
+            return ret;
+        }
+        if (living.tickCount % 40 == 0 && !living.level().isClientSide()) {
+            net.minecraft.client.yiz.tizMod.LOGGER.info("[GetHealth0] {} h={} delta=0",
+                living.getClass().getSimpleName(), health);
         }
 
         return health;
@@ -346,9 +388,9 @@ public final class EntityASMUtil {
      * 作为保底方案，在 Mixin 和 ASM Agent 均未生效时提供最终防线：
      * <ol>
      *   <li>Delta 截断：修正后的血量不超过 {@code maxHealth + delta}</li>
-     *   <li>HealBan 上限：禁疗激活时，有效血量不得超过 {@code maxHealth}</li>
+     *   <li>VitalitySeverance 上限：禁疗激活时，有效血量不得超过 {@code maxHealth}</li>
      * </ol>
-     * 这确保即使泰坦类实体在 DataParameter 中存储了巨量 HP，
+     * 这确保即使部分模组实体在 DataParameter 中存储了巨量 HP，
      * {@code getHealth()} 返回的是封顶后的有效值，死亡检测可以正常触发。
      * </p>
      *
@@ -363,9 +405,9 @@ public final class EntityASMUtil {
             ? Math.min(originalHealth, entity.getMaxHealth() + delta)
             : originalHealth;
 
-        // 2. HealBan 上限：禁疗激活时，有效血量不得超过 maxHealth
-        //    防止泰坦类实体在 DataParameter 中存储巨量 HP 导致打不死
-        if (HealBanConfig.get(entity) != null) {
+        // 2. VitalitySeverance 上限：禁疗激活时，有效血量不得超过 maxHealth
+        //    防止部分模组实体在 DataParameter 中存储巨量 HP 导致打不死
+        if (VitalitySeveranceConfig.get(entity) != null) {
             return Math.min(afterDelta, entity.getMaxHealth());
         }
 

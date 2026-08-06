@@ -17,7 +17,7 @@ import java.lang.reflect.Method;
  * <p>
  * 不受以下因素影响：
  * <ul>
- *   <li>实体重写 {@code getHealth()} 返回自定义值（如 EntityTitan）</li>
+ *   <li>实体重写 {@code getHealth()} 返回自定义值（不走原版血量）</li>
  *   <li>自定义伤害管道中的类型黑名单、伤害阈值</li>
  *   <li>无敌帧计时器</li>
  *   <li>事件系统未触发</li>
@@ -37,6 +37,21 @@ public final class DirectHealthFallback {
     private static final Field IS_DIRTY;
     private static final Method ON_SYNCED_DATA_UPDATED;
     private static final boolean AVAILABLE;
+
+    /** delta 通道（yizmodqzk$FE_GET_HEALTH_DATA）的 accessor id —— 由第 1 层 delta 系统处理，第 2/3 层都必须跳过，
+     *  否则 Math.max(0, cur+amount) 会把负 delta 归 0（最初梦幻/Delta 伤害回弹）。 */
+    public static final int DELTA_ACCESSOR_ID = initDeltaAccessorId();
+
+    private static int initDeltaAccessorId() {
+        try {
+            Field f = LivingEntity.class.getDeclaredField("yizmodqzk$FE_GET_HEALTH_DATA");
+            f.setAccessible(true);
+            EntityDataAccessor<?> accessor = (EntityDataAccessor<?>) f.get(null);
+            return accessor != null ? accessor.id() : -1;
+        } catch (Exception e) {
+            return -1;
+        }
+    }
 
     static {
         Field itemsField = null;
@@ -129,13 +144,13 @@ public final class DirectHealthFallback {
         applyToAllFloatItems(entity, amount, false);
     }
 
-    // ==================== 公用遍历（供 HealBanHandler.enforceTick 使用） ====================
+    // ==================== 公用遍历（供 VitalitySeveranceHandler.enforceTick 使用） ====================
 
     /**
      * 遍历实体的所有 Float DataItem。
      * <p>
      * 使用与 {@link #applyToAllFloatItems} 相同的方式访问 {@code itemsById} 数组，
-     * 确保不会遗漏任何 Float 数据通道（包括泰坦类模组通过反射等方式注册的）。
+     * 确保不会遗漏任何 Float 数据通道（包括其他模组通过反射等方式注册的）。
      * </p>
      *
      * @param entity   目标实体
@@ -186,6 +201,9 @@ public final class DirectHealthFallback {
                 EntityDataAccessor<?> accessor = item.getAccessor();
                 if (accessor == null) continue;
                 if (accessor.serializer() != EntityDataSerializers.FLOAT) continue;
+                // 跳过 delta 通道（yizmodqzk$FE_GET_HEALTH_DATA）：由第 1 层 delta 系统处理，
+                // 否则 max(0, cur+amount) 会把负 delta 归 0 → Delta/最初梦幻伤害回弹
+                if (accessor.id() == DELTA_ACCESSOR_ID) continue;
 
                 float current = (Float) item.getValue();
                 float newValue = clamp ? Math.max(0, current + amount) : current + amount;

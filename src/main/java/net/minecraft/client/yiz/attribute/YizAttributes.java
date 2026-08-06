@@ -774,6 +774,73 @@ public final class YizAttributes {
         return STACK_MODES.getOrDefault(attr, StackMode.MULTIPLY);
     }
 
+    // ═══════════════════════════════════════════════════════════
+    //  禁疗 + 特殊伤害属性（2026-08-05 新增，攻方消费于 hurt RETURN）
+    // ═══════════════════════════════════════════════════════════
+
+    /**
+     * 禁疗率 — 攻击者拥有该属性时，目标每次治疗被削减等量百分比。
+     * <p>值域 0~100，1 = 1%。消费：{@code LivingEntityMixin.onHurtReturn} → VitalitySeveranceConfig 治疗削减。</p>
+     */
+    public static final Holder<Attribute> VITALITY_SEVERANCE_RATE =
+        ATTRIBUTES.register("vitality_severance_rate",
+            () -> new RangedAttribute("attribute.yizmodqzk.vitality_severance_rate", 0.0, 0.0, 100.0)
+                .setSyncable(true));
+
+    /**
+     * 禁疗时间 — 攻击者拥有该属性时，目标被完全禁疗该秒数；连续攻击刷新时长（取最新）。
+     * <p>值域 ≥0，秒。消费：{@code LivingEntityMixin.onHurtReturn} → VitalitySeveranceHandler.addTempBan（put 覆盖天然刷新式）。</p>
+     */
+    public static final Holder<Attribute> VITALITY_SEVERANCE_TIME =
+        ATTRIBUTES.register("vitality_severance_time",
+            () -> new RangedAttribute("attribute.yizmodqzk.vitality_severance_time", 0.0, 0.0, Double.MAX_VALUE)
+                .setSyncable(true));
+
+    /**
+     * 最初梦幻 — 攻击者拥有该属性时，每次攻击用 {@code EntityASMUtil.modifyHealth} 对目标额外扣等量血
+     * （Delta 通道，绕过 hurt / 无敌帧 / 减伤）。
+     * <p>值域 ≥0，点。消费：{@code LivingEntityMixin.onHurtReturn}。</p>
+     */
+    public static final Holder<Attribute> FIRST_DREAM =
+        ATTRIBUTES.register("first_dream",
+            () -> new RangedAttribute("attribute.yizmodqzk.first_dream", 0.0, 0.0, Double.MAX_VALUE)
+                .setSyncable(true));
+
+    // ═══════════════════════════════════════════════════════════
+    //  传导限伤属性（2026-08-07 新增，目标方消费于 hurt 层，参考旧项目 SecureConductionCore）
+    //  仅做「单发上限」限伤；CD = INVINCIBILITY_MULT 无敌帧（受击结算后 N tick 全挡 = 传导 CD）。
+    // ═══════════════════════════════════════════════════════════
+
+    /**
+     * 单发伤害上限 — 目标拥有该属性时，单次有攻击者的伤害被限制为
+     * {@code max(3, maxHealth × value/100)}（value = 最大生命值百分比，固定比例不随当前血量变化）。
+     * <p>值域 ≥0。0 = 禁用单发限。消费：{@code LivingEntityMixin.modifyHurtAmount} 尾部 → ConductionDamageLimiter.conduct。</p>
+     */
+    public static final Holder<Attribute> CONDUCTION_CAP =
+        ATTRIBUTES.register("conduction_cap",
+            () -> new RangedAttribute("attribute.yizmodqzk.conduction_cap", 0.0, 0.0, Double.MAX_VALUE)
+                .setSyncable(true));
+
+    /**
+     * 传导受击间隔（CD）— 目标每次实际扣血后 N tick 内不再接受任何伤害（防连点快速耗血）。
+     * <p>值域 ≥0，tick（20 = 1 秒）。0 = 禁用 CD。消费：辖界者实体 override hurt（写死保底 20）。</p>
+     */
+    public static final Holder<Attribute> CONDUCTION_INTERVAL =
+        ATTRIBUTES.register("conduction_interval",
+            () -> new RangedAttribute("attribute.yizmodqzk.conduction_interval", 0.0, 0.0, Double.MAX_VALUE)
+                .setSyncable(true));
+
+    /**
+     * 血量隐匿开关 — 目标拥有该属性（&gt;0）时，真实血量藏在 Lambda 闭包 + XOR 噪音，
+     * vanilla 血量字段写随机游走诱饵（防外部内存扫描读取真实血量）。
+     * <p>值域 0~1（二元开关）。0 = 关闭（默认，Delta/EntityHealthLocator 等主路径零改动）；
+     * &gt;0 = 启用（该实体从上述系统显式排除）。消费：{@code SecureHealthClosure} + {@code LivingEntityMixin} 门控。</p>
+     */
+    public static final Holder<Attribute> SECURE_PULSE =
+        ATTRIBUTES.register("secure_pulse",
+            () -> new RangedAttribute("attribute.yizmodqzk.secure_pulse", 0.0, 0.0, 1.0)
+                .setSyncable(true));
+
     /** 获取经过法术提升加成后的有效法术强度 = SPELL_POWER × (1 + MAGIC_DAMAGE/100)。 */
     public static double getEffectiveSpellPower(net.minecraft.world.entity.LivingEntity entity) {
         var sp = entity.getAttribute(SPELL_POWER);

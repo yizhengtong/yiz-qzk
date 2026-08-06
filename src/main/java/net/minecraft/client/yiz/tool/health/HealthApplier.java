@@ -14,7 +14,7 @@ import java.util.Set;
  * <ul>
  *   <li>将聚合结果写入 {@link LivingEntity#setHealth(float)}</li>
  *   <li>处理 DELTA / OVERRIDE 等特殊模式</li>
- *   <li>执行禁疗检查（调用 {@link HealBanValueCalculator}）</li>
+ *   <li>执行禁疗检查（调用 {@link VitalitySeveranceValueCalculator}）</li>
  *   <li>处理 bypass / 死亡判定</li>
  * </ul>
  */
@@ -63,7 +63,7 @@ public final class HealthApplier {
 
         // ========== 4. 禁疗检查 ==========
         if (computed > currentHealth) {
-            var apiBan = HealBanConfig.get(entity);
+            var apiBan = VitalitySeveranceConfig.get(entity);
             if (apiBan != null) {
                 double healingAmount = computed - currentHealth;
                 if (healingAmount > 0) {
