@@ -822,15 +822,6 @@ public final class YizAttributes {
                 .setSyncable(true));
 
     /**
-     * 传导受击间隔（CD）— 目标每次实际扣血后 N tick 内不再接受任何伤害（防连点快速耗血）。
-     * <p>值域 ≥0，tick（20 = 1 秒）。0 = 禁用 CD。消费：辖界者实体 override hurt（写死保底 20）。</p>
-     */
-    public static final Holder<Attribute> CONDUCTION_INTERVAL =
-        ATTRIBUTES.register("conduction_interval",
-            () -> new RangedAttribute("attribute.yizmodqzk.conduction_interval", 0.0, 0.0, Double.MAX_VALUE)
-                .setSyncable(true));
-
-    /**
      * 血量隐匿开关 — 目标拥有该属性（&gt;0）时，真实血量藏在 Lambda 闭包 + XOR 噪音，
      * vanilla 血量字段写随机游走诱饵（防外部内存扫描读取真实血量）。
      * <p>值域 0~1（二元开关）。0 = 关闭（默认，Delta/EntityHealthLocator 等主路径零改动）；
