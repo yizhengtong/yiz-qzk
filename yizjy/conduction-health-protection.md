@@ -41,7 +41,7 @@ limited = min(reduced, cap)   —— cap = maxHealth × CONDUCTION_CAP%
 语义：原始伤害先被减伤/格挡衰减；衰减后仍超上限（MAX 巨伤）才被 cap 兜底；衰减后已低于上限按衰减后值扣。
 
 - 属性 `CONDUCTION_CAP`（上限%，辖界者挂 25%）：`cap = max(3, maxHealth × cap%/100)`。未挂载/为 0 → **保底 25%**（写死，防属性鉴权失败穿透）。
-- 属性 `CONDUCTION_INTERVAL`（受击 CD tick，辖界者挂 20=1s）：每次实际扣血后 N tick 内不再接受任何伤害（flashfur iFrames）。未挂载/为 0 → **保底 20**。
+- **受击 CD = 无敌帧属性 `INVINCIBILITY_MULT` 的时间**（用户定：传导 CD 就是无敌帧定义的时间）。`conductionHitCdTicks()` 每次 hurt 读 INVINCIBILITY_MULT → **编辑工具改无敌帧 → 传导 CD 实时跟随**。辖界者挂 16tick=0.8s。未挂载/为 0 → 保底 20。**无独立 CONDUCTION_INTERVAL 属性**（曾引入，用户指出应直接用无敌帧属性，已删）。
 - **寰宇支配之剑连点**：每刀 hurt(真伤) + setHealth(0) 重定向 = 两次扣血，CD 让只吃第一下（真伤那次），连点 1 秒内后续全挡。
 - 400 血实测：普通伤 80 → 衰减 59（<cap 按 59）；MAX 巨伤 → 限到 100（25%）；每 1 秒最多扣 100，4 秒打死。**绝非一刀秒**。
 
