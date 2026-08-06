@@ -32,11 +32,17 @@ public class NoCollisionMixin {
         }
     }
 
+    @Inject(method = "isPushable", at = @At("RETURN"), cancellable = true)
+    private void yizmodqzk$onIsPushable(CallbackInfoReturnable<Boolean> cir) {
+        if (cir.getReturnValue() && isNoCollision((Entity) (Object) this)) {
+            cir.setReturnValue(false);
+        }
+    }
+
     private static boolean isNoCollision(Entity entity) {
         if (!(entity instanceof LivingEntity le)) return false;
         var inst = le.getAttribute(YizAttributes.NO_COLLISION);
         if (inst == null) return false;
-        double v = inst.getValue();
-        return v >= 100.0 || (v > 0 && Math.random() < v / 100.0);
+        return inst.getValue() > 0; // 属性 >0 = 完全无视碰撞
     }
 }

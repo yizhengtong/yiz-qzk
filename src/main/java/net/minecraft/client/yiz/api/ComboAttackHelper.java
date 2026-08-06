@@ -69,6 +69,10 @@ public final class ComboAttackHelper {
 
         // 设置递归守卫
         COMBO_ATTACKING.set(true);
+        // 防御性先移除旧修饰符：连续触发 hurt 时，
+        // 上一次 executeCombo 的修饰符可能未及时移除 → addTransientModifier 会抛
+        // "Modifier is already applied on this attribute!"（AttributeInstance.addModifier:79）。
+        attack.removeModifier(COMBO_MODIFIER_ID);
         attack.addTransientModifier(mod);
 
         // 反射拿到 attackStrengthTicker，循环中复用

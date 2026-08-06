@@ -70,6 +70,12 @@ public final class SkillConfigStorage {
 
     public static Data get(UUID playerId) { return STORE.get(playerId); }
 
+    /** 清空指定玩家的内存数据（登出/切存档时调用，防止跨存档泄漏）。 */
+    public static void clear(UUID playerId) { STORE.remove(playerId); }
+
+    /** 清空全部（全服玩家登出/服务器停止时）。 */
+    public static void clearAll() { STORE.clear(); }
+
     // ── 持久化 ──
 
     /** 保存全部容器到 PlayerDataAPI（Menu 关闭时调用）。 */

@@ -212,16 +212,26 @@ public final class ItemAttributeHandler {
 
     private static void setVanillaModifier(ItemStack stack, Holder<Attribute> attribute,
                                            String idKey, double value) {
-        ResourceLocation id = ResourceLocation.fromNamespaceAndPath("yizmodqzk", idKey);
-
         ItemAttributeModifiers oldMods = stack.getOrDefault(DataComponents.ATTRIBUTE_MODIFIERS,
                 ItemAttributeModifiers.EMPTY);
         ItemAttributeModifiers.Builder builder = ItemAttributeModifiers.builder();
 
+        // 复用该属性在本物品上已有的 modifier id（同一物品重复 set 幂等更新）；
+        // 但旧固定 id（path == idKey，无随机后缀，历史版本写入）视为待迁移：
+        // 丢弃并生成物品唯一 id —— 否则多件旧装备共用固定 id 仍会被原版 AttributeMap
+        // 按 id 去重（putIfAbsent）互相覆盖，累加丢失
+        ResourceLocation id = null;
         for (var entry : oldMods.modifiers()) {
-            if (!entry.attribute().is(attribute)) {
+            if (entry.attribute().is(attribute)) {
+                if (!entry.modifier().id().getPath().equals(idKey)) {
+                    id = entry.modifier().id();
+                }
+            } else {
                 builder.add(entry.attribute(), entry.modifier(), entry.slot());
             }
+        }
+        if (id == null) {
+            id = uniqueModifierId(idKey);
         }
 
         builder.add(attribute,
@@ -229,6 +239,17 @@ public final class ItemAttributeHandler {
                 EquipmentSlotGroup.ANY);
 
         stack.set(DataComponents.ATTRIBUTE_MODIFIERS, builder.build());
+    }
+
+    /**
+     * 为每个物品独立生成 modifier id（idKey + 8 位随机 hex）。
+     * <p>原版 {@code AttributeInstance} 按 modifier id 去重（{@code putIfAbsent}），
+     * 若多件不同部位装备上的同一属性共用相同 id，穿戴时后 add 的会 remove 掉先 add 的，
+     * 属性值不累加、只保留最后一件。唯一 id 让每件装备的 modifier 独立累加。</p>
+     */
+    private static ResourceLocation uniqueModifierId(String idKey) {
+        String rand = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        return ResourceLocation.fromNamespaceAndPath("yizmodqzk", idKey + "_" + rand);
     }
 
     // ═══════════════════════════════════════════════════════════

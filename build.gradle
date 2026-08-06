@@ -26,7 +26,11 @@ sourceSets.main.resources {
 }
 
 repositories {
-    // Add here additional repositories if required by some of the dependencies below.
+    // 本地离线仓库（maven.neoforged.net TLS 阻断的绕过方案，见 yizjy/neoforge-maven-offline-build.md）
+    maven {
+        url = uri('file:///D:/ZM/yizgzq/local-maven-repo')
+        metadataSources { mavenPom(); gradleMetadata() }
+    }
 }
 
 base {
@@ -101,6 +105,11 @@ afterEvaluate {
     tasks.matching { it.name == 'runClient' }.configureEach {
         dependsOn agentJar
     }
+    // 把本地仓库移到 index 0，覆盖 ModDevGradle 的 sortFirst（否则 maven.neoforged.net 排第一，连接失败即整体报错）
+    repositories.findAll { it.metaClass.respondsTo(it, 'getUrl') && it.url.toString().contains('local-maven-repo') }.each {
+        repositories.remove(it)
+        repositories.add(0, it)
+    }
 }
 
 // Sets up a dependency configuration called 'localRuntime'.
@@ -119,6 +128,9 @@ dependencies {
     // And its provides the option to then use net.minecraft as the group, and one of; client, server or joined as the module name, plus the game version as version.
     // For all intends and purposes: You can treat this dependency as if it is a normal library you would use.
     implementation "net.neoforged:neoforge:${neo_version}"
+
+    // ASM 字节码分析（getHealth 字节码探测用；与 agentLibs 同版本，本地缓存已有）
+    implementation "org.ow2.asm:asm:9.8"
 
     // Example optional mod dependency with JEI
     // The JEI API is declared for compile time use, while the full JEI artifact is used at runtime

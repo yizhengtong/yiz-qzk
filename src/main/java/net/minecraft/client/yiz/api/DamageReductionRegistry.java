@@ -7,7 +7,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * 伤害减免注册表。
- * <p>由 {@code LivingEntityMixin.modifyHealthForHealBan}（setHealth 拦截层）调用。
+ * <p>由 {@code LivingEntityMixin.modifyHealthForVitalitySeverance}（setHealth 拦截层）调用。
  * 下游通过 {@link #register(HealthModifier)} 注册减免逻辑（如饰品装备减伤）。</p>
  */
 public final class DamageReductionRegistry {

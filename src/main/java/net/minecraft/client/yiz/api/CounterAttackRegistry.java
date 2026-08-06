@@ -62,6 +62,9 @@ public final class CounterAttackRegistry {
         AttributeModifier mod = new AttributeModifier(
                 MODIFIER_ID, (double) (multiplier - 1.0f), AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL
         );
+        // 防御性先移除旧修饰符（同 ComboAttackHelper）：连续触发时残留会导致
+        // addTransientModifier 抛 "Modifier is already applied on this attribute!"
+        attack.removeModifier(MODIFIER_ID);
         attack.addTransientModifier(mod);
 
         // 重置攻击冷却，确保 attack() 不会因冷却为零而打出 0 伤害

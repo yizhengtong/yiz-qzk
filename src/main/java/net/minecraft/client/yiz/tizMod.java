@@ -15,7 +15,7 @@ import net.minecraft.client.yiz.core.registry.ModAttachments;
 import net.minecraft.client.yiz.network.NetworkHandler;
 import net.minecraft.client.yiz.tool.SimpleCommandRegistry;
 import net.minecraft.client.yiz.tool.YizProtectCommand;
-import net.minecraft.client.yiz.tool.health.HealBanHandler;
+import net.minecraft.client.yiz.tool.health.VitalitySeveranceHandler;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
@@ -77,7 +77,7 @@ public class tizMod {
         net.minecraft.client.yiz.tool.YizSetHealthCommand.register();
 
         // 注册禁疗事件处理器（攻击后禁疗 + 治疗拦截）
-        HealBanHandler.register();
+        VitalitySeveranceHandler.register();
 
         // 注册玩家数据附件
         ModAttachments.register(modEventBus);
@@ -102,6 +102,9 @@ public class tizMod {
 
         // 注册自定义属性（暴击率、暴伤等）
         YizAttributes.ATTRIBUTES.register(modEventBus);
+
+        // 加载实体真实血量字段定位缓存（config/yizmodqzk/entity_health_slots.json）
+        net.minecraft.client.yiz.tool.health.EntityHealthLocator.load();
 
         // 创造标签页由下游模组手动注册，不再自动扫描
         // CreativeTabAutoRegistry.init(modEventBus);
@@ -216,6 +219,10 @@ public class tizMod {
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.MINING_ALL);
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.MINING_PENALTY_IMMUNITY);
                 e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.MINING_EFFICIENCY);
+                // 禁疗 + 特殊伤害（2026-08-05 新增）
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.VITALITY_SEVERANCE_RATE);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.VITALITY_SEVERANCE_TIME);
+                e.add(net.minecraft.world.entity.EntityType.PLAYER, YizAttributes.FIRST_DREAM);
             });
 
         // 声明走全槽位汇总的 yizmodqzk 自定义属性（主手/副手/盔甲/饰品槽全部生效）
@@ -297,6 +304,10 @@ public class tizMod {
         net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.FREEZE_DAMAGE);
         net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.SHOCK_DAMAGE);
         net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.KNOCKBACK_DAMAGE);
+        // 禁疗 + 特殊伤害（2026-08-05 新增）
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.VITALITY_SEVERANCE_RATE);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.VITALITY_SEVERANCE_TIME);
+        net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.FIRST_DREAM);
         // 挖掘属性
         net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.MINING_LEVEL);
         net.minecraft.client.yiz.core.sync.EquipmentAttributeSync.registerTrackedAttribute(YizAttributes.MINING_PICKAXE);
@@ -437,8 +448,7 @@ public class tizMod {
             net.minecraft.client.yiz.tool.health.ManaTracker.tickRegen(sp);
             net.minecraft.client.yiz.tool.health.AttributeEffectTicker.tick(sp);
             net.minecraft.client.yiz.handler.ChargedShockTracker.tick(sp);
-            // 受击无敌过期检查（INVINCIBILITY_MULT 限时态）
-            net.minecraft.client.yiz.handler.AttackInvulnerabilityTracker.onPlayerTick(sp, sp.level().getGameTime());
+            // 受击无敌过期检查已由 LivingEntityMixin.onTick（服务端分支）统一处理，泛化至所有实体
         }
     }
 
@@ -498,7 +508,7 @@ public class tizMod {
     }
 
     /** 法术防御镜像：≤20 提供击退韧性，>20 切换为击退免疫+无碰撞。 */
-    private static void mirrorSpellDefense(net.minecraft.world.entity.LivingEntity entity) {
+    public static void mirrorSpellDefense(net.minecraft.world.entity.LivingEntity entity) {
         var inst = entity.getAttribute(YizAttributes.SPELL_DEFENSE);
         if (inst == null) return;
         double val = inst.getValue();
@@ -532,7 +542,7 @@ public class tizMod {
     }
 
     /** 防御力镜像：读 yizmodqzk:armor → 1:1 写到原版 ARMOR + ARMOR_TOUGHNESS。 */
-    private static void mirrorArmor(net.minecraft.world.entity.LivingEntity entity) {
+    public static void mirrorArmor(net.minecraft.world.entity.LivingEntity entity) {
         var inst = entity.getAttribute(YizAttributes.ARMOR);
         if (inst == null) return;
         double armor = inst.getValue();

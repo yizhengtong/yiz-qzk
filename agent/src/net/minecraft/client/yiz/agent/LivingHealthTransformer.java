@@ -74,12 +74,29 @@ public class LivingHealthTransformer implements ClassFileTransformer {
 
         try {
             ClassReader cr = new ClassReader(classfileBuffer);
-            ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_FRAMES);
             String superName = cr.getSuperName();
-
-            ClassVisitor cv = new HealthClassVisitor(cw, className, superName, isModClass, isEntity);
-            cr.accept(cv, ClassReader.EXPAND_FRAMES);
-            return cw.toByteArray();
+            try {
+                // 优先重算栈帧（默认 loader）。原版类 / 简单 mod 类正常。
+                ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_FRAMES);
+                ClassVisitor cv = new HealthClassVisitor(cw, className, superName, isModClass, isEntity);
+                cr.accept(cv, ClassReader.EXPAND_FRAMES);
+                return cw.toByteArray();
+            } catch (Throwable frameFail) {
+                // 复杂 mod 类（如 Legendary-Monsters）重算帧失败：默认 loader 找不到其类型 → TypeNotPresentException。
+                // 注意：不能用自定义 loader 重算帧——成功加载 mod 类型会改变类加载/启动时序，
+                // 触发属性 bake 阶段 swim_speed 等 unbound（Sodium 启动崩溃）。
+                // 方案：fallback 到 COMPUTE_MAXS（只重算 maxs、保留原始栈帧）。本变换注入都是「方法头插段」或
+                // 「返回前值替换」，不改变栈帧结构，保留原始帧安全。
+                System.err.println("[PoshiAgent] COMPUTE_FRAMES fail " + className.replace('/', '.')
+                    + ", fallback safe-mode(COMPUTE_MAXS): " + frameFail.getClass().getSimpleName());
+                // 安全模式：跳过会产生分支的注入（破时 hurt/破无敌 die/remove），
+                // 只做「值替换/开头存值」的帧安全注入（getHealth/heal/isAlive/setHealth）→ 保留原始帧不会 VerifyError。
+                // 注意：COMPUTE_FRAMES + mod loader 对 mod 类重算帧会触发启动时序崩溃（swim_speed unbound），不可用。
+                ClassWriter cw2 = new ClassWriter(cr, ClassWriter.COMPUTE_MAXS);
+                ClassVisitor cv2 = new HealthClassVisitor(cw2, className, superName, isModClass, isEntity, true);
+                cr.accept(cv2, ClassReader.EXPAND_FRAMES);
+                return cw2.toByteArray();
+            }
         } catch (Throwable e) {
             System.err.println("[PoshiAgent] TRANSFORM FAILED for " + className.replace('/', '.')
                 + ": " + e.getClass().getName() + " - " + e.getMessage());
@@ -178,19 +195,37 @@ public class LivingHealthTransformer implements ClassFileTransformer {
         private final String superName;
         private final boolean isModClass;
         private final boolean isEntityOnly;
+        /** 安全模式：只做帧安全的「值替换/开头存值」注入，跳过会产生分支的注入（破时/die/remove）。 */
+        private final boolean safeOnly;
 
         HealthClassVisitor(ClassWriter cw, String className, String superName, boolean isModClass, boolean isEntityOnly) {
+            this(cw, className, superName, isModClass, isEntityOnly, false);
+        }
+
+        HealthClassVisitor(ClassWriter cw, String className, String superName, boolean isModClass, boolean isEntityOnly, boolean safeOnly) {
             super(Opcodes.ASM9, cw);
             this.className = className;
             this.superName = superName;
             this.isModClass = isModClass;
             this.isEntityOnly = isEntityOnly;
+            this.safeOnly = safeOnly;
         }
 
         @Override
         public MethodVisitor visitMethod(int access, String name, String desc, String signature, String[] exceptions) {
             MethodVisitor mv = super.visitMethod(access, name, desc, signature, exceptions);
             if (mv == null) return null;
+
+            // 安全模式（COMPUTE_MAXS fallback）：只注入帧安全的「值替换/开头存值」方法
+            if (safeOnly) {
+                if (isGetHealthMethod(name, desc)) return new GetHealthMethodVisitor(mv, access, name, desc);
+                if (isIsAliveMethod(name, desc)) return new IsAliveMethodVisitor(mv, access, name, desc);
+                if (isIsDeadOrDyingMethod(name, desc)) return new IsDeadOrDyingMethodVisitor(mv, access, name, desc);
+                if (isHealMethod(name, desc)) return new HealMethodVisitor(mv, access, name, desc);
+                if (isSetHealthMethod(name, desc)) return new SetHealthMethodVisitor(mv, access, name, desc);
+                if (isModClass) return new StaticHealthCallVisitor(mv, access, name, desc);
+                return mv;
+            }
 
             // 破时 Agent 绕过
             if (!isEntityOnly && isHurtMethod(name, desc)) {

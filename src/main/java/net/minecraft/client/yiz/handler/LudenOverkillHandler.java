@@ -33,7 +33,7 @@ public final class LudenOverkillHandler {
 
     public static void setCurrentSpill(float amount) { CURRENT_SPILL.set(amount); }
     public static void clearCurrentSpill() { CURRENT_SPILL.remove(); }
-    /** 当前线程是否正在施加卢登溅射伤害（供 modifyHealthForHealBan 跳过减伤，全额扣血）。 */
+    /** 当前线程是否正在施加卢登溅射伤害（供 modifyHealthForVitalitySeverance 跳过减伤，全额扣血）。 */
     public static boolean isSpilling() { return CURRENT_SPILL.get() != null; }
 
     /**

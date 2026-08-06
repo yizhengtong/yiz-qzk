@@ -1,10 +1,10 @@
 package net.minecraft.client.yiz.mixin;
 
 import net.minecraft.client.yiz.core.AttackTargetLock;
-import net.minecraft.client.yiz.api.HealBanAttributeRegistry;
+import net.minecraft.client.yiz.api.VitalitySeveranceAttributeRegistry;
 import net.minecraft.client.yiz.api.SpecialDamageAttributeRegistry;
 import net.minecraft.client.yiz.api.YizModQZKAPI;
-import net.minecraft.client.yiz.tool.health.HealBanConfig;
+import net.minecraft.client.yiz.tool.health.VitalitySeveranceConfig;
 import net.minecraft.client.yiz.tool.damage.AttackContext;
 import net.minecraft.client.yiz.tool.damage.DamageResult;
 import net.minecraft.client.yiz.tool.damage.DamageTag;
@@ -177,12 +177,8 @@ public abstract class AttackInterceptorMixin {
 
         // 1. 伤害属性额外伤害已移除（DamageAttributeRegistry 已删除）
 
-        // 2. 禁疗属性 → 为目标施加禁疗
-        float banPercent = HealBanAttributeRegistry.getPercentTotal(attacker);
-        float banFixed = HealBanAttributeRegistry.getFixedTotal(attacker);
-        if (banPercent > 0 || banFixed > 0) {
-            HealBanConfig.set(livingTarget, banPercent, banFixed);
-        }
+        // 2. 绝妄生机属性 → 统一施加入口（率/时间/注册表聚合）
+        net.minecraft.client.yiz.tool.health.VitalitySeverance.apply(attacker, livingTarget);
 
         // 3. 特殊伤害属性 → 真实伤害 / 破甲 / 破无敌帧
         float trueDmg = SpecialDamageAttributeRegistry.getTrueDamageTotal(attacker);
@@ -200,6 +196,9 @@ public abstract class AttackInterceptorMixin {
 
         // 4. 状态效果属性(攻) → 已迁移至 LivingEntityMixin.hurt() RETURN
         //    以覆盖玩家横扫、弹射物等全部伤害来源（不再限于 Player.attack() 主目标）
+
+        // 5. 最初梦幻：通用攻击方消费（即使目标免疫/无敌也直接扣真实血量，绕过目标 hurt 免疫）
+        net.minecraft.client.yiz.tool.health.EntityASMUtil.applyDreamDamage(attacker, livingTarget);
     }
 
     /** 获取玩家主手武器的破时附魔等级（yizmodqzk:poshi），0 = 无 */

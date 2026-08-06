@@ -16,6 +16,7 @@ public final class PoshiBypassBridge {
 
     @SuppressWarnings("unused")
     public static boolean shouldBypass(Object entity) {
-        return BYPASSING.get() != null && entity instanceof Player;
+        return BYPASSING.get() != null
+            && (entity instanceof Player || entity instanceof PoshiBearer);
     }
 }

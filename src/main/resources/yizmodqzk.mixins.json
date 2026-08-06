@@ -5,6 +5,7 @@
   "compatibilityLevel": "JAVA_21",
   "mixins": [
     "AttackInterceptorMixin",
+    "AttributeInstanceMixin",
     "BlockDestroyProgressMixin",
     "BlockPlayerDestroyMixin",
     "EntityAbolitionMixin",
@@ -16,6 +17,7 @@
     "ItemStackMaxSizeMixin",
     "LivingEntityArmorAbolitionMixin",
     "LivingEntityMixin",
+    "MobMixin",
     "NoCollisionMixin",
     "PlayerJumpMixin",
     "PlayerMiningMixin",

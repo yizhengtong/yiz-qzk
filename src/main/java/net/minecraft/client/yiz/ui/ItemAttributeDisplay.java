@@ -149,6 +149,11 @@ public final class ItemAttributeDisplay {
         yiz("spell_defense",        "魔法抗性",     "点",  1.0);
         yiz("shield_value",         "护盾值",       "点",  1.0);
 
+        // ── 绝妄生机 + 特殊伤害（2026-08-05 新增）────────────
+        yiz("vitality_severance_rate",       "绝妄生机率",   "%",   1.0);
+        yiz("vitality_severance_time",       "绝妄生机时间", "秒",  1.0);
+        yiz("first_dream",          "最初梦幻",   "点",  1.0);
+
         // ── 蓝条系统 ────────────────────────────────────
         yiz("max_mana",             "最大法力值",     "点",  1.0);
         yiz("mana_regen",           "定量法力回复",     "点",  1.0);

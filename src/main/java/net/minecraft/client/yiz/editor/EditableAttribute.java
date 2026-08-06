@@ -15,6 +15,7 @@ import net.minecraft.world.item.component.ItemAttributeModifiers;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 
@@ -182,7 +183,12 @@ public record EditableAttribute(
         yiz("mining_shovel",           "挖掘类：铲",   false, ""),
         yiz("mining_all",              "挖掘类：全",   false, ""),
         yiz("mining_penalty_immunity",  "免疫挖掘惩罚", false, ""),
-        yiz("mining_efficiency",        "挖掘效率",     false, "%")
+        yiz("mining_efficiency",        "挖掘效率",     false, "%"),
+
+        // ── 绝妄生机 + 特殊伤害（2026-08-05 新增）──
+        yiz("vitality_severance_rate",   "绝妄生机率",   false, "%"),
+        yiz("vitality_severance_time",   "绝妄生机时间", false, "秒"),
+        yiz("first_dream",      "最初梦幻",   false, "点")
     );
 
     // ═══════════════════════════════════════════════════════════
@@ -230,11 +236,26 @@ public record EditableAttribute(
     private static void setAttr(ItemStack stack, ResourceLocation attrLoc, String idKey, double value) {
         Holder<Attribute> holder = BuiltInRegistries.ATTRIBUTE.getHolder(attrLoc).orElse(null);
         if (holder == null) return;
-        ResourceLocation modId = ResourceLocation.fromNamespaceAndPath("yizmodqzk", "attr_" + idKey.replace('.', '_'));
         ItemAttributeModifiers old = stack.getOrDefault(DataComponents.ATTRIBUTE_MODIFIERS, ItemAttributeModifiers.EMPTY);
         ItemAttributeModifiers.Builder builder = ItemAttributeModifiers.builder();
+        // 复用本物品该属性已有 id（同一物品重复 set 幂等更新）；
+        // 但旧固定 id（path == legacyPath，无随机后缀，历史版本写入）视为待迁移：
+        // 丢弃并生成物品唯一 id —— 否则多件旧装备共用固定 id 仍会被原版 AttributeMap
+        // 按 id 去重覆盖，累加丢失
+        String legacyPath = "attr_" + idKey.replace('.', '_');
+        ResourceLocation modId = null;
         for (var entry : old.modifiers()) {
-            if (!entry.attribute().is(holder)) builder.add(entry.attribute(), entry.modifier(), entry.slot());
+            if (entry.attribute().is(holder)) {
+                if (!entry.modifier().id().getPath().equals(legacyPath)) {
+                    modId = entry.modifier().id();
+                }
+            } else {
+                builder.add(entry.attribute(), entry.modifier(), entry.slot());
+            }
+        }
+        if (modId == null) {
+            String rand = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+            modId = ResourceLocation.fromNamespaceAndPath("yizmodqzk", legacyPath + "_" + rand);
         }
         builder.add(holder, new AttributeModifier(modId, value, AttributeModifier.Operation.ADD_VALUE), EquipmentSlotGroup.ANY);
         stack.set(DataComponents.ATTRIBUTE_MODIFIERS, builder.build());

@@ -37,7 +37,7 @@ import java.util.TreeSet;
  *
  * <p>JSON 格式：</p>
  * <pre>{
- *   "abolished": ["avaritia:infinity_sword", "modid:item_id"]
+ *   "abolished": ["modid:item_id"]
  * }</pre>
  */
 public final class StartupAbolishConfig {

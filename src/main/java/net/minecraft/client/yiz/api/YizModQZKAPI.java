@@ -415,9 +415,9 @@ public final class YizModQZKAPI {
      * @param percent     百分比禁疗（0~100），如 50 = 削减一半治疗
      * @param fixedAmount 固定值禁疗（≥0），如 10 = 每次治疗减 10 点
      */
-    public static void setHealBan(LivingEntity entity, float percent, float fixedAmount) {
+    public static void setVitalitySeverance(LivingEntity entity, float percent, float fixedAmount) {
         if (entity == null) return;
-        net.minecraft.client.yiz.tool.health.HealBanConfig.set(entity, percent, fixedAmount);
+        net.minecraft.client.yiz.tool.health.VitalitySeveranceConfig.set(entity, percent, fixedAmount);
     }
 
     /**
@@ -430,11 +430,11 @@ public final class YizModQZKAPI {
      * @param entity  目标实体
      * @param percent 禁疗百分比（0~100）
      */
-    public static void setHealBanPercent(LivingEntity entity, float percent) {
+    public static void setVitalitySeverancePercent(LivingEntity entity, float percent) {
         if (entity == null) return;
-        var existing = net.minecraft.client.yiz.tool.health.HealBanConfig.get(entity);
+        var existing = net.minecraft.client.yiz.tool.health.VitalitySeveranceConfig.get(entity);
         float fixed = existing != null ? existing.fixedAmount() : 0;
-        net.minecraft.client.yiz.tool.health.HealBanConfig.set(entity, percent, fixed);
+        net.minecraft.client.yiz.tool.health.VitalitySeveranceConfig.set(entity, percent, fixed);
     }
 
     /**
@@ -447,11 +447,11 @@ public final class YizModQZKAPI {
      * @param entity      目标实体
      * @param fixedAmount 固定禁疗值（≥0）
      */
-    public static void setHealBanFixed(LivingEntity entity, float fixedAmount) {
+    public static void setVitalitySeveranceFixed(LivingEntity entity, float fixedAmount) {
         if (entity == null) return;
-        var existing = net.minecraft.client.yiz.tool.health.HealBanConfig.get(entity);
+        var existing = net.minecraft.client.yiz.tool.health.VitalitySeveranceConfig.get(entity);
         float percent = existing != null ? existing.percent() : 0;
-        net.minecraft.client.yiz.tool.health.HealBanConfig.set(entity, percent, fixedAmount);
+        net.minecraft.client.yiz.tool.health.VitalitySeveranceConfig.set(entity, percent, fixedAmount);
     }
 
     // ==================== 禁疗属性绑定（方法③-子） ====================
@@ -460,28 +460,28 @@ public final class YizModQZKAPI {
      * 注册一个属性为百分比禁疗属性。
      * <p>
      * 攻击者拥有该属性时，每次攻击为目标施加百分比禁疗。
-     * 例：registerHealBanPercentAttribute(holder, 10)，攻击者有 3 点 → 目标 30% 禁疗。
+     * 例：registerVitalitySeverancePercentAttribute(holder, 10)，攻击者有 3 点 → 目标 30% 禁疗。
      * </p>
      *
      * @param holder 属性
      * @param scale  缩放系数（每点属性的禁疗百分比）
      */
-    public static void registerHealBanPercentAttribute(Holder<Attribute> holder, float scale) {
-        HealBanAttributeRegistry.registerPercent(holder, scale);
+    public static void registerVitalitySeverancePercentAttribute(Holder<Attribute> holder, float scale) {
+        VitalitySeveranceAttributeRegistry.registerPercent(holder, scale);
     }
 
     /**
      * 注册一个属性为固定值禁疗属性。
      * <p>
      * 攻击者拥有该属性时，每次攻击为目标施加固定值禁疗。
-     * 例：registerHealBanFixedAttribute(holder, 5)，攻击者有 3 点 → 目标每次治疗减 15 点。
+     * 例：registerVitalitySeveranceFixedAttribute(holder, 5)，攻击者有 3 点 → 目标每次治疗减 15 点。
      * </p>
      *
      * @param holder 属性
      * @param scale  缩放系数（每点属性的禁疗值）
      */
-    public static void registerHealBanFixedAttribute(Holder<Attribute> holder, float scale) {
-        HealBanAttributeRegistry.registerFixed(holder, scale);
+    public static void registerVitalitySeveranceFixedAttribute(Holder<Attribute> holder, float scale) {
+        VitalitySeveranceAttributeRegistry.registerFixed(holder, scale);
     }
 
     // ==================== 物品属性修改 ====================
