@@ -14,3 +14,15 @@
 - [强制实体移除](entity-force-remove-unsafe.md) — 当 Entity.remove/discard/ChunkSource 全被 override 时的最底层绕过方案：Unsafe + EntityLookup 内部 Map 反射
 - [模块包名冲突](module-export-package-conflict.md) — run/mods 旧 jar 导致 Modules X and Y export package Z 崩溃的排查与修复
 - [模组技术谱系](modding-tech-landscape.md) — 技术深度 6 层分类、关键术语释义(Instrumentation/AT/TransformationService/VTable)、竞品强度分析
+- [护甲图标生成规则](armor-icon-texture-rule.md) — 母模板=包边圈(圈外透明)、按部位独立取色(k-means)、胸甲包边用肩部(45,20)(45,24)两点RGB分上下、头盔完工覆盖阴影层
+- [物品属性 modifier id 冲突累加丢失](item-modifier-id-collision-stacking.md) — 原版 AttributeMap 按 modifier id 去重，多件装备共用固定 id 会互相覆盖不累加；id 必须每物品唯一且稳定(复用已有)，改 setVanillaModifier/setAttr 两处
+- [Photon 纯代码粒子 API 与坑](photon-code-particle-api.md) — 8 坑：纹理完整路径/ARGB 色/ADDITIVE 亮度累积换 alpha 混合/billboard 非体积圆走 Model+ObjModelSource/simulationSpace Local vs World/反射构造 protected 发射器；调参别靠重启试错
+- [bbmodel 转原版 ModelPart](bbmodel-to-modelpart-convert.md) — 加生物必读：group origin 是世界坐标、原版渲染 scale(-1,-1,1) 需 X/Y 与绕 X/Y 旋转取反、box_uv 需图集重排、up/down 面 V 翻转、Renderer scale 里 translate 用正数；辖界者(原全首者)转换已落地
+- [NeoForge maven 离线构建](neoforge-maven-offline-build.md) — maven.neoforged.net 被 TLS 阻断时用本地仓库绕过：点号group缓存/完整.module/metadataSources gradleMetadata/neoform ArtifactManager 缓存路径
+- [辖界者 Boss 当前状态 + Warden 动画复用](warden-animation-reuse.md) — 新窗口接续必读：模型照抄 WardenModel、纯近战(咆哮/音爆已删)、中立立即反击(跳创造/无敌)、狂暴=半血%或战斗5秒(6秒+刷新)；属性=困难模板(400血/50攻/攻强60等)随世界难度缩放(简单0.5/普通0.75/困难1.0，DifficultyChangeEvent事件驱动+已损按比例)；防御镜像已泛化实体；最初梦幻=攻击×20%；伤害=攻击力倍率；创造旁观后门；爆炸击退免疫
+- [受保护实体属性维护设施](entity-attribute-gate.md) — EntityAttributeGate(prot_前缀+调用栈/包名鉴权)+AttributeInstanceMixin(防外部移除)；辖界者 15 属性挂载+8 项分配；无敌帧/闪避已泛化；防御镜像mirrorArmor/mirrorSpellDefense已泛化到实体(YizxianMob值变化时调)；自研血量实体通用处理(EntityHealthLocator 全能扫描+全局不衰减Delta+applyDreamDamage 通用攻击方消费+Agent安全模式限制)；⚠️扫描误判伤害累积字段为血量槽(lastHurt/damageBucket/假人计数)已修=基类排除+写后验证getHealth；⚠️低血量clamp误判二修=下降下限min(amount*0.5,血量)
+- [实体属性编辑工具](entity-attribute-edit-tool.md) — 物品 yizxianmod:entity_attribute_editor 右键任意实体开原版容器界面编辑 12 属性；本模组实体受保护写入、其他实体反射注入不套保护；踩坑见文(init 加载/4参 mouseScrolled/RangedAttribute)
+- [实体移除保护](entity-remove-protection.md) — YizxianMob 移除/新增总闸门：拦 Entity.setRemoved(所有移除汇聚点)+ServerLevel.addFreshEntity/addDuringTeleport，白名单=保存/死亡/本模组包；⚠️1.21.1 无 ServerLevel.removeEntity、维度传送直接 setRemoved 不走 remove
+- [YizieManager 通用实体管理](conduction-health-protection.md#yiziemanager通用实体管理器2026-08-07-新增) — 前置库 tool/YizieManager：checkAndRemove(Entity) 检测生命值≤0→走原版移除链(remove KILLED，保留死亡/掉落)；与 forceRemove 互补；YizxianMob.aiStep 已接入(血量≤0 主动移除，兜底自研血量绕过die)
+- [绝妄生机（原禁疗）](vitality-severance.md) — 改名 anti_heal→vitality_severance、HealBan*→VitalitySeverance*；三层机制(永久配置/临时+叠加/属性驱动统一入口)；字段级禁疗=EntityHealthLocator定位真实字段+回弹抵消(补DataParameter盲区)；辖界者每次攻击+5%可叠到100%
+- [传导限伤+血量外部哈希表+写入守卫](conduction-health-protection.md) — flashfur 式终态：真实血量存外部哈希表(SecureHealthClosure)，辖界者 override getHealth/setHealth/hurt/isAlive/isDeadOrDying/setPose/dropAllDeathLoot/handleEntityEvent/die 完全接管；setHealth 扣血重定向 hurt、先衰减(DAMAGE_REDUCTION/BLOCK)再 min(衰减后, maxHealth×CONDUCTION_CAP%)、受击CD=CONDUCTION_INTERVAL(20tick)，属性可调非硬编码；寰宇支配之剑(自实现die直接dead=true+掉落+倒地)无法秒杀；YizieManager 血量≤0 原版移除链；HealthWriteGuard 拦回血；getHealth 字节码探测；build.gradle 加 asm 依赖
