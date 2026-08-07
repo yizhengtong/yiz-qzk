@@ -1,6 +1,6 @@
 ---
 name: entity-attribute-gate
-description: "前置库受保护实体属性维护设施（EntityAttributeGate + AttributeInstanceMixin 防移除）+ 辖界者接入方式。给实体加 yizmodqzk 自定义属性必读；无敌帧/闪避实体化尚未完成"
+description: "前置库受保护实体属性维护设施（EntityAttributeGate + AttributeInstanceMixin 防移除）+ 辖界者接入方式。给实体加 yizmodqzk 自定义属性必读；无敌帧/闪避已泛化到实体（LivingEntityMixin hurt 统一路径）"
 metadata:
   type: project
 ---

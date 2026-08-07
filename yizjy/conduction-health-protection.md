@@ -54,8 +54,42 @@ limited = min(reduced, cap)   —— cap = maxHealth × CONDUCTION_CAP%
 
 ## 属性编辑器接线
 
-- **实体属性编辑工具**（`EntityAttributeEditScreen`）：ENTRIES 已加 `conduction_cap`（传导单发上限）+ `conduction_interval`（传导受击CD），17 个属性 LIST_COLS=9。C2S 写入链路通用（attrId → EntityAttributeGate.set）。
+- **实体属性编辑工具**（`EntityAttributeEditScreen`）：ENTRIES 加 `conduction_cap`（传导单发上限）；受击 CD 走**无敌帧条目**（传导 CD=INVINCIBILITY_MULT，无独立 CD 条目）。16 个属性 LIST_COLS=8。C2S 写入链路通用（attrId → EntityAttributeGate.set）。
 - **物品属性编辑台**（AttributeEditorScreen / EditableAttribute）：**不加**传导属性——传导是目标侧属性，打武器/装备无消费端，加了误导。
+
+## 受击红闪门控（2026-08-07 修，用户反馈「传导时红、CD 时不红」）
+
+- **正确红闪链路**：原版红闪 = 服务端 `broadcastDamageEvent(source)` → 客户端 `handleDamageEvent` → `hurtTime=10` → 渲染变红。**不是 `broadcastEntityEvent(byte 2)`**（那是别的用途）——初版错用导致普通攻击不红。
+- 辖界者 `hurt()` 传导扣血成功后：`hurtTime=10` + `level().broadcastDamageEvent(this, source)`（CD 内 return false 不广播 → 天然不红）。
+- **寰宇支配疯狂变红**：`InfinitySwordItem.hurt` 绕过 hurt() 直接调 `victim.level().broadcastDamageEvent`（源码 161 行）→ 每次攻击都红、不经过传导 CD。**门控**：`ServerLevelDamageFlashProtectionMixin`（下游）拦 `ServerLevel.broadcastDamageEvent`，对 YizxianMob 仅当 `QuanshouzheEntity.isConductionHitFlash()`（ThreadLocal，hurt() 传导扣血时 set）才放行；外部直接调（标记未设）→ 拦截不红。已注册 yizxianmod.mixins.json。
+
+## ⚠️ DataParameter 直写秒杀（more_avaritia 神明之剑，2026-08-07 防御）
+
+- **more_avaritia 神明之剑**（`InfinityGodSwordItem` → `InfinityUtils.easyAttack → killEntity → forceSetHealth`）：不调 `hurt()/setHealth()`，直接 `victim.entityData.set(DATA_HEALTH_ID, 0)` **绕过 setHealth override** → 客户端 getHealth 读 DataParameter 得 0 → 触发死亡/移除。Re-Avaritia 寰宇支配之剑走 setHealth(0)（被 override 限伤挡），**more_avaritia 走 DataParameter 直写（override 挡不住）**——这是两者"一个挡得住一个挡不住"的根因。
+- **flashfur 能挡**：`BossEntity.negateHealthDeltaSyncedData()` 每 tick 扫描 `SynchedEntityData` Float DataItem 写回 0。
+- **辖界者防御（2026-08-07）**：
+  1. `getHealth()` **客户端也读外部表**（S2C 同步真值，`isRegistered` 后才读表）→ 即使 DATA_HEALTH_ID 被写 0，客户端 getHealth 返回真值 → `isDeadOrDying` false → 不死。
+  2. `customServerAiStep` 每 tick `EntityActuallyHurt.catchSetTrueHealth(this, 表血量)` 纠正 health 字段 + DATA_HEALTH_ID 回真值（flashfur 同思路）。
+  3. `dropAllDeathLoot` override（表血量>0 拒）挡 its 反射掉落。
+
+## ⚠️⚠️ removed/removalReason 字段直写 → 存档不保存（more_avaritia 终极移除，2026-08-08 防御）
+
+- **现象**：游戏内辖界者没被移除，但**退出存档重进后消失**——存档 .mca 里根本没有辖界者实体。
+- **根因（反编译 killEntity）**：more_avaritia 不只 setHealth/hurt，还用 Unsafe/反射**直接改 private 字段**：
+  ```java
+  victim.dead = true                    // 直写 dead
+  victim.removalReason = DISCARDED      // 直写 removalReason（绕过 remove/setRemoved 方法！）
+  victim.removed = true                 // 直写 removed
+  ```
+  `removalReason=DISCARDED` 的 `shouldSave()=false` → 原版 `saveAsPassenger`/`writeUnlessPassenger` 返回 false → **实体不写入 .mca → 重进消失**。remove/setRemoved override 拦不住字段直写。
+- **flashfur 能扛**：override `isRemoved`/`remove`/`setRemoved` 空实现 + 每 tick 纠正——实体永不真正移除。
+- **辖界者三重防御（2026-08-08）**：
+  1. `remove(RemovalReason)` override：拦外部 remove 方法调用（FORCE_REMOVE ThreadLocal 区分主动移除）。
+  2. `customServerAiStep` 每 tick `clearForcedRemoved()`：反射清 `removed`/`removalReason` 字段（逻辑血量>0 时；字段句柄缓存防每 tick 反射开销）。
+  3. **`saveAsPassenger(CompoundTag)` override**：逻辑血量>0 强制跳过 removalReason 检查，直接 `putString("id") + saveWithoutId` → 实体必写 .mca（终极兜底，即使字段没来得及清）。
+- **存档持久化**：`addAdditionalSaveData` 存外部表血量到自定义 tag `yizxianmod_boss_health`；`readAdditionalSaveData` 恢复外部表 + 清 `dead/deathTime/hurtTime`（防死亡残留）。
+- **验证**：存档 `r.0.0.mca` chunk 0 含辖界者（`[QSZ] shouldBeSaved=true removed=false` 诊断确认）。
+- **教训**：外部模组可用 Unsafe/反射直接改实体 private 字段绕过所有 override 方法；实体"没保存"排查要直接查 .mca 原始字节（`b'quanshouzhe' in 解压chunk`），而非只查血量。
 
 ## 验证（2026-08-07 runClient 通过 ×N）
 

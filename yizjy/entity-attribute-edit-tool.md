@@ -7,12 +7,12 @@ metadata:
 
 # 实体属性编辑工具（2026-08-05 落地）
 
-物品 `yizxianmod:entity_attribute_editor`（模型复用木棍，创造标签页「召唤物」）。**手持右键任意 LivingEntity** 打开原版容器界面（generic_54 箱子背景 176×222），点选 12 个 yizmodqzk 属性 + 滚轮增减 + 「应用」生效。
+物品 `yizxianmod:entity_attribute_editor`（模型复用木棍，创造标签页「召唤物」）。**手持右键任意 LivingEntity** 打开容器界面（**自定义背景** `assets/yizxianmod/textures/gui/editor/editor_bg.png`，用户改制 176×222），点选 16 个 yizmodqzk 属性 + **滚轮增减 + 手动输入框** + 「应用」生效。
 
 ## 结构（下游 yizxian1.21.1）
 - `item/EntityAttributeEditorItem` — `interactLivingEntity` 钩子（`Player.interactOn` 在实体端 interact 返回 PASS 时调用，对任意 LivingEntity 生效），服务端 `player.openMenu(provider, buf -> buf.writeInt(target.getId()))`
 - `menu/EntityAttributeEditMenu` — 只存目标实体 **id**（非 UUID），经 `IContainerFactory` 的 buf 传给客户端；槽位仅玩家背包（对齐 generic_54）
-- `client/screen/EntityAttributeEditScreen` — 复用原版 generic_54 背景，属性列表点选 + 滚轮增减 + 原版 Button「应用」
+- `client/screen/EntityAttributeEditScreen` — 自定义 editor_bg 背景，属性列表点选 + 滚轮增减 + **双击数值区（x+40 起）打开 EditBox 手动输入**（支持小数/负数，回车/点外应用）+ 原版 Button「应用」
 - `network/C2SEntityAttributeEditPayload` — `(targetId:int, attrId:String, value:double)`，服务端校验距离后写入
 
 ## 写入策略（与保护范围一致）
