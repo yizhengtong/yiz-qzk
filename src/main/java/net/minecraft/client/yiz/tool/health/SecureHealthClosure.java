@@ -28,6 +28,9 @@ public final class SecureHealthClosure {
     /** 实体 UUID → 真实血量（外部哈希表存储，逻辑血量唯一来源）。 */
     private static final Map<UUID, Float> HEALTH_MAP = new ConcurrentHashMap<>();
 
+    /** 实体 UUID → 受保护最大生命值（外部哈希表存储，不受 MAX_HEALTH 属性 modifier 影响）。 */
+    private static final Map<UUID, Float> MAX_HEALTH_MAP = new ConcurrentHashMap<>();
+
     /** 是否启用血量外部存储（SECURE_PULSE &gt; 0）。 */
     public static boolean isSecure(LivingEntity entity) {
         if (entity == null) return false;
@@ -64,6 +67,23 @@ public final class SecureHealthClosure {
         return entity != null && HEALTH_MAP.containsKey(entity.getUUID());
     }
 
+    /**
+     * 受保护最大生命值（防外部模组改 MAX_HEALTH 属性 modifier）。
+     * 无记录 → 回退 vanilla 属性值（未注册/初始化前）。
+     * ⚠️ 不能用 entity.getMaxHealth() 回退（辖界者 override 了它 → 无限递归），直接读属性。
+     */
+    public static float getMaxHealth(LivingEntity entity) {
+        Float v = MAX_HEALTH_MAP.get(entity.getUUID());
+        if (v != null) return v;
+        var inst = entity.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.MAX_HEALTH);
+        return inst != null ? (float) inst.getValue() : 20.0F;
+    }
+
+    /** 设置受保护最大生命值（applyEntityAttributes 难度缩放后调用）。 */
+    public static void setMaxHealth(LivingEntity entity, float value) {
+        MAX_HEALTH_MAP.put(entity.getUUID(), value);
+    }
+
     /** 每 tick：清理死亡/卸载实体状态。由 {@code LivingEntityMixin.onTick}（服务端分支）调用。 */
     public static void tick(LivingEntity entity) {
         if (!entity.isAlive()) removeAll(entity);
@@ -72,5 +92,6 @@ public final class SecureHealthClosure {
     /** 实体死亡/移除时清理。 */
     public static void removeAll(LivingEntity entity) {
         HEALTH_MAP.remove(entity.getUUID());
+        MAX_HEALTH_MAP.remove(entity.getUUID());
     }
 }
