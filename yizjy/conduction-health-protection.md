@@ -91,6 +91,17 @@ limited = min(reduced, cap)   —— cap = maxHealth × CONDUCTION_CAP%
 - **验证**：存档 `r.0.0.mca` chunk 0 含辖界者（`[QSZ] shouldBeSaved=true removed=false` 诊断确认）。
 - **教训**：外部模组可用 Unsafe/反射直接改实体 private 字段绕过所有 override 方法；实体"没保存"排查要直接查 .mca 原始字节（`b'quanshouzhe' in 解压chunk`），而非只查血量。
 
+## ⚠️ MAX_HEALTH 属性保护（tianshaxing 等改最大生命值，2026-08-08 防御）
+
+- **tianshaxing（天沙星道）** `MaxHealthDrainConsequence.reduceMaxHealth(Player,double)`：`getAttribute(Attributes.MAX_HEALTH).addPermanentModifier(...)` 给 MAX_HEALTH 加 **permanent modifier** 降低最大生命值（虽签名收 Player，但任何模组都能对任意实体加 MAX_HEALTH modifier）。
+- **缺口**：`EntityAttributeGate` 只保护 `prot_` 前缀的 **yizmodqzk 自定义属性**，**vanilla `Attributes.MAX_HEALTH` 不受保护** → 外部模组能改辖界者最大生命值。
+- **⚠️ `LivingEntity.getMaxHealth()` 是 final 不能 override**（编译报错确认）——不能像 getHealth 一样 override 返回外部表值。
+- **辖界者防御（2026-08-08）**：
+  1. `SecureHealthClosure` 加 `MAX_HEALTH_MAP`（受保护最大生命值存储）+ `getMaxHealth/setMaxHealth`；**fallback 读 `getAttributeValue(MAX_HEALTH)` 而非 `entity.getMaxHealth()`**（否则 getMaxHealth 若被 override 会无限递归）。
+  2. `applyEntityAttributes` 里 `setMaxHealth(this, getAttributeValue(MAX_HEALTH))`（难度缩放后记录）。
+  3. `customServerAiStep` 每 tick：`getAttribute(MAX_HEALTH)` 值 ≠ 记录值 → `setBaseValue(记录值)` + `removeModifiers()` 清外部 modifier（MAX_HEALTH 上无本模组 prot_ modifier，安全）。
+  4. `YizxianMob.applyVanillaDifficultyScale` 改用 `getAttributeValue(MAX_HEALTH)` 算比例（原来用 getMaxHealth()，若子类 override 会恒等 → 比例缩放失效）。
+
 ## 验证（2026-08-07 runClient 通过 ×N）
 
 前置库 build + 下游 runClient：玩家进世界→寰宇支配之剑打辖界者→服务器正常退出（exit 0）。无 InjectionError/VerifyError（第三方 mod 的 agent retransform VerifyError 是已知旧行为）。`[QSZ]` 诊断日志验证：衰减→限伤→CD 节奏正确，血量按 25%/秒 下降非秒杀。
