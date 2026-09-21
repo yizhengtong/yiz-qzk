@@ -104,7 +104,39 @@ metadata:
   village_mod 自带 `SynchedEntityDataMixin`（`set` 拦截做护甲减伤）等 entity mixin，但其字节码**不碰 defineId/类池**，
   全 jar 扫描也无任何模组引用类池 → 只能算可疑，需靠上面两条新日志定案。
 
-## 六、验证方法（生产）
+## 七、08:29 会话复盘（第一轮 jar 上线后的实跑证据 + 崩溃归因更正）
+
+**① 性能改造生效（日志实证）**：`[HealthDiscovery] 全范围枚举完成(后台)` 全程在 `yiz-health-discovery` 线程 ——
+首扫 `类数=30146 … 用时=8918ms`，随后 1071 → 883 → 627 → 137 → **17ms**（类表稳定后）；
+`[HealthMap] 藏血 Map 扫描完成` 全程 **1 次**（改造前 30 秒 12 次）；候选规模实测 **外部Map候选=279、静态对象=21980**
+（每刀 2 次调用就是 4 万多次 `f.get(null)` —— 这正是第二轮 `HealthTier` 常规缓存要省掉的东西）。
+
+**② id 撞车归因更正（重要）**：`Duplicate id value` 在 **08-21 起的 7 份崩溃报告**里反复出现（不是今天才有，
+也**不是 village_mod 引入的** —— 08:29 会话根本没加载 village_mod）。新增的字段名诊断直接点名了撞车双方：
+```
+id=0 占用者 <entity data: 0>[Entity.f_19805_]   ← DATA_SHARED_FLAGS_ID
+id=0 本次   <entity data: 0>[Entity.f_19836_]   ← DATA_NO_GRAVITY
+```
+而**同一会话启动自检**是健康的：`f_19805_=0 f_19832_=1 … f_19836_=5 … f_146800_=7；类池[Entity]=7`。
+⇒ **同一个字段启动时 id=5，打到 08:31:47 变成 id=0** —— id 撞车是**会话中途事件**（字段被换掉或 id 被改），
+不是 `Entity.<clinit>` 的启动顺序问题。**线索**：`[YizRestore] 自保护还原` 次数与冲突强相关 ——
+07:53 会话 0 次还原/0 冲突，07:47 4 次/0 冲突，而 07:58(22/18)、08:01(20/1)、08:07(22/1)、08:29(22/2)
+都是「~20 次还原 + 出现冲突」；08:29 的还原爆发在 08:31:40.69，冲突紧接在 08:31:47。
+`YizRestoreTransformer` 走 `Instrumentation.retransformClasses`（规范上不重跑 `<clinit>`、不允许增删字段），
+所以「静态状态被重新初始化」这条链路还没证实，**已补三样只读诊断等下一次实跑定案**：启动快照
+（`声明类.字段名 → id@对象身份`）、冲突日志里的 `⚠漂移: 启动时=… → 现在=…` + 当时 `类池[Entity]` 值、
+以及挂在后台 ticker 上的 `auditEntityChannelDrift()`（Entity 通道一变就 ERROR 打时间戳，好和 `[YizRestore]` 对齐时间线）。
+
+**③ 08:29 会话「连接中断」不是本模组代码问题**：08:31:41.294 起 NVIDIA 驱动侧
+`GL_OUT_OF_MEMORY`（10 条驱动通告 + **76,920 条** `Failed to allocate memory for buffer object` /
+`Failed to map memory for buffer`），触发点是**焰魔死亡瞬间**（08:31:41.263 目标=0 → 31ms 后 OOM）。
+同一签名在 `crash-2026-09-21_06.19.10-client.txt` 就出现过（**复发性显存问题**，与记忆里
+「GL_OUT_OF_MEMORY 是显存/驱动侧、不是 Java 堆泄漏」一致）。之后 08:31:55 Forge `S2CModData` 握手解码抛
+`ClassCastException: Collections$SetFromMap cannot be cast to [B`（netty `ByteBufUtil.threadLocalTempArray`）
+→ 登录包处理失败 → `lost connection: 连接中断`；服务端同时报 tick 落后。**都不是渲染/网络之外的因果**，
+本模组那一刀只在打血量（日志里 `[TotalOverride]`/`[GateHunt]` 一切正常）。
+
+## 八、验证方法（生产）
 
 1. 进存档后 grep `[HealthDiscovery] 全范围枚举完成(后台)` → 应出现**在后台线程**（启动时），用时是枚举真实成本；
    `(主线程兜底)` 只应在「预热还没跑完就开打」时出现一次。
@@ -117,7 +149,7 @@ metadata:
    map 类实体仍然可改（`表征扫描(现场全量): … 藏血Map=1 …`，不是全 0）；`[EHL] 定位成功` 正常出现。
 6. 崩溃自检：`[SynchedEntityData] Entity 通道 id 自检` 全绿（id=序号）；若报重复，看新日志里的字段名定位是哪两条通道。
 
-## 七、构建/部署踩坑（本轮新增）
+## 九、构建/部署踩坑（本轮新增）
 
 - **下游 jar 会静默丢掉 `yizxianmod.refmap.json`**：源码没变时 `compileJava` 是 UP-TO-DATE，
   mixin 注解处理器不再输出 refmap，而 `build/tmp/compileJava` 里也没有残留 → 打出来的 jar 少一个
