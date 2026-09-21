@@ -1,6 +1,6 @@
 ---
 name: health-discovery-background-scan
-description: "藏血发现（HealthMapRegistry/ExternalHealthStore/ExternalRefStore）性能改造：三处各自 getAllLoadedClasses+逐字段反射 → 合并成 HealthDiscovery 一次全类路径枚举 + 后台守护线程快照 + 只缓存字段句柄；范围不缩、实例不缓存、不按命中收敛；含首击 1385ms→后台 与 每 2.7s 重扫刷屏的日志证据，以及本轮 id 0 撞车崩溃（Byte→Pose）的归因与防线补洞（defaultFor 漏 POSE）"
+description: "藏血发现（HealthMapRegistry/ExternalHealthStore/ExternalRefStore）性能改造 + 发现分层策略：三处各自全类路径枚举 → 合并成 HealthDiscovery 一次枚举 + 后台守护线程快照 + 只缓存字段句柄；再加 HealthTier「常规实体缓存 / 非常规生命值实体一律现场扫描」的行为判据（写回落地+未被拉回才升级常规、被拉回/回读未落地/命中门控即粘性非常规）。范围不缩、实例不缓存、不按命中收敛；含首击 1385ms→后台 与每 2.7s 重扫刷屏的日志证据、id 0 撞车崩溃（Byte→Pose）归因与防线补洞（defaultFor 漏 POSE）"
 metadata:
   type: project
 ---
@@ -42,7 +42,30 @@ metadata:
 - **实例字段清单按类缓存**：`ExternalHealthStore.INSTANCE_FIELDS`、`ExternalRefStore.FIELD_CACHE`/`NUMERIC_FIELD_CACHE`
   （含一次性 `setAccessible`），把每次攻击的 `getDeclaredFields()` + 可访问性检查降到零。
 
-## 三、强度清单（改这条线时必须逐条自检，一条都不能丢）
+## 四、发现分层：常规实体缓存 / 非常规生命值实体一律现场扫描（`HealthTier`）
+
+> 用户定的策略：**常规实体缓存，非常规生命值实体一律现场扫描**，关键在「匹配策略要能正常分辨」。
+
+- **常规实体**（绝大多数）：血量规规矩矩躺在 vanilla 通道里 → **跳过三处外部藏血发现**（省掉几千个候选对象的
+  字段走查），只走主槽判定 + 数值/串/对象图/NBT 镜像 + vanilla 通道；判定按类缓存，**30 秒复验一次**
+  （到期那一刀按现场全量探测走），类结构指纹变化即作废。
+- **非常规生命值实体**（藏血 Map / 差值血量 / 加密串 / 外部存档 / 权威门控）：**一律现场扫描，判定粘性永不降级**。
+  缓存的只有「字段句柄/判据结论」，候选集与字段值每次攻击都是当场重新取 —— 绝不收敛候选、绝不缓存实例。
+- **匹配策略（只认行为证据，不认类名包名）**：
+  | 结论 | 证据 |
+  | --- | --- |
+  | 非常规（粘性） | 行为定位到主槽／任一藏血发现器读到值或写成功／差值血量 FSUB／**2 tick 写回被拉回**／立即回读未落地／命中权威门控 |
+  | 常规（可证伪的乐观结论） | 全量探测都没命中 **且** [`GateHunt`](../../../1.20.1/yizmodqzk/src/main/java/net/minecraft/client/yiz/tool/health/GateHunt.java) 的 2 tick 写回验证报「值保持」或「实体已被本次写入击杀」 |
+  | 作废（回到未知） | 立即回读未落地、结构指纹变化 → 下次攻击重新现场全量探测 |
+- 默认是**未知 = 现场全量探测**：没拿到正向证据之前一律不缓存，宁可多扫。
+- **与「禁止收敛候选」的区别（别搞混）**：被禁的是「只保留此前命中过的候选」（命中集收敛 → 后加载/换壳的
+  结构永远发现不了）；这里是「整条发现通道被行为验证证明在这类实体上读不出东西」才跳过，且有四道反向闸门
+  （每刀 2 tick 写回验证、立即回读失败即作废、30s 复验、结构指纹），任一异常立刻打回现场全量扫描。
+- 日志证据：`[HealthTier] <类> → 非常规生命值实体（每次攻击现场全量扫描）: 依据` /
+  `→ 常规实体（跳过外部藏血发现，30s 复验一次）: 依据` / `常规判定作废 → 回到现场全量扫描: 依据`；
+  `[TotalOverride] <类> 表征扫描(现场全量/常规缓存): 主槽=… 藏血Map=…` 直接标出这一刀走的哪一档。
+
+## 五、强度清单（改这条线时必须逐条自检，一条都不能丢）
 
 1. 发现范围 = 全类路径 `Instrumentation.getAllLoadedClasses()`；有新类加载仍**全范围**重扫（只是节流放宽到 5s、挪到后台）。
 2. 候选**每次调用现读字段值**；只缓存字段句柄。
@@ -81,14 +104,25 @@ metadata:
   village_mod 自带 `SynchedEntityDataMixin`（`set` 拦截做护甲减伤）等 entity mixin，但其字节码**不碰 defineId/类池**，
   全 jar 扫描也无任何模组引用类池 → 只能算可疑，需靠上面两条新日志定案。
 
-## 五、验证方法（生产）
+## 六、验证方法（生产）
 
 1. 进存档后 grep `[HealthDiscovery] 全范围枚举完成(后台)` → 应出现**在后台线程**（启动时），用时是枚举真实成本；
    `(主线程兜底)` 只应在「预热还没跑完就开打」时出现一次。
 2. `[TotalOverride] <类> 首击耗时(ms): … 藏血Map/外部=…` → 应从 1385ms 掉到个位数（该段现在只有字段读值）。
 3. `[HealthMap] 藏血 Map 扫描完成，命中 N 个` → 只在**命中数变化**时出现（正常全程 1 次），不再每 2.7 秒刷屏。
-4. 强度自检：`[HealthMap] 识别藏血 Map:` 仍能认出 omnimobs 的 `EntityUtil.REAL_MAX_HEALTH`；
-   map 类实体仍然可改（`表征扫描: … 藏血Map=1 …`，不是全 0）；`[EHL] 定位成功` 正常出现。
-5. 崩溃自检：`[SynchedEntityData] Entity 通道 id 自检` 全绿（id=序号）；若报重复，看新日志里的字段名定位是哪两条通道。
+4. **分层自检**：`[HealthTier] <类> → 常规实体`（普通怪，之后 `表征扫描(常规缓存)`）与
+   `[HealthTier] <类> → 非常规生命值实体`（藏血实体，之后 `表征扫描(现场全量)`）都要能看到；
+   若刷出 `常规判定作废 → 回到现场全量扫描`，说明这个类被误判过，把依据（reason）记下来。
+5. 强度自检：`[HealthMap] 识别藏血 Map:` 仍能认出 omnimobs 的 `EntityUtil.REAL_MAX_HEALTH`；
+   map 类实体仍然可改（`表征扫描(现场全量): … 藏血Map=1 …`，不是全 0）；`[EHL] 定位成功` 正常出现。
+6. 崩溃自检：`[SynchedEntityData] Entity 通道 id 自检` 全绿（id=序号）；若报重复，看新日志里的字段名定位是哪两条通道。
+
+## 七、构建/部署踩坑（本轮新增）
+
+- **下游 jar 会静默丢掉 `yizxianmod.refmap.json`**：源码没变时 `compileJava` 是 UP-TO-DATE，
+  mixin 注解处理器不再输出 refmap，而 `build/tmp/compileJava` 里也没有残留 → 打出来的 jar 少一个
+  `yizxianmod.refmap.json`（少了 3~9KB，MD5 变了但其他类一模一样）。**部署前必须核对 jar 里的 refmap 条目**；
+  丢了就 `gradlew clean build` 重来（clean 后 compileJava 实跑，refmap 8936 字节 / 17 条映射回来了）。
+  这类 jar 上线会让下游的 `EntityRemoveProtectionMixin` 等静默不生效，症状像「免移除保护突然失效」。
 
 相关：[[health-discovery-cache]]（已取代） [[synched-data-id-collision]] [[health-map-tamper]] [[tiedoushi-launch-and-juggle]]
