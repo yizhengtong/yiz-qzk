@@ -7,7 +7,7 @@ metadata:
 
 # 绝妄生机（原禁疗）体系（2026-08-07 重写落地）
 
-「禁疗」更名「绝妄生机」。核心增强：**最初梦幻能改血的自研血量实体，绝妄生机也能彻底限制其回血**。
+「禁疗」更名「绝妄生机」。核心增强：**涨跌多空能改血的自研血量实体，绝妄生机也能彻底限制其回血**。
 
 ## 改名映射
 
@@ -35,7 +35,7 @@ metadata:
 
 ## 字段级禁疗（核心增强）
 
-自研血量实体（LM totalDamageTaken 型）的真实血量字段是**普通反射字段，不在 DataParameter**——旧禁疗的通道级扫描扫不到它，回血完全不受限；而最初梦幻能改它（`EntityHealthLocator.applyPersistentDamage` 反射直改）。同一批实体两套机制能力不对称。
+自研血量实体（LM totalDamageTaken 型）的真实血量字段是**普通反射字段，不在 DataParameter**——旧禁疗的通道级扫描扫不到它，回血完全不受限；而涨跌多空能改它（`EntityHealthLocator.applyPersistentDamage` 反射直改）。同一批实体两套机制能力不对称。
 
 **修复**：`enforceFieldTick` 用 `EntityHealthLocator.locate/readLocated/writeLocated` 定位真实字段，tick 检测**回血方向**变化（inverse 型字段减少 / 正向型字段增加 = 回血）→ 反射写回基线抵消。本模组主动扣血（applyPersistentDamage）后 `updateFieldBaseline` 防误伤。
 

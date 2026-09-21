@@ -1,6 +1,6 @@
 ---
 name: entity-attribute-edit-tool
-description: "实体属性编辑工具（yizxianmod:entity_attribute_editor）的实现方案与关键坑：右键任意实体打开原版容器界面编辑 yizmodqzk 15 属性（含绝妄生机率/绝妄生机时间/最初梦幻）；本模组实体受保护写入、其他实体反射按需注入不套保护"
+description: "实体属性编辑工具（yizxianmod:entity_attribute_editor）的实现方案与关键坑：右键任意实体打开原版容器界面编辑 yizmodqzk 15 属性（含绝妄生机率/绝妄生机时间/涨跌多空）；本模组实体受保护写入、其他实体反射按需注入不套保护"
 metadata:
   type: project
 ---
@@ -31,4 +31,4 @@ metadata:
 
 ## 关联
 - 受保护设施与辖界者接入：[[entity-attribute-gate]]
-- 前置库给 `PLAYER` 挂了全部 15 属性（含绝妄生机率/绝妄生机时间/最初梦幻）→ 玩家也可被编辑（普通写入）
+- 前置库给 `PLAYER` 挂了全部 15 属性（含绝妄生机率/绝妄生机时间/涨跌多空）→ 玩家也可被编辑（普通写入）

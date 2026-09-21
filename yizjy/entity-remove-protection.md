@@ -30,8 +30,9 @@ metadata:
 3. **addFreshEntity 返回 boolean**（不是 void）：描述符 `(Lnet/minecraft/world/entity/Entity;)Z`，回调用 `CallbackInfoReturnable<Boolean>`。
 4. **mixins.json 是资源，改了必须重新构建进产物**：dev 运行读 `build/resources`，只 `compileJava` 不更新资源 → 保护不生效（维度传送漏网就是这个：mixins.json 没进 build）。
 5. **测试期临时关闭死亡放行**：注释 `YizxianMob.aiStep` 的 `allowDeathRemove` 调用；**注意**——死亡放行关闭时打死辖界者会以 0 血残留存档，**污染存档导致后续加载卡「加载地形中」**（需换新世界测试）。
-6. **⚠️ `isYizCaller()` 栈帧跳漏（2026-08-07 严重 bug，寰宇支配之剑能移除辖界者）**：原实现 `for (i=3...)` 遍历调用栈但**只跳过 `Entity` 帧，没跳过 Mixin 注入帧**。而 `Thread.currentThread().getStackTrace()` 的 `i=3` 恰好是 `yizxianmod$protectRemove`（Mixin 注入到 setRemoved 的方法，属于 `net.minecraft.client.yiz.xian.mixin` 包）→ `startsWith("net.minecraft.client.yiz")` 恒命中 → **任何外部 remove 都被误判「本模组调用」放行，移除保护形同虚设**。修复：跳过 `net.minecraft.world.entity.Entity` 帧 + `EntityRemoveProtectionMixin` 帧，从第一个真实外部调用者判定。**教训：调用栈鉴权必须跳过 Mixin 注入帧自身，否则框架帧恒命中白名单**。
+6. **⚠️ `isYizCaller()` 栈帧跳漏（2026-08-07 严重 bug，外部模组能移除辖界者）**：原实现 `for (i=3...)` 遍历调用栈但**只跳过 `Entity` 帧，没跳过 Mixin 注入帧**。而 `Thread.currentThread().getStackTrace()` 的 `i=3` 恰好是 `yizxianmod$protectRemove`（Mixin 注入到 setRemoved 的方法，属于 `net.minecraft.client.yiz.xian.mixin` 包）→ `startsWith("net.minecraft.client.yiz")` 恒命中 → **任何外部 remove 都被误判「本模组调用」放行，移除保护形同虚设**。修复：跳过 `net.minecraft.world.entity.Entity` 帧 + `EntityRemoveProtectionMixin` 帧，从第一个真实外部调用者判定。**教训：调用栈鉴权必须跳过 Mixin 注入帧自身，否则框架帧恒命中白名单**。
 
 ## 关联
 - 辖界者整体状态：[[warden-animation-reuse]]
 - 死亡监听（生命≤0 检测在 YizxianMob aiStep）：[[entity-attribute-gate]]
+- 更底层对抗（字段直写 + 列表清 + agent 字节码拦截）：[[yizxianmob-remove-protection-agent]]
